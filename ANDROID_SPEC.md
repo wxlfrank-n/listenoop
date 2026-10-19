@@ -4,7 +4,7 @@
 > (browser-based music player that auto-splits tracks into loopable clips),
 > faithful to the two existing implementations:
 >
-> - **Web reference** — `C:\Users\Admin\Documents\dev\myplayer`
+> - **Web reference** — `C:\Users\Admin\Documents\dev\listenoop-web`
 >   (React 19 + TypeScript + Redux Toolkit; the behavior authority).
 > - **iOS reference** — `C:\Users\Admin\Documents\dev\listenoop-ios`
 >   (Swift/SwiftUI + `AVAudioPlayer`; the native-app authority — layout,

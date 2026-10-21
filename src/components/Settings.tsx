@@ -10,13 +10,14 @@
  * are clamped to stay valid.
  */
 
-import {useCallback, useState} from 'react';
+import {useCallback, useEffect, useRef, useState} from 'react';
 import {useConfig} from '../hooks/useConfig';
 import {CONFIG_RANGES, DEFAULT_CONFIG} from '../store/configSlice';
 import {THEMES, THEME_IDS, type ThemeId} from '../themes';
 import {LanguageSelect} from './LanguageSelect';
 import {useT, type TranslationKey} from '../i18n';
 import CloseIcon from '../assets/icons/close.svg?react';
+import InfoIcon from '../assets/icons/info.svg?react';
 import './Settings.css';
 
 interface SettingsProps {
@@ -363,6 +364,26 @@ export function Settings({onClose}: SettingsProps) {
   const t = useT();
   const close = useCallback(() => onClose(), [onClose]);
   const [activeTab, setActiveTab] = useState<SettingsTabId>('theme');
+  const [showInfo, setShowInfo] = useState(false);
+  const infoRef = useRef<HTMLDivElement>(null);
+
+  // The note is a disclosure, so an outside press or Escape closes it.
+  useEffect(() => {
+    if (!showInfo) return;
+    const onPointerDown = (event: PointerEvent) => {
+      if (infoRef.current?.contains(event.target as Node)) return;
+      setShowInfo(false);
+    };
+    const onKeyDown = (event: KeyboardEvent) => {
+      if (event.key === 'Escape') setShowInfo(false);
+    };
+    document.addEventListener('pointerdown', onPointerDown);
+    document.addEventListener('keydown', onKeyDown);
+    return () => {
+      document.removeEventListener('pointerdown', onPointerDown);
+      document.removeEventListener('keydown', onKeyDown);
+    };
+  }, [showInfo]);
 
   return (
     <div className="settings-overlay" onClick={onClose}>
@@ -414,9 +435,24 @@ export function Settings({onClose}: SettingsProps) {
           >
             {t('settings.resetAll')}
           </button>
-          <span className="settings-footer-note">
-            {t('settings.changesLive')}
-          </span>
+          {/* The autosave note lives behind this toggle: it is reassurance, not
+              a control, so it does not deserve a line of the panel. */}
+          <div className="settings-info" ref={infoRef}>
+            <button
+              type="button"
+              className={`settings-info-button${showInfo ? ' settings-info-button--open' : ''}`}
+              aria-label={t('settings.changesLive')}
+              aria-expanded={showInfo}
+              onClick={() => setShowInfo(value => !value)}
+            >
+              <InfoIcon width={18} height={18} />
+            </button>
+            {showInfo && (
+              <span className="settings-info-popover" role="status">
+                {t('settings.changesLive')}
+              </span>
+            )}
+          </div>
         </div>
       </div>
     </div>

@@ -440,28 +440,28 @@
 }
 
 /*
- * The reset action sits above a full-width caption. Sharing one row squeezed
- * the caption into an ellipsis at this panel width; on its own line it wraps
- * instead of being cut off, and the panel ends on a quiet note rather than a
- * button.
+ * Footer: one row — the reset button and an info toggle that reveals the
+ * autosave note in a popover. The note used to hold a line of its own, which
+ * cost the panel ~25px of body height for a line nobody reads twice.
  */
 .settings-footer {
   display: flex;
-  flex-direction: column;
-  align-items: stretch;
-  gap: 10px;
+  align-items: center;
+  justify-content: space-between;
+  gap: 12px;
   padding: 14px 20px;
   border-top: 1px solid var(--border);
 }
 
 .settings-reset {
-  background: none;
-  color: var(--text-secondary);
+  background: var(--bg-tertiary);
+  color: var(--danger);
   border: 1px solid var(--border);
-  padding: 6px 14px;
-  border-radius: 16px;
+  padding: 7px 14px;
+  border-radius: var(--radius-sm);
   font-size: 0.75rem;
-  align-self: flex-start;
+  font-weight: 500;
+  flex: none;
   white-space: nowrap;
   transition:
     color 0.15s,
@@ -469,9 +469,55 @@
     background 0.15s;
 }
 
-.settings-footer-note {
-  font-size: 0.65rem;
-  line-height: 1.35;
+/*
+ * Info toggle: quiet at rest, marked while its note is open. The popover opens
+ * upwards so it never runs into the panel's bottom edge.
+ */
+.settings-info {
+  position: relative;
+  display: flex;
+  flex: none;
+}
+
+.settings-info-button {
+  background: none;
+  border: none;
+  padding: 0;
+  width: 32px;
+  height: 32px;
+  border-radius: 50%;
+  color: var(--text-tertiary);
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  transition:
+    color 0.15s,
+    background 0.15s;
+}
+
+.settings-info-button--open {
+  color: var(--text-primary);
+  background: var(--bg-hover);
+}
+
+.settings-info-button:active {
+  animation: settings-surface-press 0.3s ease-out;
+}
+
+.settings-info-popover {
+  position: absolute;
+  right: 0;
+  bottom: calc(100% + 8px);
+  width: max-content;
+  max-width: 240px;
+  padding: 8px 10px;
+  border: 1px solid var(--border);
+  border-radius: var(--radius);
+  background: var(--bg-panel);
   color: var(--text-secondary);
-  opacity: 0.7;
+  font-size: 0.68rem;
+  line-height: 1.35;
+  text-align: left;
+  box-shadow: 0 10px 24px rgba(0, 0, 0, 0.45);
+  z-index: 1;
 }

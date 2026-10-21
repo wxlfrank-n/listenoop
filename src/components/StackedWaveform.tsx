@@ -33,6 +33,7 @@ import {useAppSelector} from '../store/hooks';
 import {selectMergeScope} from '../store/selectors';
 import './StackedWaveform.css';
 import {getWindowSecs} from '../utils/rowWaveform';
+import {type PageSpan, isClipOnPage} from '../utils/stackedPages';
 
 const ROW_H = 64;
 const ROW_GAP = 4;
@@ -332,7 +333,18 @@ export const StackedWaveform = memo(
 
     const pageTimesRef = useRef(pageTimes);
 
+    /*
+     * Page spans from the layout before this render. A split or merge re-packs
+     * the rows, which can hand the clip the user just edited to another page
+     * while it is still the clip they were looking at. The active-clip follow
+     * compares against this to tell that case apart from a clip that was never
+     * on the page (prev/next clip, a request from elsewhere).
+     */
+    const prevPageTimesRef = useRef<PageSpan[]>([]);
+
     useEffect(() => {
+      prevPageTimesRef.current = pageTimesRef.current;
+
       pageTimesRef.current = pageTimes;
     }, [pageTimes]);
 
@@ -726,6 +738,22 @@ export const StackedWaveform = memo(
       const clip = displayClips[activeClip];
 
       if (!clip) return;
+
+      /*
+       * A split or merge re-packs the rows, so the clip can change page while
+       * staying the one the user was editing. Keep the current page when the
+       * clip was on it before the change; only page for a clip that was not on
+       * screen.
+       */
+      if (
+        isClipOnPage(
+          prevPageTimesRef.current[Math.max(0, currentPageRef.current)],
+          clip.vStart,
+          clip.vEnd,
+        )
+      ) {
+        return;
+      }
 
       const page = pageForTime((clip.vStart + clip.vEnd) / 2);
 

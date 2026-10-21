@@ -439,11 +439,17 @@
   font-variant-numeric: tabular-nums;
 }
 
+/*
+ * The reset action sits above a full-width caption. Sharing one row squeezed
+ * the caption into an ellipsis at this panel width; on its own line it wraps
+ * instead of being cut off, and the panel ends on a quiet note rather than a
+ * button.
+ */
 .settings-footer {
   display: flex;
-  align-items: center;
-  justify-content: space-between;
-  gap: 12px;
+  flex-direction: column;
+  align-items: stretch;
+  gap: 10px;
   padding: 14px 20px;
   border-top: 1px solid var(--border);
 }
@@ -455,7 +461,7 @@
   padding: 6px 14px;
   border-radius: 16px;
   font-size: 0.75rem;
-  flex: none;
+  align-self: flex-start;
   white-space: nowrap;
   transition:
     color 0.15s,
@@ -465,12 +471,7 @@
 
 .settings-footer-note {
   font-size: 0.65rem;
+  line-height: 1.35;
   color: var(--text-secondary);
   opacity: 0.7;
-  text-align: right;
-  white-space: nowrap;
-  flex: 1 1 auto;
-  min-width: 0;
-  overflow: hidden;
-  text-overflow: ellipsis;
 }

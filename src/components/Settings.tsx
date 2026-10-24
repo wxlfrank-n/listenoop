@@ -246,7 +246,7 @@ function AppearanceTab() {
 function PlaybackTab() {
   const {config, updateConfig} = useConfig();
   const t = useT();
-  const {skipSeconds, repetitions, showAdvancedControls} = config;
+  const {skipSeconds, repetitions, loopPlaylist, showAdvancedControls} = config;
   return (
     <>
       <SliderSetting
@@ -269,6 +269,22 @@ function PlaybackTab() {
         step={1}
         onChange={v => updateConfig({repetitions: v})}
       />
+      <div className="settings-field">
+        <label className="settings-switch">
+          <input
+            type="checkbox"
+            checked={loopPlaylist}
+            onChange={e => updateConfig({loopPlaylist: e.target.checked})}
+          />
+          <span className="settings-switch__track" aria-hidden="true">
+            <span className="settings-switch__knob" />
+          </span>
+          <span className="settings-switch__label">
+            {t('settings.loopPlaylist')}
+            <small>{t('settings.loopPlaylistHint')}</small>
+          </span>
+        </label>
+      </div>
       <div className="settings-field">
         <label className="settings-switch">
           <input

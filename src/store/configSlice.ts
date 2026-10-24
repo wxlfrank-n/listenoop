@@ -15,6 +15,8 @@
  *   split, and the floor detection also merges short runs up to (default: 0.1,
  *   see `MIN_SPLIT_PIECE_SEC`).
  * - repetitions: How many times a clicked clip is repeated (default: 3).
+ * - loopPlaylist: Whether reaching the end of a track rolls on to the next
+ *   track in the playlist; when off playback stops at the end (default: false).
  * - showAdvancedControls: Whether the clip toolbar (merge gap + repeat
  *   controls) is shown below the waveform (default: false).
  * - mergeScope: Whether a merge/split gesture applies to every clip in the
@@ -51,6 +53,7 @@ interface ConfigState {
   minClipLength: number;
   minSplitPieceSec: number;
   repetitions: number;
+  loopPlaylist: boolean;
   showAdvancedControls: boolean;
   mergeScope: MergeScope;
   theme: ThemeId;
@@ -65,6 +68,7 @@ export const DEFAULT_CONFIG: ConfigState = {
   minClipLength: 0.3,
   minSplitPieceSec: MIN_SPLIT_PIECE_SEC,
   repetitions: 3,
+  loopPlaylist: false,
   showAdvancedControls: false,
   mergeScope: 'clip',
   theme: DEFAULT_THEME,
@@ -106,6 +110,10 @@ function loadConfig(): ConfigState {
           typeof parsed.showAdvancedControls === 'boolean'
             ? parsed.showAdvancedControls
             : DEFAULT_CONFIG.showAdvancedControls,
+        loopPlaylist:
+          typeof parsed.loopPlaylist === 'boolean'
+            ? parsed.loopPlaylist
+            : DEFAULT_CONFIG.loopPlaylist,
         language: isLocale(parsed.language)
           ? parsed.language
           : DEFAULT_CONFIG.language,

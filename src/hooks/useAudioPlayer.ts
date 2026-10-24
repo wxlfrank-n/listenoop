@@ -270,6 +270,14 @@ export function useAudioPlayer(skipSeconds: number) {
         holdAtEndRef.current = false;
         return;
       }
+      // Without the playlist loop the track just stops at its end. The next
+      // press of play restarts it (the media element rewinds a finished
+      // track on `play()`).
+      if (!store.getState().config.loopPlaylist) {
+        dispatch(setCurrentTime(audioRef.current.currentTime));
+        dispatch(setIsPlaying(false));
+        return;
+      }
       nextRef.current();
     };
     const onError = () => {

@@ -45,9 +45,14 @@ const playerState = vi.hoisted(() => ({
   duration: 100,
 }));
 
+/* The playlist loop is off by default (`configSlice.DEFAULT_CONFIG`). */
+const configState = vi.hoisted(() => ({
+  loopPlaylist: false,
+}));
+
 vi.mock('../store/store', () => ({
   store: {
-    getState: () => ({player: playerState}),
+    getState: () => ({player: playerState, config: configState}),
   },
 }));
 
@@ -170,6 +175,8 @@ describe('useAudioPlayer.playRange', () => {
     vi.useFakeTimers();
 
     dispatch.mockClear();
+
+    configState.loopPlaylist = false;
 
     audio = new FakeAudio();
 
@@ -556,7 +563,23 @@ describe('useAudioPlayer.playRange', () => {
       expect(dispatch).toHaveBeenCalledWith(setCurrentTrackIndex(0));
     });
 
+    it('stops at the end when the playlist loop is off', () => {
+      renderHook(() => useAudioPlayer(5));
+
+      audio.currentTime = 100;
+
+      act(() => {
+        audio.dispatchEvent(new Event('ended'));
+      });
+
+      expect(dispatch).not.toHaveBeenCalledWith(setCurrentTrackIndex(0));
+      expect(dispatch).toHaveBeenCalledWith(setIsPlaying(false));
+      expect(dispatch).toHaveBeenCalledWith(setCurrentTime(100));
+    });
+
     it('still advances when playback reaches the end on its own', () => {
+      configState.loopPlaylist = true;
+
       renderHook(() => useAudioPlayer(5));
 
       audio.currentTime = 100;

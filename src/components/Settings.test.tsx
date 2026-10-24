@@ -55,3 +55,21 @@ describe('Settings footer', () => {
     expect(screen.queryByText(NOTE)).toBeNull();
   });
 });
+
+describe('Settings playback loop', () => {
+  it('is off by default and can be turned on', () => {
+    renderSettings();
+
+    fireEvent.click(screen.getByRole('tab', {name: 'Playback'}));
+
+    const toggle = screen.getByRole('checkbox', {
+      name: /Loop playback/,
+    }) as HTMLInputElement;
+
+    expect(toggle.checked).toBe(false);
+
+    fireEvent.click(toggle);
+
+    expect(toggle.checked).toBe(true);
+  });
+});

@@ -103,6 +103,10 @@ export const en = {
     repeatsPerClip: 'Repeats per clip',
     repeatsHint: 'Choose how many times a clip repeats when you click it.',
 
+    loopPlaylist: 'Loop playback',
+    loopPlaylistHint:
+      'When a track ends, continue with the next track in the playlist. Turn off to stop at the end of the track.',
+
     showAdvanced: 'Show advanced controls',
     showAdvancedHint:
       'Show quick controls for merging clips and changing repeats below the waveform.',
@@ -259,6 +263,10 @@ export const no: Messages = {
     repeatsHint:
       'Velg hvor mange ganger et klipp repeteres n\u00e5r du klikker p\u00e5 det.',
 
+    loopPlaylist: 'Gjenta avspilling',
+    loopPlaylistHint:
+      'N\u00e5r et spor er ferdig, fortsett med neste spor i spillelisten. Sl\u00e5 av for \u00e5 stoppe p\u00e5 slutten av sporet.',
+
     showAdvanced: 'Vis avanserte kontroller',
     showAdvancedHint:
       'Vis hurtigkontroller for \u00e5 sl\u00e5 sammen klipp og endre repetisjoner under b\u00f8lgen.',
@@ -413,6 +421,10 @@ export const zh: Messages = {
 
     repeatsPerClip: '片段重复次数',
     repeatsHint: '设置点击片段后自动重复播放的次数。',
+
+    loopPlaylist: '循环播放',
+    loopPlaylistHint:
+      '一首结束后自动播放列表中的下一首；关闭后将在曲目结尾停止。',
 
     showAdvanced: '显示高级控制',
     showAdvancedHint: '在波形下方显示片段合并和重复次数的快捷控制。',

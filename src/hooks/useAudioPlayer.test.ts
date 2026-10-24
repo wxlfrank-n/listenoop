@@ -9,6 +9,7 @@ import {
   setCurrentTime,
   setIsPlaying,
   setCurrentTrackIndex,
+  setDuration,
 } from '../store/playerSlice';
 
 /*
@@ -532,20 +533,25 @@ describe('useAudioPlayer.playRange', () => {
       expect(dispatch).not.toHaveBeenCalledWith(setCurrentTrackIndex(0));
     });
 
-    it('advances to the next track when already at the end', () => {
+    it('goes to the start of the next track when already at the end', async () => {
       const {result} = renderHook(() => useAudioPlayer(5));
 
       audio.currentTime = 100;
 
-      act(() => {
+      audio.play.mockClear();
+
+      await act(async () => {
         result.current.next();
       });
 
       expect(dispatch).toHaveBeenCalledWith(setCurrentTrackIndex(0));
       expect(dispatch).toHaveBeenCalledWith(setCurrentTime(0));
+      // Crossing the boundary only moves the playhead; it does not play.
+      expect(audio.play).not.toHaveBeenCalled();
+      expect(audio.paused).toBe(true);
     });
 
-    it('advances on the second press after parking at the end', () => {
+    it('advances on the second press after parking at the end', async () => {
       const {result} = renderHook(() => useAudioPlayer(5));
 
       audio.currentTime = 40;
@@ -556,11 +562,12 @@ describe('useAudioPlayer.playRange', () => {
 
       expect(audio.paused).toBe(true);
 
-      act(() => {
+      await act(async () => {
         result.current.next();
       });
 
       expect(dispatch).toHaveBeenCalledWith(setCurrentTrackIndex(0));
+      expect(audio.play).not.toHaveBeenCalled();
     });
 
     it('stops at the end when the playlist loop is off', () => {
@@ -630,7 +637,7 @@ describe('useAudioPlayer.playRange', () => {
       expect(dispatch).not.toHaveBeenCalledWith(setCurrentTrackIndex(0));
     });
 
-    it('goes to the previous track when already at the start', () => {
+    it('goes to the end of the previous track when already at the start', async () => {
       playerState.tracks = [track, {...track, id: 't2', url: 'blob:track2'}];
       playerState.currentTrackIndex = 1;
 
@@ -638,15 +645,29 @@ describe('useAudioPlayer.playRange', () => {
 
       audio.currentTime = 0;
 
-      act(() => {
+      audio.play.mockClear();
+
+      await act(async () => {
         result.current.prev();
       });
 
       expect(dispatch).toHaveBeenCalledWith(setCurrentTrackIndex(0));
-      expect(dispatch).toHaveBeenCalledWith(setCurrentTime(0));
+      // Crossing the boundary only moves the playhead; it does not play.
+      expect(audio.play).not.toHaveBeenCalled();
+      expect(audio.paused).toBe(true);
+
+      // The duration is known once the metadata arrives; park at the end.
+      audio.duration = 100;
+      act(() => {
+        audio.dispatchEvent(new Event('loadedmetadata'));
+      });
+
+      expect(audio.currentTime).toBe(100);
+      expect(dispatch).toHaveBeenCalledWith(setCurrentTime(100));
+      expect(dispatch).toHaveBeenCalledWith(setDuration(100));
     });
 
-    it('goes to the previous track on the second press after parking at the start', () => {
+    it('goes to the previous track on the second press after parking at the start', async () => {
       playerState.tracks = [track, {...track, id: 't2', url: 'blob:track2'}];
       playerState.currentTrackIndex = 1;
 
@@ -661,11 +682,12 @@ describe('useAudioPlayer.playRange', () => {
       expect(audio.currentTime).toBe(0);
       expect(audio.paused).toBe(true);
 
-      act(() => {
+      await act(async () => {
         result.current.prev();
       });
 
       expect(dispatch).toHaveBeenCalledWith(setCurrentTrackIndex(0));
+      expect(audio.play).not.toHaveBeenCalled();
     });
   });
 });

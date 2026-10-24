@@ -50,7 +50,6 @@ export function useAudioPlayer(skipSeconds: number) {
 
   const audioRef = useRef<HTMLAudioElement>(new Audio());
   const nextRef = useRef<() => void>(() => {});
-  const prevRef = useRef<() => void>(() => {});
   const expectedRawUrlRef = useRef<string | null>(null);
   const trackLoadIdRef = useRef(0);
   const wavBlobCacheRef = useRef<Map<string, string>>(new Map());
@@ -151,22 +150,29 @@ export function useAudioPlayer(skipSeconds: number) {
     return objectUrl;
   }, []);
 
-  // Point the audio element at a new source and start playing it.
+  // Point the audio element at a new source.
   /**
-   * Loads and starts playback of a new audio track.
+   * Loads a new audio track into the element.
    * Handles both WAV-encoded playback and raw audio URL fallback.
    *
    * Flow:
    * 1. Initialize AudioContext for Web Audio features (waveform visualization)
    * 2. Decode audio file to WAV format for consistent playback
    * 3. Fall back to raw URL if decoding fails
-   * 4. Load and play the audio element
+   * 4. Load the audio element, then play it or park it at a boundary
    *
    * @param audio - The HTMLAudioElement to use for playback
    * @param url - The URL of the audio file to load
+   * @param options.play - Start playing after loading (default: true)
+   * @param options.atEnd - Park the playhead at the end instead (paused).
+   *   Waits for metadata, since the duration is only known once it loads.
    */
   const startTrack = useCallback(
-    async (audio: HTMLAudioElement, url: string) => {
+    async (
+      audio: HTMLAudioElement,
+      url: string,
+      {play = true, atEnd = false}: {play?: boolean; atEnd?: boolean} = {},
+    ) => {
       // Initialize AudioContext on user gesture (from next/prev buttons or click)
       getAnalyser();
       const loadId = ++trackLoadIdRef.current;
@@ -174,38 +180,54 @@ export function useAudioPlayer(skipSeconds: number) {
       holdAtEndRef.current = false;
       dispatch(setIsPlaying(false));
       expectedRawUrlRef.current = url;
-      try {
-        const playableUrl = await getPlayableUrl(url);
+
+      const load = (src: string) => {
         // Only update if this is still the expected URL
         if (
-          trackLoadIdRef.current === loadId &&
-          expectedRawUrlRef.current === url
+          trackLoadIdRef.current !== loadId ||
+          expectedRawUrlRef.current !== url
         ) {
-          audio.src = playableUrl;
-          audio.load();
-          audio
-            .play()
-            .then(() => dispatch(setIsPlaying(true)))
-            .catch(err => {
-              console.debug('Start track play failed:', err);
-            });
+          return;
         }
+
+        audio.src = src;
+        audio.load();
+
+        if (atEnd) {
+          const parkAtEnd = () => {
+            if (trackLoadIdRef.current !== loadId) return;
+            // A seek to the very end can emit `ended`; hold it so the parked
+            // position is not mistaken for a finished track.
+            holdAtEndRef.current = true;
+            const duration = audio.duration;
+            audio.currentTime = duration;
+            dispatch(setDuration(duration));
+            dispatch(setCurrentTime(duration));
+            dispatch(setIsPlaying(false));
+          };
+
+          if (audio.readyState >= 1) parkAtEnd();
+          else
+            audio.addEventListener('loadedmetadata', parkAtEnd, {once: true});
+          return;
+        }
+
+        if (!play) return;
+
+        audio
+          .play()
+          .then(() => dispatch(setIsPlaying(true)))
+          .catch(err => {
+            console.debug('Start track play failed:', err);
+          });
+      };
+
+      try {
+        load(await getPlayableUrl(url));
       } catch (error) {
         console.error('Failed to decode audio for playback:', error);
         // Fallback to raw URL if decoding fails
-        if (
-          trackLoadIdRef.current === loadId &&
-          expectedRawUrlRef.current === url
-        ) {
-          audio.src = url;
-          audio.load();
-          audio
-            .play()
-            .then(() => dispatch(setIsPlaying(true)))
-            .catch(err => {
-              console.debug('Fallback play failed:', err);
-            });
-        }
+        load(url);
       }
     },
     [dispatch, getAnalyser, getPlayableUrl],
@@ -227,22 +249,30 @@ export function useAudioPlayer(skipSeconds: number) {
     };
   });
 
-  useEffect(() => {
-    prevRef.current = () => {
+  /**
+   * Loads the track `offset` places away (wrapping) without starting playback,
+   * parked at its end when `atEnd` is set. The skip buttons use this when they
+   * cross a track boundary: they only move the playhead, they do not play.
+   */
+  const loadAdjacentTrack = useCallback(
+    (offset: -1 | 1, atEnd: boolean) => {
       const s = getPlayer();
       if (s.tracks.length === 0) return;
-      const prevIndex =
-        (s.currentTrackIndex - 1 + s.tracks.length) % s.tracks.length;
-      const track = s.tracks[prevIndex];
+      const index =
+        (s.currentTrackIndex + offset + s.tracks.length) % s.tracks.length;
+      const track = s.tracks[index];
       if (!track) return;
-      startTrack(audioRef.current, track.url).catch(err => {
-        console.error('Failed to start previous track:', err);
-      });
-      dispatch(setCurrentTrackIndex(prevIndex));
+      startTrack(audioRef.current, track.url, {play: false, atEnd}).catch(
+        err => {
+          console.error('Failed to load adjacent track:', err);
+        },
+      );
+      dispatch(setCurrentTrackIndex(index));
       dispatch(setCurrentTime(0));
       dispatch(setDuration(0));
-    };
-  });
+    },
+    [dispatch, startTrack],
+  );
 
   useEffect(() => {
     const audio = audioRef.current;
@@ -384,7 +414,7 @@ export function useAudioPlayer(skipSeconds: number) {
    * The "skip to end" button works in two steps:
    *  - Not at the end yet: jump to the end and stop there, holding playback so
    *    the `ended` event does not roll on to the next track.
-   *  - Already at the end: advance to the next track.
+   *  - Already at the end: go to the start of the next track, paused.
    */
   const next = useCallback(() => {
     const audio = audioRef.current;
@@ -396,7 +426,7 @@ export function useAudioPlayer(skipSeconds: number) {
 
     if (atEnd) {
       holdAtEndRef.current = false;
-      nextRef.current();
+      loadAdjacentTrack(1, false);
       return;
     }
 
@@ -408,19 +438,19 @@ export function useAudioPlayer(skipSeconds: number) {
     audio.currentTime = duration;
     dispatch(setCurrentTime(duration));
     dispatch(setIsPlaying(false));
-  }, [dispatch, stopRangeMonitoring]);
+  }, [dispatch, loadAdjacentTrack, stopRangeMonitoring]);
 
   /*
    * The "skip to start" button mirrors skip-to-end:
    *  - Not at the start yet: jump to the start and stop there.
-   *  - Already at the start: go to the previous track.
+   *  - Already at the start: go to the end of the previous track, paused.
    */
   const prev = useCallback(() => {
     const audio = audioRef.current;
     holdAtEndRef.current = false;
 
     if (audio.currentTime <= EDGE_TOLERANCE_SEC) {
-      prevRef.current();
+      loadAdjacentTrack(-1, true);
       return;
     }
 
@@ -429,7 +459,7 @@ export function useAudioPlayer(skipSeconds: number) {
     audio.currentTime = 0;
     dispatch(setCurrentTime(0));
     dispatch(setIsPlaying(false));
-  }, [dispatch, stopRangeMonitoring]);
+  }, [dispatch, loadAdjacentTrack, stopRangeMonitoring]);
 
   const seek = useCallback(
     (time: number) => {

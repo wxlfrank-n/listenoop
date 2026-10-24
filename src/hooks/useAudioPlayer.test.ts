@@ -9,7 +9,6 @@ import {
   setCurrentTime,
   setIsPlaying,
   setCurrentTrackIndex,
-  setDuration,
 } from '../store/playerSlice';
 
 /*
@@ -546,9 +545,9 @@ describe('useAudioPlayer.playRange', () => {
 
       expect(dispatch).toHaveBeenCalledWith(setCurrentTrackIndex(0));
       expect(dispatch).toHaveBeenCalledWith(setCurrentTime(0));
-      // Crossing the boundary only moves the playhead; it does not play.
-      expect(audio.play).not.toHaveBeenCalled();
-      expect(audio.paused).toBe(true);
+      // Crossing the boundary plays the next track from its start.
+      expect(audio.play).toHaveBeenCalled();
+      expect(audio.paused).toBe(false);
     });
 
     it('advances on the second press after parking at the end', async () => {
@@ -562,12 +561,15 @@ describe('useAudioPlayer.playRange', () => {
 
       expect(audio.paused).toBe(true);
 
+      audio.play.mockClear();
+
       await act(async () => {
         result.current.next();
       });
 
       expect(dispatch).toHaveBeenCalledWith(setCurrentTrackIndex(0));
-      expect(audio.play).not.toHaveBeenCalled();
+      expect(audio.play).toHaveBeenCalled();
+      expect(audio.paused).toBe(false);
     });
 
     it('stops at the end when the playlist loop is off', () => {
@@ -637,7 +639,7 @@ describe('useAudioPlayer.playRange', () => {
       expect(dispatch).not.toHaveBeenCalledWith(setCurrentTrackIndex(0));
     });
 
-    it('goes to the end of the previous track when already at the start', async () => {
+    it('goes to the start of the previous track when already at the start', async () => {
       playerState.tracks = [track, {...track, id: 't2', url: 'blob:track2'}];
       playerState.currentTrackIndex = 1;
 
@@ -652,19 +654,10 @@ describe('useAudioPlayer.playRange', () => {
       });
 
       expect(dispatch).toHaveBeenCalledWith(setCurrentTrackIndex(0));
-      // Crossing the boundary only moves the playhead; it does not play.
-      expect(audio.play).not.toHaveBeenCalled();
-      expect(audio.paused).toBe(true);
-
-      // The duration is known once the metadata arrives; park at the end.
-      audio.duration = 100;
-      act(() => {
-        audio.dispatchEvent(new Event('loadedmetadata'));
-      });
-
-      expect(audio.currentTime).toBe(100);
-      expect(dispatch).toHaveBeenCalledWith(setCurrentTime(100));
-      expect(dispatch).toHaveBeenCalledWith(setDuration(100));
+      // Crossing the boundary plays the previous track from its start.
+      expect(audio.play).toHaveBeenCalled();
+      expect(audio.paused).toBe(false);
+      expect(audio.currentTime).toBe(0);
     });
 
     it('goes to the previous track on the second press after parking at the start', async () => {
@@ -682,12 +675,15 @@ describe('useAudioPlayer.playRange', () => {
       expect(audio.currentTime).toBe(0);
       expect(audio.paused).toBe(true);
 
+      audio.play.mockClear();
+
       await act(async () => {
         result.current.prev();
       });
 
       expect(dispatch).toHaveBeenCalledWith(setCurrentTrackIndex(0));
-      expect(audio.play).not.toHaveBeenCalled();
+      expect(audio.play).toHaveBeenCalled();
+      expect(audio.paused).toBe(false);
     });
   });
 });

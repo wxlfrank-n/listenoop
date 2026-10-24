@@ -106,7 +106,11 @@ function setup() {
     view.container.querySelector('.stacked-waveform__pageno')?.textContent ??
     '';
 
-  return {scrollTo, rerender, pageNumber};
+  const scroller = view.container.querySelector(
+    '.stacked-waveform',
+  ) as HTMLElement;
+
+  return {scrollTo, rerender, pageNumber, scroller};
 }
 
 beforeEach(() => {
@@ -135,7 +139,7 @@ afterEach(() => {
 });
 
 describe('stacked waveform active-clip follow', () => {
-  it('keeps the page when a split or merge re-packs the edited clip onto another page', async () => {
+  it('follows a split or merge that re-packs the edited clip onto another page', async () => {
     const {scrollTo, rerender, pageNumber} = setup();
 
     // Page 1 shows 0-18s, so the clip at 16.5s is on screen.
@@ -143,14 +147,34 @@ describe('stacked waveform active-clip follow', () => {
 
     scrollTo.mockClear();
 
-    // Shorter clips re-pack the rows, so that clip now starts page 2. It was
-    // on screen when the user edited it, so do not page away.
+    // Shorter clips re-pack the rows, so that clip now starts page 2. It is
+    // still the clip the user edited, so page to it.
     rerender({displayClips: shortClips, activeClip: 11});
     await act(async () => {
       await vi.advanceTimersByTimeAsync(0);
     });
 
-    expect(pageNumber()).toBe('1 / 3');
+    expect(pageNumber()).toBe('2 / 3');
+    expect(scrollTo).toHaveBeenCalledWith({left: 800, behavior: 'smooth'});
+  });
+
+  it('does not move when the active clip is already on the visible page', async () => {
+    const {scrollTo, rerender, pageNumber, scroller} = setup();
+
+    // Establish page 1 as the visible page (the scroller reports page 1).
+    await act(async () => {
+      scroller.dispatchEvent(new Event('scroll'));
+    });
+
+    scrollTo.mockClear();
+
+    // 4.5s is on page 1 (0-18s).
+    rerender({displayClips: longClips, activeClip: 1});
+    await act(async () => {
+      await vi.advanceTimersByTimeAsync(0);
+    });
+
+    expect(pageNumber()).toBe('1 / 2');
     expect(scrollTo).not.toHaveBeenCalled();
   });
 

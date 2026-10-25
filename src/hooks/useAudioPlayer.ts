@@ -250,22 +250,23 @@ export function useAudioPlayer(skipSeconds: number) {
   });
 
   /**
-   * Loads the track `offset` places away (wrapping). When `play` is set it
-   * starts playing that track from the top; otherwise it only moves the
-   * playhead (parked at the end when `atEnd` is set). The skip buttons use
-   * this when they cross a track boundary.
+   * Loads the track `offset` places away (wrapping) without starting playback,
+   * parked at its end when `atEnd` is set. The skip buttons use this when they
+   * cross a track boundary: they only move the playhead, they do not play.
    */
   const loadAdjacentTrack = useCallback(
-    (offset: -1 | 1, {atEnd = false, play = false} = {}) => {
+    (offset: -1 | 1, atEnd = false) => {
       const s = getPlayer();
       if (s.tracks.length === 0) return;
       const index =
         (s.currentTrackIndex + offset + s.tracks.length) % s.tracks.length;
       const track = s.tracks[index];
       if (!track) return;
-      startTrack(audioRef.current, track.url, {play, atEnd}).catch(err => {
-        console.error('Failed to load adjacent track:', err);
-      });
+      startTrack(audioRef.current, track.url, {play: false, atEnd}).catch(
+        err => {
+          console.error('Failed to load adjacent track:', err);
+        },
+      );
       dispatch(setCurrentTrackIndex(index));
       dispatch(setCurrentTime(0));
       dispatch(setDuration(0));
@@ -425,7 +426,7 @@ export function useAudioPlayer(skipSeconds: number) {
 
     if (atEnd) {
       holdAtEndRef.current = false;
-      loadAdjacentTrack(1, {play: true});
+      loadAdjacentTrack(1);
       return;
     }
 
@@ -442,14 +443,14 @@ export function useAudioPlayer(skipSeconds: number) {
   /*
    * The "skip to start" button mirrors skip-to-end:
    *  - Not at the start yet: jump to the start and stop there.
-   *  - Already at the start: go to the start of the previous track and play it.
+   *  - Already at the start: go to the end of the previous track, paused.
    */
   const prev = useCallback(() => {
     const audio = audioRef.current;
     holdAtEndRef.current = false;
 
     if (audio.currentTime <= EDGE_TOLERANCE_SEC) {
-      loadAdjacentTrack(-1, {play: true});
+      loadAdjacentTrack(-1, true);
       return;
     }
 

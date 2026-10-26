@@ -39,6 +39,7 @@
 }
 
 .playlist-close {
+  position: relative;
   background: none;
   border: none;
   color: var(--text-secondary);
@@ -50,6 +51,16 @@
   transition:
     color 0.15s,
     background 0.15s;
+}
+
+/*
+ * Touch target: the icon stays 26px so the header keeps its visual rhythm,
+ * but the hit area grows to 44px (Apple HIG / Material guidance).
+ */
+.playlist-close::after {
+  content: '';
+  position: absolute;
+  inset: -9px;
 }
 
 .playlist-close:active {
@@ -69,6 +80,7 @@
 
 /* Matches the accent style of the player actions (three dots) button. */
 .add-btn {
+  position: relative;
   background: rgba(var(--accent-rgb), 0.12);
   color: var(--accent);
   border: 1px solid rgba(var(--accent-rgb), 0.35);
@@ -84,6 +96,13 @@
     background 0.15s,
     color 0.15s,
     border-color 0.15s;
+}
+
+/* 36px visual chip, 44px hit area. */
+.add-btn::after {
+  content: '';
+  position: absolute;
+  inset: -4px;
 }
 
 .add-btn:active {

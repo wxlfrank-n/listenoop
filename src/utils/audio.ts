@@ -75,6 +75,10 @@ export function decodeAudioBuffer(url: string): Promise<DecodedAudio> {
     if (!response.ok)
       throw new Error(`Failed to fetch audio (${response.status})`);
     const arrayBuffer = await response.arrayBuffer();
+    // `decodeAudioData` detaches (transfers) its input buffer, after which
+    // `byteLength` reads 0. Capture the size up front so the bitrate stays
+    // accurate.
+    const byteLength = arrayBuffer.byteLength;
 
     // Use shared context if available (player initialized), else create temporary one
     let audioContext = sharedAudioContext;
@@ -102,7 +106,7 @@ export function decodeAudioBuffer(url: string): Promise<DecodedAudio> {
 
     try {
       const buffer = await audioContext.decodeAudioData(arrayBuffer);
-      return {buffer, byteLength: arrayBuffer.byteLength};
+      return {buffer, byteLength};
     } finally {
       // Only close if we created a temporary context (keep shared context alive)
       if (isTemporary) {

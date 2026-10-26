@@ -32,6 +32,7 @@
 }
 
 .settings-close {
+  position: relative;
   background: none;
   border: none;
   color: var(--text-secondary);
@@ -43,6 +44,13 @@
   transition:
     color 0.15s,
     background 0.15s;
+}
+
+/* 26px visual icon, 44px hit area. */
+.settings-close::after {
+  content: '';
+  position: absolute;
+  inset: -9px;
 }
 
 .settings-close:active {
@@ -480,6 +488,7 @@
 }
 
 .settings-info-button {
+  position: relative;
   background: none;
   border: none;
   padding: 0;
@@ -493,6 +502,13 @@
   transition:
     color 0.15s,
     background 0.15s;
+}
+
+/* 32px visual circle, 44px hit area. */
+.settings-info-button::after {
+  content: '';
+  position: absolute;
+  inset: -6px;
 }
 
 .settings-info-button--open {

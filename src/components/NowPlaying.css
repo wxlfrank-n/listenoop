@@ -70,7 +70,8 @@
 
 .now-playing__meta {
   font-size: 0.72rem;
-  color: var(--text-tertiary, #8b949e);
+  /* `--text-tertiary` drops below 4.5:1 at this size on several themes. */
+  color: var(--text-secondary);
   white-space: nowrap;
   overflow: hidden;
   text-overflow: ellipsis;

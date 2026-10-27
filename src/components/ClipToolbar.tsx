@@ -101,6 +101,10 @@ export function ClipToolbar({
         value={repetitions}
         onChange={onRepetitionsChange}
         disabled={disabled}
+        // The merge row and the repeat row share a single line: drop the
+        // label while the merge control is present, and keep it (centred)
+        // when the repeats are the only control.
+        showLabel={!showMergeSlider}
       />
     </div>
   );

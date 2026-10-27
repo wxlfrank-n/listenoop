@@ -46,7 +46,7 @@
 @media (max-width: 767px) {
   .clip-toolbar {
     flex-direction: row;
-    flex-wrap: wrap;
+    flex-wrap: nowrap;
     align-items: center;
     gap: 8px 16px;
     width: 100%;

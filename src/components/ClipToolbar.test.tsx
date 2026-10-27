@@ -67,6 +67,18 @@ describe('ClipToolbar', () => {
     expect(container.querySelector('.clip-reps')).not.toBeNull();
   });
 
+  it('drops the repeats label while the merge control shares the row', () => {
+    const store = makeStore();
+    const {container} = renderToolbar(store, true);
+    expect(container.querySelector('.clip-reps__label')).toBeNull();
+  });
+
+  it('keeps the repeats label when the merge control is hidden', () => {
+    const store = makeStore();
+    const {container} = renderToolbar(store, false);
+    expect(container.querySelector('.clip-reps__label')).not.toBeNull();
+  });
+
   it('hides the toolbar on a swipe down', () => {
     const store = makeStore();
     renderToolbar(store);

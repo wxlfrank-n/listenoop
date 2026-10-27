@@ -23,6 +23,11 @@ interface RepsStepperProps {
   max?: number;
   /** Disables the stepper (e.g. while playing). */
   disabled?: boolean;
+  /**
+   * Shows the "Repeats" label. Hidden while the merge-gap control shares the
+   * row, so both controls fit on one line.
+   */
+  showLabel?: boolean;
 }
 
 export function RepsStepper({
@@ -31,6 +36,7 @@ export function RepsStepper({
   min = 1,
   max = 20,
   disabled = false,
+  showLabel = true,
 }: RepsStepperProps) {
   const t = useT();
   const step = (delta: number) =>
@@ -38,7 +44,7 @@ export function RepsStepper({
 
   return (
     <div className="clip-reps">
-      <span className="clip-reps__label">{t('reps.label')}</span>
+      {showLabel && <span className="clip-reps__label">{t('reps.label')}</span>}
       <div className="clip-reps__stepper">
         <button
           type="button"

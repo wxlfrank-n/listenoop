@@ -70,10 +70,10 @@ export function getInitClipData(
     64,
     Math.round((options.blockMs / 1000) * sampleRate),
   );
-  // silenceRatio is clamped to [0.0001, 0.01] so a single block can't be
-  // misclassified as silence due to a single sample being quiet. A 0.01 ratio
-  // is ~-40 dB, which is already very quiet.
-  const silenceRatio = Math.min(0.01, Math.max(0.0001, options.silenceRatio));
+  // silenceRatio is clamped to [0.0001, 0.02] so a single block can't be
+  // misclassified as silence due to a single sample being quiet. A 0.02 ratio
+  // is ~-34 dB, which is already very quiet.
+  const silenceRatio = Math.min(0.02, Math.max(0.0001, options.silenceRatio));
 
   // peakStride is the number of samples to skip when computing the peak of a
   // block. A smaller stride gives a more accurate peak, but takes longer to

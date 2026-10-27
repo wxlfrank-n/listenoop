@@ -79,10 +79,10 @@ export const DEFAULT_CONFIG: ConfigState = {
 export const CONFIG_RANGES = {
   skipSeconds: {min: 1, max: 60},
   blockMs: {min: 2, max: 64},
-  // Capped at the detector's own ceiling (`clips.ts` clamps to 0.01): higher
+  // Capped at the detector's own ceiling (`clips.ts` clamps to 0.02): higher
   // values behave identically, so the slider stops here instead of offering a
   // dead range.
-  silenceRatio: {min: 0.005, max: 0.01},
+  silenceRatio: {min: 0.005, max: 0.02},
   minClipLength: {min: 0.2, max: 1},
   minSplitPieceSec: {min: 0.01, max: 0.5},
   repetitions: {min: 1, max: 20},

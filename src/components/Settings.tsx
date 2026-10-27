@@ -317,7 +317,7 @@ function ClipDetectionTab() {
       <SliderSetting
         label={t('settings.silenceThreshold')}
         hint={t('settings.silenceHint')}
-        presets={[0.005, 0.01]}
+        presets={[0.005, 0.01, 0.015, 0.02]}
         value={silenceRatio}
         min={CONFIG_RANGES.silenceRatio.min}
         max={CONFIG_RANGES.silenceRatio.max}

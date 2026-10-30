@@ -1,15 +1,17 @@
 /**
  * Extracts audio metadata (channels, sample rate, bitrate).
  *
- * Uses the decoded audio buffer to compute bitrate:
  * bitrate = (file_size_bytes * 8) / duration_seconds / 1000
  *
- * Reuses the shared decode cache so metadata extraction doesn't
- * trigger a second full decode of the file.
+ * Reuses the worker decode (and its per-URL Promise cache) so metadata
+ * extraction doesn't trigger a second full decode of the file. The
+ * `clips` field of the decode result is ignored here — only metadata is
+ * consumed; the cached `clips` are managed separately via `useClipDetection`.
  */
 
 import {useState, useEffect, useRef} from 'react';
-import {decodeAudioBuffer} from '../utils/audio';
+import {decodeAudio} from '../workers/audioDecoderClient';
+import {useConfig} from './useConfig';
 
 /**
  * Audio metadata information.
@@ -27,9 +29,13 @@ export interface AudioMeta {
 export function useAudioMeta(url: string | null) {
   const [meta, setMeta] = useState<AudioMeta | null>(null);
   const urlRef = useRef(url);
-
+  const {config} = useConfig();
+  // Read the latest config via a ref so changes don't trigger a re-decode —
+  // metadata never changes for a given URL, so a stale snapshot is fine.
+  const configRef = useRef(config);
   useEffect(() => {
     urlRef.current = url;
+    configRef.current = config;
   });
 
   useEffect(() => {
@@ -39,23 +45,37 @@ export function useAudioMeta(url: string | null) {
       return;
     }
 
+    // Abort the in-flight fetch when the user switches tracks mid-decode.
+    // The worker's decodeAudioData call is un-interruptible, but at least
+    // the network transfer stops.
+    const controller = new AbortController();
     let cancelled = false;
 
     async function extract() {
       try {
-        // Reuse the same fetch + decodeAudioData that the waveform and playback
-        // use, so the metadata never triggers a second full decode of the file.
-        const {buffer, byteLength} = await decodeAudioBuffer(currentUrl!);
+        // Reuse the same worker decode that the waveform and playback
+        // use, so the metadata never triggers a second full decode. The
+        // options are passed so the per-URL cache shares a single decode
+        // with `useWaveform` (which DOES use the clips field).
+        const {numberOfChannels, sampleRate, byteLength, duration} =
+          await decodeAudio(
+            currentUrl!,
+            {
+              blockMs: configRef.current.blockMs,
+              silenceRatio: configRef.current.silenceRatio,
+              minClipLength: configRef.current.minClipLength,
+              minSplitPieceSec: configRef.current.minSplitPieceSec,
+            },
+            controller.signal,
+          );
         if (cancelled) return;
 
         const bitrate =
-          buffer.duration > 0
-            ? Math.round((byteLength * 8) / buffer.duration / 1000)
-            : 0;
+          duration > 0 ? Math.round((byteLength * 8) / duration / 1000) : 0;
 
         setMeta({
-          channels: buffer.numberOfChannels,
-          sampleRate: buffer.sampleRate,
+          channels: numberOfChannels,
+          sampleRate,
           bitrate,
         });
       } catch {
@@ -69,6 +89,7 @@ export function useAudioMeta(url: string | null) {
 
     return () => {
       cancelled = true;
+      controller.abort();
     };
   }, [url]);
 

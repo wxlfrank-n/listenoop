@@ -116,6 +116,12 @@
   animation: player-actions-item 0.15s ease-out backwards;
 }
 
+/* Marks the entry whose panel is already open behind the menu. */
+.player-actions__item--active {
+  background: rgba(var(--accent-rgb), 0.22);
+  color: var(--accent);
+}
+
 .player-actions__item:nth-child(2) {
   animation-delay: 0.03s;
 }

@@ -5,8 +5,6 @@ import {beforeEach, describe, expect, it, vi} from 'vitest';
 
 import {useRowWaveformScroll} from './useRowWaveformScroll';
 
-import type {Clip} from '../utils/clips';
-
 /*
  * Make viewport calculation deterministic.
  *
@@ -40,7 +38,6 @@ function createHarness(options?: {
   duration?: number;
   currentTime?: number;
   playing?: boolean;
-  clips?: Clip[];
 }) {
   let time = options?.currentTime ?? 0;
 
@@ -81,8 +78,6 @@ function createHarness(options?: {
     useRowWaveformScroll({
       waveformDuration: options?.duration ?? 100,
 
-      displayClips: options?.clips ?? [],
-
       currentTime: time,
 
       onSeek,
@@ -90,10 +85,6 @@ function createHarness(options?: {
       onPlayRange,
 
       repetitions: 3,
-
-      activeClip: -1,
-
-      mergeScope: 'clip',
 
       onActiveClipChange,
 

@@ -520,8 +520,8 @@ describe('Clip gestures', () => {
       </>,
     );
     const rects = view.container.querySelectorAll('.waveform-clip');
-    const a = rects[0];
-    const b = rects[1];
+    const a = rects[0]!;
+    const b = rects[1]!;
 
     fireEvent.pointerDown(a, {
       pointerId: 61,
@@ -597,13 +597,13 @@ describe('Clip gestures', () => {
     );
     const rects = view.container.querySelectorAll('.waveform-clip');
 
-    fireEvent.pointerDown(rects[0], {
+    fireEvent.pointerDown(rects[0]!, {
       pointerId: 71,
       pointerType: 'touch',
       clientX: 100,
       clientY: 80,
     });
-    fireEvent.pointerDown(rects[1], {
+    fireEvent.pointerDown(rects[1]!, {
       pointerId: 72,
       pointerType: 'touch',
       clientX: 100,

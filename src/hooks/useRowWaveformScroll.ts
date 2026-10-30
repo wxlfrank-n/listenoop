@@ -26,8 +26,6 @@ import {
   updatePlayedStyle,
   updateTrackStyle,
 } from '../utils/waveform';
-import type {Clip} from '../utils/clips';
-import type {MergeScope} from '../types';
 import {DIAGONAL_MIN_TAN} from '../components/Clip';
 import {panTarget} from '../utils/pan';
 import {clipPinchState} from '../components/clipPinch';
@@ -46,7 +44,6 @@ export {
 
 export interface UseRowWaveformScrollArgs {
   waveformDuration: number;
-  displayClips: Clip[];
   currentTime: number;
   onSeek: (time: number) => void;
   onPlayRange: (
@@ -58,9 +55,6 @@ export interface UseRowWaveformScrollArgs {
   ) => void;
   repetitions: number;
   onStopPlayback?: () => void;
-  activeClip: number;
-  /** Merge scope, so the window can follow the selected clip in "clip" scope. */
-  mergeScope: MergeScope;
   onActiveClipChange: (idx: number) => void;
   onSwipeClip?: (idx: number, direction: 'up' | 'down') => void;
   getCurrentTime: () => number;
@@ -71,16 +65,22 @@ export interface UseRowWaveformScrollArgs {
   cursorElRef?: RefObject<HTMLDivElement | null>;
   playedElRef?: RefObject<HTMLDivElement | null>;
   clipLabelLayerRef?: RefObject<HTMLDivElement | null>;
+  /**
+   * Time position (seconds) the viewport should anchor to on mount. Used
+   * when the view is first rendered or re-mounted after a view switch so
+   * the user sees the relevant part of the waveform instead of position 0.
+   * Typically the active clip's midpoint, or the current playhead time when
+   * no clip is selected. Only consulted on the first render — subsequent
+   * anchor changes go through the normal follow/seek flow.
+   */
+  initialAnchorSec?: number;
 }
 
 export function useRowWaveformScroll({
   waveformDuration,
-  displayClips,
   currentTime,
   onSeek,
   onPlayRange,
-  activeClip,
-  mergeScope,
   onActiveClipChange,
   getCurrentTime,
   playing,
@@ -90,6 +90,7 @@ export function useRowWaveformScroll({
   cursorElRef,
   playedElRef,
   clipLabelLayerRef,
+  initialAnchorSec = 0,
 }: UseRowWaveformScrollArgs) {
   const innerH = VB_H - PAD * 2;
   const hsRef = useRef<HTMLDivElement>(null);
@@ -97,7 +98,12 @@ export function useRowWaveformScroll({
   const hsWinLenRef = useRef(0);
   const hsMaxStartRef = useRef(0);
   const [windowSecs, setWindowSecs] = useState(0);
-  const viewportAnchorRef = useRef(0);
+  // Initialize to `initialAnchorSec` so a freshly-mounted view (including
+  // a view switch) opens at the active clip / playhead instead of at 0.
+  // `useRef` only reads the initial value, which is exactly what we want:
+  // the anchor is set once on mount and then driven by the normal
+  // follow / seek flow.
+  const viewportAnchorRef = useRef(initialAnchorSec);
   const bufferAnchorRef = useRef(0);
   const pendingBufferAnchorRef = useRef<number | null>(null);
   const bufferLengthRef = useRef(0);
@@ -113,7 +119,7 @@ export function useRowWaveformScroll({
   });
   const viewportContextRef = useRef<ViewportContext>({
     type: 'follow',
-    epoch: makeFollowEpoch(0, 0, getCurrentTime()),
+    epoch: makeFollowEpoch(initialAnchorSec, 0, getCurrentTime()),
   });
   useEffect(() => {
     playingRef.current = playing;
@@ -191,14 +197,7 @@ export function useRowWaveformScroll({
   const applyWidth = useCallback(
     (width: number) => {
       if (width <= 0 || waveformDuration <= 0) return;
-      const nextWindowSecs = Math.min(
-        getWindowSecs(width, displayClips, waveformDuration, {
-          activeClip,
-          mergeScope,
-          previousWindowSecs: hsWinLenRef.current,
-        }),
-        waveformDuration,
-      );
+      const nextWindowSecs = Math.min(getWindowSecs(width), waveformDuration);
       if (!Number.isFinite(nextWindowSecs) || nextWindowSecs <= 0) return;
       if (Math.abs(nextWindowSecs - hsWinLenRef.current) < 1e-6) return;
       hsWinLenRef.current = nextWindowSecs;
@@ -220,15 +219,7 @@ export function useRowWaveformScroll({
         setViewportFollow(getCurrentTime());
       }
     },
-    [
-      activeClip,
-      displayClips,
-      getCurrentTime,
-      mergeScope,
-      setLiveAnchor,
-      setViewportFollow,
-      waveformDuration,
-    ],
+    [getCurrentTime, setLiveAnchor, setViewportFollow, waveformDuration],
   );
   useLayoutEffect(() => {
     const element = hsRef.current;

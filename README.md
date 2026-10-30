@@ -2,7 +2,7 @@
 
 A browser-based music player for audio files that automatically breaks each track into **clips** (segments separated by silence) so you can practice, loop, and repeat specific parts.
 
-![GitHub language](https://img.shields.io/badge/react-19-blue) ![typescript](https://img.shields.io/badge/typescript-6-blue) ![vite](https://img.shields.io/badge/vite-8-purple)
+![GitHub language](https://img.shields.io/badge/react-19-blue) ![typescript](https://img.shields.io/badge/typescript-5.6-blue) ![vite](https://img.shields.io/badge/vite-8-purple)
 
 ## Features
 
@@ -33,7 +33,7 @@ This starts the Vite dev server (default: <http://localhost:5173>). Open that UR
 
 ```bash
 npm run build        # compiles TypeScript, builds to docs/ (VITE_OUT_DIR)
-npm run build:local  # builds and copies the output into the deploy folder set by VITE_BASE_URL
+npm run build:local  # copies output into .local-deploy/<folder>/ for VITE_BASE_URL=/folder/
 npm run preview      # serves the built app to verify it
 ```
 
@@ -43,15 +43,17 @@ npm run preview      # serves the built app to verify it
 | -------------------- | --------------------------------------------------- |
 | `npm run dev`        | Start the development server with hot reload        |
 | `npm run build`      | Type-check and build the production bundle          |
-| `npm run build:local`| Build and copy output into the configured folder    |
+| `npm run build:local`| Build and copy output into .local-deploy/<folder>/    |
 | `npm run preview`    | Preview the production build                        |
 | `npm run serve`      | Alias for `preview`                                 |
 | `npm run test`       | Run the unit test suite (Vitest)                    |
-| `npm run lint`       | Lint the codebase (Oxlint)                          |
+| `npm run lint`       | Lint the codebase (GTS / ESLint)                          |
 
 ---
 
 ## Loading music
+
+Local deployment copies use `.local-deploy/<folder>/` for a base URL such as `/folder/`. A root base URL skips the copy. The source follows `VITE_OUT_DIR` (default `dist`). Unsafe paths and symbolic links at the deployment folder are rejected. Existing files are preserved, so old hashed assets may remain after rebuilding.
 
 1. Click the **playlist** button in the top-left corner to open the playlist panel.
 2. Click the **`+`** button and select one or more audio files.
@@ -77,9 +79,9 @@ The bottom button row provides:
 | Control            | Action                                                       |
 | ------------------ | ------------------------------------------------------------ |
 | **Back** (large)   | Skip backward by the configured interval (default 10s)        |
-| **Previous**       | Jump to the previous track, or restart the current one if more than 3 seconds have played |
+| **Previous**       | Go to start; press again at the start to load the previous track |
 | **Play / Pause**   | The main play/pause toggle (shows a loading state while decoding) |
-| **Next**           | Jump to the next track (wraps to the start of the playlist)   |
+| **Next**           | Go to end and stop; press again at the end to load the next track   |
 | **Forward** (large)| Skip forward by the configured interval (default 10s)        |
 
 The large skip buttons display the current skip interval (e.g. `10`), and all controls are disabled until a track has loaded.
@@ -145,11 +147,11 @@ Open the **Settings** panel with the gear button in the top-right. Every option 
 | ---------------------- | --------------------------- | ------- | ----------- |
 | **Waveform view**      | Stacked / Single row        | Single row | How clips and audio are displayed |
 | **Skip forward / back**| 5, 10, 15, 20, 30s (or 1–60s custom) | 10s | Interval used by the large skip buttons |
-| **Silence threshold**  | 0.005 / 0.01 (or 0.005–0.01) | 0.01 | How quiet a block must be to count as silence. **Lower** values only treat very quiet parts as silence (capped at the detector ceiling) |
+| **Silence threshold**  | 0.005–0.02 | 0.01 | How quiet a block must be to count as silence. **Lower** values only treat very quiet parts as silence (capped at the detector ceiling) |
 | **Analysis detail**    | 4 / 8 / 12 / 24 (or 2–64ms) | 12ms | Audio chunk size used for detection. **Smaller** = more precise splits, **larger** = faster processing |
-| **Minimum clip length** | 0.1 / 0.2 / 0.3 / 0.5s (or 0.2–1s) | 0.3s | Detection tries to join shorter clips with a neighbor |
+| **Minimum clip length** | 0.2–1s | 0.3s | Detection tries to join shorter clips with a neighbor |
 
-> Tip: after changing **silence threshold**, **analysis detail**, or **minimum gap**, a new track must be (re)loaded for the splits to recompute.
+> Detection settings recompute clips for the current track automatically and reset manual clip grouping. Settings remain usable for the current session if browser storage is blocked or full.
 
 ---
 
@@ -165,9 +167,9 @@ Open the **Settings** panel with the gear button in the top-right. Every option 
 ## Notes & troubleshooting
 
 - **Audio formats** — MP3, WAV, OGG, M4A, FLAC, and WebM are accepted; other files are skipped and a notice shows the count.
-- **Data stays on your device** — music and settings are processed and stored locally in the browser. Clearing site data removes your settings and uploaded files.
+- **Data stays on your device** — audio is processed locally without uploading it. Settings persist in browser storage. Imported files, playback position, and manual clip edits last for the current page session; select files again after reloading.
 - **iOS / iPhone** — WebKit's audio-routing limitation means the live frequency visualizer has no live analyser data; as a fallback the dancing lines are derived from the decoded waveform around the playhead, so they still animate.
-- **Audio playback** may require a user gesture (browser autoplay policy) — tap Play to start.
+- **Audio playback** may require a user gesture (browser autoplay policy) — tap Play to start. If playback fails, use **Retry** to reload the track or **Next track** to continue.
 
 ---
 

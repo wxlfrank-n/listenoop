@@ -30,7 +30,7 @@ const groupContaining = (groups: Clip[], target: Clip) =>
  */
 const groupEnclosing = (groups: Clip[], target: Clip) => {
   for (let i = groups.length - 1; i >= 0; i--) {
-    if (groups[i].start <= target.start) return i;
+    if (groups[i]!.start <= target.start) return i;
   }
   return -1;
 };
@@ -82,7 +82,7 @@ function finishSplit(
 
   const nextClips = mergeClipsByGap(clips, mergeGap);
 
-  const activeClip = groupContaining(nextClips, clip.children![0]);
+  const activeClip = groupContaining(nextClips, clip.children![0]!);
 
   return nextClips.length > 0
     ? {
@@ -188,8 +188,8 @@ export function mergeClips(
 
   if (scope === 'clip') {
     const merged = mergeClipPair(
-      displayClips[Math.min(idx, neighborIdx)],
-      displayClips[Math.max(idx, neighborIdx)],
+      displayClips[Math.min(idx, neighborIdx)]!,
+      displayClips[Math.max(idx, neighborIdx)]!,
     );
 
     return {
@@ -245,14 +245,14 @@ export function mergeClipRange(
 
   let mergeGap = 0;
   for (let i = low; i < high; i++) {
-    const gap = displayClips[i + 1].start - displayClips[i].end;
+    const gap = displayClips[i + 1]!.start - displayClips[i]!.end;
     if (gap > mergeGap) mergeGap = gap;
   }
 
   if (scope === 'clip') {
     let merged = first;
     for (let i = low + 1; i <= high; i++) {
-      merged = mergeClipPair(merged, displayClips[i]);
+      merged = mergeClipPair(merged, displayClips[i]!);
     }
 
     return {

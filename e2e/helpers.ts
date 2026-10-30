@@ -262,7 +262,7 @@ async function pageCounts(
   const text = ((await pageIndicator(page).textContent()) ?? '').trim();
   const [current, total] = text.split('/').map(part => Number(part.trim()));
 
-  return {current, total};
+  return {current: current!, total: total!};
 }
 
 export {pageCounts, clipBounds};

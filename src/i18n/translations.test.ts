@@ -2,6 +2,7 @@ import {describe, expect, it} from 'vitest';
 import {
   en,
   zh,
+  no,
   translate,
   t,
   setLocale,
@@ -9,6 +10,20 @@ import {
   LOCALE_IDS,
   isLocale,
 } from './index';
+
+/**
+ * Recursively walk `source` and collect the dotted key paths of its leaf
+ * strings, e.g. `{player: {play: 'Play'}}` → `['player.play']`.
+ */
+function collectKeys(obj: Record<string, unknown>, prefix = ''): string[] {
+  return Object.entries(obj).flatMap(([key, value]) => {
+    const path = prefix ? `${prefix}.${key}` : key;
+    if (value !== null && typeof value === 'object') {
+      return collectKeys(value as Record<string, unknown>, path);
+    }
+    return [path];
+  });
+}
 
 describe('i18n', () => {
   it('resolves deep keys to the English string', () => {
@@ -65,5 +80,19 @@ describe('i18n', () => {
     );
     expect(zh.playlist.title).toBe('播放列表（{count}）');
     setLocale('en');
+  });
+
+  it('has a complete zh translation — every English key exists', () => {
+    const enKeys = collectKeys(en);
+    const zhKeys = new Set(collectKeys(zh));
+    const missing = enKeys.filter(k => !zhKeys.has(k));
+    expect(missing).toEqual([]);
+  });
+
+  it("has a complete 'no' translation — every English key exists", () => {
+    const enKeys = collectKeys(en);
+    const noKeys = new Set(collectKeys(no));
+    const missing = enKeys.filter(k => !noKeys.has(k));
+    expect(missing).toEqual([]);
   });
 });

@@ -203,6 +203,7 @@ export function useClipPinchMerge(
       !splitCandidateRef.current
     ) {
       const [a, b] = [...map.values()];
+      if (!a || !b) return;
       if (a.clipIndex === b.clipIndex) {
         splitCandidateRef.current = {
           a: a.pointerId,

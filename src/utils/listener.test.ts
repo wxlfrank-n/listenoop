@@ -17,7 +17,9 @@ function captureEvent(node: Element, type: string): Event {
   const events: Event[] = [];
   node.addEventListener(type, event => events.push(event), {once: true});
   node.dispatchEvent(new Event(type, {bubbles: true}));
-  return events[0];
+  const ev = events[0];
+  if (!ev) throw new Error('expected event to be captured');
+  return ev;
 }
 
 describe('addListener', () => {

@@ -1,25 +1,11 @@
 import {describe, expect, it} from 'vitest';
 import {
+  MIN_WINDOW_SECS,
+  SMALL_VIEWPORT_THRESHOLD_PX,
   clampWindowAnchor,
   getBaseWindowSecs,
   getWindowSecs,
 } from './rowWaveform';
-import type {Clip} from './clips';
-
-/**
- * `count` clips of `length` seconds each, laid out end to end.
- *
- * `getWindowSecs` divides the track duration by the clip count, so the
- * individual boundaries do not matter.
- */
-function clips(count: number, length = 1): Clip[] {
-  return Array.from({length: count}, (_, i) => ({
-    start: i * length,
-    end: (i + 1) * length,
-    vStart: i * length,
-    vEnd: (i + 1) * length,
-  }));
-}
 
 describe('getBaseWindowSecs', () => {
   const cases: Array<[number, number]> = [
@@ -43,221 +29,94 @@ describe('getBaseWindowSecs', () => {
 
 describe('getWindowSecs', () => {
   /*
-   * With `avg = waveformDuration / clipCount`, the window is
-   *
-   *     avg * width / ((avg - 0.1) * ratio + 60)
-   *
-   * where `ratio = (width - 60) / (baseWindowSecs - 0.1)`. The result is capped
-   * at the base window and floored at `0.1 * width / 60`.
-   *
-   * The anchors are chosen so the density term lands exactly on round numbers:
-   * at 600px the base window is 12s and `ratio = 540 / 11.9`, so an average
-   * clip of 12s works out to a 600px density window and therefore a 12s
-   * viewport.
+   * Above SMALL_VIEWPORT_THRESHOLD_PX the ideal 120px-per-second scale
+   * applies: windowSecs = width * 0.2 / 24. A 1-second clip is rendered
+   * 120px wide everywhere in this regime — consistent visual size.
    */
-  const densityCases: Array<[number, number, number, number]> = [
-    // [width, clipCount, waveformDuration, expected]
-    // Long average clips: the base window caps the result.
-    [600, 1, 120, 12],
-    [600, 2, 120, 12],
-    [600, 10, 120, 12],
-    // The break-even point: avg 12s at 600px is exactly the base window.
-    [600, 20, 120, 10.984615],
-    [600, 60, 120, 8.206897],
-    [600, 120, 120, 5.950024],
-    // The floor wins: 600px floors at 0.1 * 600 / 60 = 1s.
-    [600, 600, 120, 1.859375],
-    [600, 1200, 120, 1],
-    [600, 2400, 120, 1],
-    // A wider row scales the floor: 1200px floors at 0.1 * 1200 / 60 = 2s.
-    [1200, 30, 120, 14.133333],
-    [1200, 6000, 120, 2],
-    // A 1600px row allows the longest base window, and its density term
-    // (avg 30s) lands just under it rather than being capped.
-    [1600, 4, 120, 31.926606],
+  const linearCases: Array<[number, number]> = [
+    // [width, expected seconds]
+    [SMALL_VIEWPORT_THRESHOLD_PX, 5],
+    [600, 5],
+    [1200, 10],
+    [1600, 13.3333],
   ];
 
-  it.each(densityCases)(
-    'width %s with %s clips over %s seconds shows %s seconds',
-    (width, count, duration, expected) => {
-      expect(getWindowSecs(width, clips(count), duration)).toBeCloseTo(
-        expected,
-        4,
-      );
-    },
-  );
-
-  const baseCases: Array<[number, number]> = [
-    [400, 12],
-    [800, 12],
-    [1200, 16],
-    [1600, 32],
-  ];
-
-  it.each(baseCases)(
-    'width %s with no clips shows the base window of %s seconds',
+  it.each(linearCases)(
+    'width %spx (>= threshold) → %ss of audio at 120px/s',
     (width, expected) => {
-      // No clips: density does not apply, whatever the duration.
-      expect(getWindowSecs(width, [], 120)).toBe(expected);
-      expect(getWindowSecs(width, [], 0)).toBe(expected);
+      expect(getWindowSecs(width)).toBeCloseTo(expected, 4);
     },
   );
 
-  it('falls back to the width-derived floor when the duration is zero', () => {
-    // A zero duration makes the average clip length zero, so the density term
-    // collapses and only the floor is left: 1s at 600px.
-    expect(getWindowSecs(600, clips(4), 0)).toBe(1);
-  });
+  /*
+   * Below SMALL_VIEWPORT_THRESHOLD_PX the window is held at MIN_WINDOW_SECS
+   * so small screens still show ~5 seconds of audio. The px-per-second
+   * ratio drops as the viewport shrinks (1s = 80px at 400px, 72px at 360px).
+   */
+  const smallScreenCases: Array<[number, number]> = [
+    // [width, expected seconds (always MIN_WINDOW_SECS)]
+    [0, MIN_WINDOW_SECS],
+    [120, MIN_WINDOW_SECS],
+    [240, MIN_WINDOW_SECS],
+    [360, MIN_WINDOW_SECS],
+    [400, MIN_WINDOW_SECS],
+    [599, MIN_WINDOW_SECS],
+  ];
 
-  it('never returns less than the width-derived floor', () => {
-    const floor = (0.1 * 600) / 60;
-
-    expect(getWindowSecs(600, clips(2400), 120)).toBeGreaterThanOrEqual(floor);
-    expect(getWindowSecs(600, clips(4), 0)).toBeGreaterThanOrEqual(floor);
-  });
-
-  it('never returns more than the base window', () => {
-    expect(getWindowSecs(600, clips(1), 1200)).toBeLessThanOrEqual(12);
-    expect(getWindowSecs(1600, clips(1), 120)).toBeLessThanOrEqual(32);
-  });
+  it.each(smallScreenCases)(
+    'width %spx (< threshold) → held at MIN_WINDOW_SECS (%ss)',
+    (width, expected) => {
+      expect(getWindowSecs(width)).toBe(expected);
+      expect(getWindowSecs(width)).toBe(MIN_WINDOW_SECS);
+    },
+  );
 
   /*
-   * Clip scope sizes the window off the local neighbourhood around the selected
-   * clip instead of the whole track.
+   * Continuity: at the threshold itself, the two regimes agree — both the
+   * linear formula and the floor give 5s. This avoids a visual jump when
+   * the viewport is resized across the boundary.
    */
-  describe('clip scope neighbourhood', () => {
-    // Mirror of the documented density formula, for an explicit average.
-    const windowForAvg = (width: number, avg: number) => {
-      const base = getBaseWindowSecs(width);
-      const minWindowSecs = (0.1 * width) / 60;
-      const ratio = (width - 60) / (base - 0.1);
-      const densityWindowPx = (avg - 0.1) * ratio + 60;
-      const densityWindowSecs = (avg * width) / densityWindowPx;
-      return Math.max(minWindowSecs, Math.min(base, densityWindowSecs));
-    };
+  it('is continuous at the threshold (no visual jump on resize)', () => {
+    const justBelow = getWindowSecs(SMALL_VIEWPORT_THRESHOLD_PX - 1);
+    const at = getWindowSecs(SMALL_VIEWPORT_THRESHOLD_PX);
+    const justAbove = getWindowSecs(SMALL_VIEWPORT_THRESHOLD_PX + 1);
 
-    /*
-     * Lay clips out in time order with `gap` seconds of silence between them, so
-     * the bounding span a neighbourhood covers includes those gaps.
-     */
-    const spaced = (durations: number[], gap = 0): Clip[] => {
-      let time = 0;
-
-      return durations.map(duration => {
-        const start = time;
-        const end = time + duration;
-        time = end + gap;
-
-        return {start, end, vStart: start, vEnd: end};
-      });
-    };
-
-    // 30 one-second clips, half a second apart.
-    const track = () => spaced(Array(30).fill(1), 0.5);
-
-    it('averages the bounding span of the clips around the selected clip', () => {
-      const list = track();
-
-      // Neighbourhood is clips 6..13: spans 9s..20.5s, so 11.5s over 8 clips.
-      expect(
-        getWindowSecs(600, list, 120, {activeClip: 10, mergeScope: 'clip'}),
-      ).toBeCloseTo(windowForAvg(600, 1.4375), 4);
-    });
-
-    it('ignores clips outside the neighbourhood', () => {
-      const list = track();
-      const expected = getWindowSecs(600, list, 120, {
-        activeClip: 10,
-        mergeScope: 'clip',
-      });
-
-      // A huge outlier far from the selection must not move the window.
-      list[0] = {start: 0, end: 100, vStart: 0, vEnd: 100};
-
-      expect(
-        getWindowSecs(600, list, 120, {activeClip: 10, mergeScope: 'clip'}),
-      ).toBe(expected);
-    });
-
-    it('clamps the neighbourhood at the start of the track', () => {
-      const list = track();
-
-      // Clip 1's neighbourhood clamps to clips 0..7, so the span is 0s..11.5s.
-      expect(
-        getWindowSecs(600, list, 120, {activeClip: 1, mergeScope: 'clip'}),
-      ).toBeCloseTo(windowForAvg(600, 1.4375), 4);
-    });
-
-    it('uses the whole-track average in global scope', () => {
-      const list = track();
-
-      // Track average is 120 / 30 = 4s, independent of the selection.
-      expect(
-        getWindowSecs(600, list, 120, {activeClip: 10, mergeScope: 'global'}),
-      ).toBeCloseTo(windowForAvg(600, 4), 4);
-    });
-
-    it('falls back to the whole-track average without a selected clip', () => {
-      const list = track();
-      const plain = getWindowSecs(600, list, 120);
-
-      expect(
-        getWindowSecs(600, list, 120, {activeClip: -1, mergeScope: 'clip'}),
-      ).toBe(plain);
-      expect(
-        getWindowSecs(600, list, 120, {activeClip: 99, mergeScope: 'clip'}),
-      ).toBe(plain);
-    });
-
-    it('still caps the window at the base window', () => {
-      // Every clip is 20s, so the neighbourhood average is 20s and the density
-      // term wants more than the 12s base window at 600px.
-      const list = spaced(Array(30).fill(20));
-
-      expect(
-        getWindowSecs(600, list, 120, {activeClip: 5, mergeScope: 'clip'}),
-      ).toBe(windowForAvg(600, 20));
-      expect(
-        getWindowSecs(600, list, 120, {activeClip: 5, mergeScope: 'clip'}),
-      ).toBeLessThanOrEqual(12);
-    });
+    expect(justBelow).toBeCloseTo(at, 4);
+    expect(at).toBeCloseTo(5, 4);
+    expect(justAbove).toBeCloseTo(at + 1 / 120, 4);
   });
 
-  /*
-   * Hysteresis: the length already on screen is sticky until the freshly
-   * computed one drifts more than `WINDOW_HYSTERESIS_SECS` (one second) away.
-   */
-  describe('previous window hysteresis', () => {
-    // 20 average-12s clips at 600px compute to 10.984615s.
-    const fresh = getWindowSecs(600, clips(20), 120);
+  it('scales linearly with width above the threshold', () => {
+    const at600 = getWindowSecs(600);
+    const at1200 = getWindowSecs(1200);
 
-    it('keeps the previous window when the new one is within a second', () => {
-      expect(
-        getWindowSecs(600, clips(20), 120, {previousWindowSecs: fresh - 0.9}),
-      ).toBeCloseTo(fresh - 0.9, 4);
-    });
+    expect(at1200).toBeCloseTo(at600 * 2, 4);
+  });
 
-    it('adopts the new window when it is more than a second away', () => {
-      expect(
-        getWindowSecs(600, clips(20), 120, {previousWindowSecs: fresh - 1.1}),
-      ).toBeCloseTo(fresh, 4);
-    });
+  it('is purely a function of width (no hysteresis, deterministic)', () => {
+    expect(getWindowSecs(600)).toBe(getWindowSecs(600));
+    expect(getWindowSecs(400)).toBe(getWindowSecs(400));
+    expect(getWindowSecs(600)).toBeCloseTo(5, 4);
+    expect(getWindowSecs(400)).toBeCloseTo(5, 4);
+  });
 
-    it('treats a one-second difference as unchanged', () => {
-      expect(
-        getWindowSecs(600, clips(20), 120, {previousWindowSecs: fresh - 1}),
-      ).toBeCloseTo(fresh - 1, 4);
-      expect(
-        getWindowSecs(600, clips(20), 120, {previousWindowSecs: fresh + 1}),
-      ).toBeCloseTo(fresh + 1, 4);
-    });
+  it('never returns less than MIN_WINDOW_SECS', () => {
+    expect(getWindowSecs(0)).toBeGreaterThanOrEqual(MIN_WINDOW_SECS);
+    expect(getWindowSecs(100)).toBeGreaterThanOrEqual(MIN_WINDOW_SECS);
+    expect(getWindowSecs(300)).toBeGreaterThanOrEqual(MIN_WINDOW_SECS);
+    expect(getWindowSecs(599)).toBeGreaterThanOrEqual(MIN_WINDOW_SECS);
+  });
 
-    it('applies the fresh window when there is no previous one', () => {
-      expect(getWindowSecs(600, clips(20), 120)).toBeCloseTo(fresh, 4);
-      expect(
-        getWindowSecs(600, clips(20), 120, {previousWindowSecs: 0}),
-      ).toBeCloseTo(fresh, 4);
-    });
+  it('never returns less than 0', () => {
+    expect(getWindowSecs(0)).toBeGreaterThanOrEqual(0);
+    expect(getWindowSecs(-100)).toBeGreaterThanOrEqual(0);
+  });
+});
+
+describe('constants', () => {
+  it('exposes the threshold and floor for callers and tests', () => {
+    expect(SMALL_VIEWPORT_THRESHOLD_PX).toBe(600);
+    expect(MIN_WINDOW_SECS).toBeCloseTo(5, 4);
   });
 });
 

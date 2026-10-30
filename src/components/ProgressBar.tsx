@@ -20,6 +20,7 @@ import {ClipToolbarCollapsedHit} from './ClipToolbarCollapsedHit';
 import {WaveformViewFlipButton} from './WaveformViewFlipButton';
 
 import {useAppDispatch, useAppSelector} from '../store/hooks';
+import {useT} from '../i18n';
 
 import {
   selectCurrentAudio,
@@ -77,6 +78,7 @@ export function ProgressBar({
   getCurrentTime,
 }: ProgressBarProps) {
   const dispatch = useAppDispatch();
+  const t = useT();
 
   const audio = useAppSelector(selectCurrentAudio, shallowEqual);
 
@@ -506,11 +508,11 @@ export function ProgressBar({
         >
           {waveformStatus === 'loading' || waveformStatus === 'idle' ? (
             <div className="waveform-loading waveform-loading--stacked">
-              Loading waveform…
+              {t('waveform.loading')}
             </div>
           ) : waveformStatus === 'error' ? (
             <div className="waveform-loading waveform-loading--error waveform-loading--stacked">
-              Waveform unavailable
+              {t('waveform.unavailable')}
             </div>
           ) : hasWaveform && waveformView === 'horizontal' ? (
             <RowWaveform
@@ -564,7 +566,7 @@ export function ProgressBar({
          */}
         {hasWaveform && clips.length === 0 && (
           <div className="waveform-empty-hint" role="status">
-            No clips detected — lower the Silence threshold in Settings.
+            {t('waveform.noClips')}
           </div>
         )}
 

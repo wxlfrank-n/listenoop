@@ -6,8 +6,10 @@
  * "current audio" record used by the waveform and clip views.
  */
 
+import {createSelector} from '@reduxjs/toolkit';
 import type {RootState} from './store';
 import type {CurrentAudio} from '../types';
+import type {SplitOptions} from '../utils/clips';
 
 // ---- config ----
 export const selectSkipSeconds = (s: RootState) => s.config.skipSeconds;
@@ -22,6 +24,27 @@ export const selectMergeScope = (s: RootState) => s.config.mergeScope ?? 'clip';
 /** Smallest piece a split may leave alone. */
 export const selectMinSplitPieceSec = (s: RootState) =>
   s.config.minSplitPieceSec;
+
+/**
+ * Detection options bundle (blockMs / silenceRatio / minClipLength /
+ * minSplitPieceSec) used by the worker's `decode` and `redetect` requests.
+ *
+ * Memoized so consumers (`useAudioPlayer` reads this into a ref) don't get a
+ * fresh object reference on every store update — without `createSelector`
+ * the inline `useAppSelector(s => ({...}))` returned a new object each call,
+ * tripping Redux's selector-stability check ("Selector returned a different
+ * result when called with the same parameters") and causing `useAudioPlayer`
+ * to re-render on every store tick.
+ */
+export const selectDetectionOptions = createSelector(
+  [s => s.config],
+  (config): SplitOptions => ({
+    blockMs: config.blockMs,
+    silenceRatio: config.silenceRatio,
+    minClipLength: config.minClipLength,
+    minSplitPieceSec: config.minSplitPieceSec,
+  }),
+);
 
 // ---- player ----
 export const selectTracks = (s: RootState) => s.player.tracks;

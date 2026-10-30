@@ -81,6 +81,29 @@ vi.mock('../utils/wav', () => ({
 }));
 
 /*
+ * The audio player now talks to the worker client instead of the sync
+ * utils. Mock the client so `getPlayableUrl` returns a deterministic
+ * blob URL without spinning up a real Worker. The `clips` field is
+ * required because the worker normally computes initial clips alongside
+ * the WAV blob; the consumer (`useWaveform`) dispatches both to Redux.
+ */
+vi.mock('../workers/audioDecoderClient', () => ({
+  evictAudio: vi.fn(),
+  decodeAudio: vi.fn(() =>
+    Promise.resolve({
+      wavBlob: new Blob([new ArrayBuffer(8)], {type: 'audio/wav'}),
+      mono: new Float32Array(8),
+      sampleRate: 48000,
+      duration: 0,
+      numberOfChannels: 1,
+      byteLength: 8,
+      clips: {clips: [], gaps: [], minGap: 0},
+    }),
+  ),
+  redetectClips: vi.fn(() => Promise.resolve({clips: [], gaps: [], minGap: 0})),
+}));
+
+/*
  * ------------------------------------------------------------
  * Fake Audio
  * ------------------------------------------------------------
@@ -246,6 +269,26 @@ describe('useAudioPlayer.playRange', () => {
     await settleRestart();
 
     expect(audio.play).toHaveBeenCalled();
+  });
+
+  it('reports playback rejection and clears the error after successful playback', async () => {
+    const {result} = renderHook(() => useAudioPlayer(5));
+    audio.play.mockRejectedValueOnce(
+      new DOMException('Unsupported', 'NotSupportedError'),
+    );
+    await act(async () => result.current.play());
+    expect(result.current.playbackError).toBe(true);
+    await act(async () => result.current.play());
+    expect(result.current.playbackError).toBe(false);
+  });
+
+  it('ignores an interrupted play request', async () => {
+    const {result} = renderHook(() => useAudioPlayer(5));
+    audio.play.mockRejectedValueOnce(
+      new DOMException('Interrupted', 'AbortError'),
+    );
+    await act(async () => result.current.play());
+    expect(result.current.playbackError).toBe(false);
   });
 
   /*

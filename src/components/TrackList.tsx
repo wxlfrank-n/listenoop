@@ -37,7 +37,17 @@ export function TrackList({
         <div
           key={track.id}
           className={`track-item ${index === currentTrackIndex ? 'track-item--active' : ''}`}
+          role="button"
+          tabIndex={0}
+          aria-label={`${index + 1}. ${track.title} — ${track.artist}`}
+          aria-current={index === currentTrackIndex ? 'true' : undefined}
           onClick={() => onSelectTrack(index)}
+          onKeyDown={e => {
+            if (e.key === 'Enter' || e.key === ' ') {
+              e.preventDefault();
+              onSelectTrack(index);
+            }
+          }}
         >
           <div className="track-item__info">
             <span className="track-item__number">{index + 1}</span>

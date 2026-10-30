@@ -142,7 +142,9 @@ test.describe('playing audio', () => {
     expect(atStart).toBeLessThanOrEqual(0.05);
   });
 
-  test('skip to end twice advances to the next track', async ({page}) => {
+  test('skip to end twice loads the next track paused at its start', async ({
+    page,
+  }) => {
     await page.goto('/');
     await waitForClips(page);
 
@@ -155,12 +157,14 @@ test.describe('playing audio', () => {
 
     // Second press should advance to the next track.
     await page.getByRole('button', {name: 'Go to end'}).click();
-    // After advancing, a new track starts playing.
-    await expect(playButton(page)).toHaveAttribute('aria-label', 'Pause');
-    expect((await mediaTime(page))!).toBeLessThanOrEqual(0.05);
+    // Adjacent-track navigation deliberately leaves playback paused.
+    await expect(playButton(page)).toHaveAttribute('aria-label', 'Play');
+    await expect.poll(() => mediaTime(page)).toBeLessThanOrEqual(0.05);
   });
 
-  test('skip to start twice goes to the previous track', async ({page}) => {
+  test('skip to start twice loads the previous track paused at its end', async ({
+    page,
+  }) => {
     await page.goto('/');
     await waitForClips(page);
 
@@ -173,8 +177,14 @@ test.describe('playing audio', () => {
 
     // Second press should go to the previous track.
     await page.getByRole('button', {name: 'Go to start'}).click();
-    await expect(playButton(page)).toHaveAttribute('aria-label', 'Pause');
-    expect((await mediaTime(page))!).toBeLessThanOrEqual(0.05);
+    await expect(playButton(page)).toHaveAttribute('aria-label', 'Play');
+    await expect
+      .poll(async () => {
+        const time = await mediaTime(page);
+        const duration = await mediaDuration(page);
+        return Math.abs((duration ?? 0) - (time ?? 0));
+      })
+      .toBeLessThanOrEqual(0.05);
   });
 });
 

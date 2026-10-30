@@ -12,6 +12,7 @@
 
 import {useCallback, useEffect, useRef, useState} from 'react';
 import {useConfig} from '../hooks/useConfig';
+import {useFocusTrap} from '../hooks/useFocusTrap';
 import {CONFIG_RANGES, DEFAULT_CONFIG} from '../store/configSlice';
 import {THEMES, THEME_IDS, type ThemeId} from '../themes';
 import {LanguageSelect} from './LanguageSelect';
@@ -382,6 +383,11 @@ export function Settings({onClose}: SettingsProps) {
   const [activeTab, setActiveTab] = useState<SettingsTabId>('theme');
   const [showInfo, setShowInfo] = useState(false);
   const infoRef = useRef<HTMLDivElement>(null);
+  const panelRef = useRef<HTMLDivElement>(null);
+
+  // Trap Tab / Shift+Tab inside the panel, close on Escape, and restore
+  // focus to the trigger button on unmount.
+  useFocusTrap(panelRef, {onEscape: onClose});
 
   // The note is a disclosure, so an outside press or Escape closes it.
   useEffect(() => {
@@ -403,9 +409,17 @@ export function Settings({onClose}: SettingsProps) {
 
   return (
     <div className="settings-overlay" onClick={onClose}>
-      <div className="settings-panel" onClick={e => e.stopPropagation()}>
+      <div
+        className="settings-panel"
+        ref={panelRef}
+        role="dialog"
+        aria-modal="true"
+        aria-labelledby="settings-title"
+        tabIndex={-1}
+        onClick={e => e.stopPropagation()}
+      >
         <div className="settings-header">
-          <h2>{t('settings.title')}</h2>
+          <h2 id="settings-title">{t('settings.title')}</h2>
           <button
             className="settings-close"
             onClick={close}

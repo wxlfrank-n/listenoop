@@ -59,10 +59,10 @@ describe('getInitClipData', () => {
 
   it('detects a continuous run of sound as a single clip spanning the buffer', () => {
     const [clip] = getInitClipData(buildData([1, 1, 1]), 100, opts).clips;
-    expect(clip.start).toBe(0);
-    expect(clip.end).toBeCloseTo(1.92, 5);
-    expect(clip.vStart).toBe(0);
-    expect(clip.vEnd).toBeCloseTo(1.92, 5);
+    expect(clip!.start).toBe(0);
+    expect(clip!.end).toBeCloseTo(1.92, 5);
+    expect(clip!.vStart).toBe(0);
+    expect(clip!.vEnd).toBeCloseTo(1.92, 5);
   });
 
   it('splits around a silent block and expands vStart/vEnd into the gap', () => {
@@ -73,18 +73,18 @@ describe('getInitClipData', () => {
       [1.28, 2.56],
     ]);
     // First clip expands into the following silence.
-    expect(clips[0].vStart).toBe(0);
-    expect(clips[0].vEnd).toBeCloseTo(0.8, 5);
+    expect(clips[0]!.vStart).toBe(0);
+    expect(clips[0]!.vEnd).toBeCloseTo(0.8, 5);
     // Second clip expands into the preceding silence.
-    expect(clips[1].vStart).toBeCloseTo(1.12, 5);
-    expect(clips[1].vEnd).toBeCloseTo(2.56, 5);
+    expect(clips[1]!.vStart).toBeCloseTo(1.12, 5);
+    expect(clips[1]!.vEnd).toBeCloseTo(2.56, 5);
   });
 
   it('trims leading and trailing silence and expands into it by 25% of each gap', () => {
     const [clip] = getInitClipData(buildData([0, 1, 0]), 100, opts).clips;
-    expect(bounds([clip])).toEqual([[0.64, 1.28]]);
-    expect(clip.vStart).toBeCloseTo(0.48, 5);
-    expect(clip.vEnd).toBeCloseTo(1.44, 5);
+    expect(bounds([clip!])).toEqual([[0.64, 1.28]]);
+    expect(clip!.vStart).toBeCloseTo(0.48, 5);
+    expect(clip!.vEnd).toBeCloseTo(1.44, 5);
   });
 
   it('honors the configured minClipLength when merging short runs', () => {
@@ -217,7 +217,7 @@ describe('mergeClipsByGap', () => {
   it('returns a single clip unchanged with no children', () => {
     const clip = mk(0, 1);
     expect(mergeClipsByGap([clip], 0.5)).toEqual([clip]);
-    expect(mergeClipsByGap([clip], 0.5)[0].children).toBeUndefined();
+    expect(mergeClipsByGap([clip], 0.5)[0]!.children).toBeUndefined();
   });
 
   it('merges consecutive clips whose gap is within minGap into a parent', () => {
@@ -252,7 +252,7 @@ describe('mergeClipsByGap', () => {
     const b = mk(1.2, 2);
     const c = mk(10, 11);
     const result = mergeClipsByGap([a, b, c], 0.5);
-    expect(result[0].children).toEqual([a, b]);
+    expect(result[0]!.children).toEqual([a, b]);
     expect(result[1]).toBe(c);
   });
 
@@ -272,8 +272,8 @@ describe('mergeClipsByGap', () => {
       [0, 3],
       [4, 6],
     ]);
-    expect(result[0].children).toEqual([a, b, c]);
-    expect(result[1].children).toEqual([d, e]);
+    expect(result[0]!.children).toEqual([a, b, c]);
+    expect(result[1]!.children).toEqual([d, e]);
   });
 
   it('keeps vStart/vEnd of the parent as the outer span of its children', () => {
@@ -281,8 +281,8 @@ describe('mergeClipsByGap', () => {
     const b = mk(1.2, 2);
     const c = mk(2.4, 3.5);
     const [parent] = mergeClipsByGap([a, b, c], 0.5);
-    expect(parent.vStart).toBe(0);
-    expect(parent.vEnd).toBe(3.5);
+    expect(parent!.vStart).toBe(0);
+    expect(parent!.vEnd).toBe(3.5);
   });
 });
 
@@ -304,9 +304,9 @@ describe('splitClipAtLargestGap', () => {
     const result = splitClipAtLargestGap({...mk(0, 5), children: [a, b, c]});
     expect(result?.gap).toBe(1);
     expect(result?.pieces).toHaveLength(2);
-    expect(result?.pieces[0].children).toBeUndefined();
+    expect(result?.pieces[0]!.children).toBeUndefined();
     expect(result?.pieces[0]).toBe(a);
-    expect(result?.pieces[1].children).toEqual([b, c]);
+    expect(result?.pieces[1]!.children).toEqual([b, c]);
   });
 
   it('does not tear apart a nested group: splits at its direct children', () => {
@@ -333,9 +333,77 @@ describe('splitClipAtLargestGap', () => {
 
     expect(result?.gap).toBe(0);
     expect(result?.pieces).toEqual([a, bc]);
-    expect(result?.pieces[1].expanded).toBe(true);
-    expect(result?.pieces[1].vStart).toBeCloseTo(0.9, 6);
-    expect(result?.pieces[1].vEnd).toBeCloseTo(2.1, 6);
+    expect(result?.pieces[1]!.expanded).toBe(true);
+    expect(result?.pieces[1]!.vStart).toBeCloseTo(0.9, 6);
+    expect(result?.pieces[1]!.vEnd).toBeCloseTo(2.1, 6);
+  });
+
+  /*
+   * Expanded clips: an `expanded` clip (its vStart/vEnd pushed out into
+   * the surrounding silence by `expandClip`) is treated as a single
+   * visual unit and never split. The guard at the top of
+   * `splitClipAtLargestGap` short-circuits to null so the UI hides the
+   * split affordance for any clip whose `expanded` flag is set, even if
+   * it has multiple children that would otherwise be valid split targets.
+   */
+  describe('with expanded clips', () => {
+    it('returns null when the clip itself is marked expanded', () => {
+      // Same clip that the "cuts a group at its largest child gap" test
+      // splits successfully when unexpanded — but with `expanded: true`
+      // the guard fires and the function rejects the split.
+      const a = mk(0, 1);
+      const b = mk(2, 3);
+      const c = mk(4, 5);
+      const parent = {
+        ...mk(0, 5),
+        vStart: -0.1,
+        vEnd: 5.1,
+        expanded: true,
+        children: [a, b, c],
+      };
+
+      expect(splitClipAtLargestGap(parent)).toBeNull();
+      // The min-piece floor is irrelevant once the guard fires.
+      expect(splitClipAtLargestGap(parent, 0.1)).toBeNull();
+    });
+
+    it('returns null for an expanded clip regardless of minPieceSec', () => {
+      // Even with minPieceSec=0 (no floor), the expanded guard fires first.
+      const a = mk(0, 1);
+      const b = mk(2, 3);
+      const parent = {
+        ...mk(0, 3),
+        vStart: 0,
+        vEnd: 3.1,
+        expanded: true,
+        children: [a, b],
+      };
+
+      expect(splitClipAtLargestGap(parent, 0)).toBeNull();
+    });
+
+    it('still splits an unexpanded parent that has expanded children', () => {
+      // The guard only fires when the clip being split is itself expanded.
+      // An unexpanded parent whose children happen to be expanded leaves
+      // (the normal case after `expandClips` runs on detected leaves and
+      // `mergeClipPair` builds a fresh unexpanded parent around them) is
+      // still split at the largest gap as usual.
+      const a = {...mk(0, 1), vStart: 0, vEnd: 1.2, expanded: true};
+      const b = {...mk(2, 3), vStart: 1.9, vEnd: 3.1, expanded: true};
+      const parent = {
+        ...mk(0, 3),
+        vStart: 0, // matches a.vStart
+        vEnd: 3.1, // matches b.vEnd
+        // expanded intentionally NOT set on the parent
+        children: [a, b],
+      };
+
+      const result = splitClipAtLargestGap(parent);
+
+      expect(result).not.toBeNull();
+      expect(result?.gap).toBe(1);
+      expect(result?.pieces).toEqual([a, b]);
+    });
   });
 });
 
@@ -365,14 +433,14 @@ describe('mergeClipsByGapScoped', () => {
   it('does not merge inside a focus that is a single raw clip', () => {
     // Focus b: its run holds one clip, so there is nothing to merge, even
     // though a global merge at this gap would join b and c across 2.5s.
-    const result = mergeClipsByGapScoped(clips, 3, clips[1]);
+    const result = mergeClipsByGapScoped(clips, 3, clips[1]!);
     expect(bounds(result)).toEqual(bounds(clips));
-    expect(result[1].children).toBeUndefined();
+    expect(result[1]!.children).toBeUndefined();
   });
 
   it('accepts a merged parent as focus', () => {
-    const [parent] = mergeClipsByGap([clips[0], clips[1]], 0.5);
-    expect(bounds(mergeClipsByGapScoped(clips, 0.1, parent))).toEqual([
+    const [parent] = mergeClipsByGap([clips[0]!, clips[1]!], 0.5);
+    expect(bounds(mergeClipsByGapScoped(clips, 0.1, parent!))).toEqual([
       [0, 1],
       [1.2, 2],
       [4.5, 5],
@@ -442,8 +510,8 @@ describe('mergeClipPair', () => {
     const merged = mergeClipPair(parent, d);
 
     expect(merged.children).toEqual([parent, d]);
-    expect(merged.children[0]).toBe(parent);
-    expect(merged.children[0].children[1].vEnd).toBeCloseTo(2.1, 6);
+    expect(merged.children![0]).toBe(parent);
+    expect(merged.children![0]!.children![1]!.vEnd).toBeCloseTo(2.1, 6);
   });
 
   it('keeps a single expanded leaf whole', () => {

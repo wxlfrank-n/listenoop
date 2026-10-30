@@ -10,7 +10,7 @@
  * its siblings do not.
  */
 
-import {memo} from 'react';
+import {memo, useCallback, useMemo} from 'react';
 
 import {ClipLabel, clipLabelProps} from './ClipLabel';
 import {Clips} from './Clips';
@@ -30,6 +30,14 @@ export const INNER_H = VB_H - PAD * 2;
 
 /** Tolerance for treating the final row as reaching the end of the track. */
 const END_EPSILON = 1e-6;
+
+/** Static base for the played-layer style; only `clipPath` changes per tick. */
+const PLAYED_LAYER_BASE = {
+  position: 'absolute',
+  inset: 0,
+  overflow: 'hidden',
+  pointerEvents: 'none',
+} as const;
 
 export interface StackedRow {
   start: number;
@@ -97,21 +105,35 @@ export const StackRow = memo(
 
     /*
      * Both the waveform and the clip layer draw over the same window, so it is
-     * built once and shared.
+     * built once and shared. Memoized so `WaveformCanvas` (which is itself
+     * memoized) does not see a new object identity on every render and re-render
+     * its internal draw effect.
      */
-    const rowWindow = {
-      windowStartSec: rowStart,
-      windowLen: rowLen,
-      innerH: INNER_H,
-      vbW: VB_W,
-      vbH: VB_H,
-    };
+    const rowWindow = useMemo(
+      () => ({
+        windowStartSec: rowStart,
+        windowLen: rowLen,
+        innerH: INNER_H,
+        vbW: VB_W,
+        vbH: VB_H,
+      }),
+      [rowStart, rowLen],
+    );
 
-    const getPlayedPct = () =>
-      Math.max(0, Math.min(1, (getCurrentTime() - rowStart) / rowLen));
+    // `getPlayedPct` / `getCursorPct` are passed to `<WaveformCursor>`, which
+    // lists them in its rAF effect's deps. Without `useCallback` the effect
+    // tears down and rebuilds the rAF loop on every render — and since the
+    // parent re-renders on every `timeupdate` tick during playback, that's a
+    // per-frame teardown of the animation loop.
+    const getPlayedPct = useCallback(
+      () => Math.max(0, Math.min(1, (getCurrentTime() - rowStart) / rowLen)),
+      [getCurrentTime, rowStart, rowLen],
+    );
 
-    const getCursorPct = () =>
-      Math.min(getPlayedPct(), (row.end - rowStart) / rowLen);
+    const getCursorPct = useCallback(
+      () => Math.min(getPlayedPct(), (row.end - rowStart) / rowLen),
+      [getPlayedPct, row.end, rowStart, rowLen],
+    );
 
     const playedPct = getPlayedPct();
 
@@ -126,27 +148,62 @@ export const StackRow = memo(
       (currentTime < row.end ||
         (isLastRow && currentTime >= row.end - END_EPSILON));
 
-    const handleClick = (e: React.MouseEvent<HTMLDivElement>) => {
-      /*
-       * A horizontal page drag must
-       * never become a seek.
-       */
-      if (suppressClickRef.current) {
-        suppressClickRef.current = false;
+    const handleClick = useCallback(
+      (e: React.MouseEvent<HTMLDivElement>) => {
+        /*
+         * A horizontal page drag must
+         * never become a seek.
+         */
+        if (suppressClickRef.current) {
+          suppressClickRef.current = false;
 
-        return;
-      }
+          return;
+        }
 
-      if (clipPlayActive) {
-        return;
-      }
+        if (clipPlayActive) {
+          return;
+        }
 
-      const rect = e.currentTarget.getBoundingClientRect();
+        const rect = e.currentTarget.getBoundingClientRect();
 
-      const f = Math.max(0, Math.min(1, (e.clientX - rect.left) / rect.width));
+        const f = Math.max(
+          0,
+          Math.min(1, (e.clientX - rect.left) / rect.width),
+        );
 
-      onSeek(rowStart + f * rowLen);
-    };
+        onSeek(rowStart + f * rowLen);
+      },
+      [suppressClickRef, clipPlayActive, onSeek, rowStart, rowLen],
+    );
+
+    // `getIdx` and `renderLabel` are passed to `<Clips>`; stabilize them so
+    // `Clips` does not see a new function identity on every parent re-render
+    // (which happens on every `timeupdate` tick during playback).
+    const getIdx = useCallback(
+      (_clip: InitClipData, i: number) => row.clips[i]?.idx ?? -1,
+      [row.clips],
+    );
+
+    // `Clips` is memoized; give it a stable clips array identity so it only
+    // re-renders when the row's clips actually change, not on every tick.
+    const clipList = useMemo(
+      () => row.clips.map(({clip}) => clip),
+      [row.clips],
+    );
+
+    const renderLabel = useCallback(
+      (id: number, clip: InitClipData) => (
+        <ClipLabel
+          key={`lbl-${id}`}
+          {...clipLabelProps({
+            id,
+            clip,
+            activeClip,
+          })}
+        />
+      ),
+      [activeClip],
+    );
 
     return (
       <div key={gi} className="stacked-waveform__row" onClick={handleClick}>
@@ -161,10 +218,7 @@ export const StackRow = memo(
         <div
           className="stacked-waveform__played"
           style={{
-            position: 'absolute',
-            inset: 0,
-            overflow: 'hidden',
-            pointerEvents: 'none',
+            ...PLAYED_LAYER_BASE,
             clipPath: `inset(0 ${100 - playedPct * 100}% 0 0)`,
           }}
         >
@@ -180,7 +234,7 @@ export const StackRow = memo(
         </div>
         <div className="stacked-waveform__clip-layer">
           <Clips
-            clips={row.clips.map(({clip}) => clip)}
+            clips={clipList}
             window={rowWindow}
             onPlayRange={onPlayRange}
             repetitions={repetitions}
@@ -190,17 +244,8 @@ export const StackRow = memo(
             onActivate={onActivate}
             onSwipe={onSwipeClip}
             minSplitPieceSec={minSplitPieceSec}
-            getIdx={(_clip, i) => row.clips[i].idx}
-            renderLabel={(id, clip) => (
-              <ClipLabel
-                key={`lbl-${id}`}
-                {...clipLabelProps({
-                  id,
-                  clip,
-                  activeClip,
-                })}
-              />
-            )}
+            getIdx={getIdx}
+            renderLabel={renderLabel}
           />
         </div>
 

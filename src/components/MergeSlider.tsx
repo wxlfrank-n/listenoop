@@ -36,8 +36,8 @@ function bubbleLeftPosition(
   width: number,
   thumbW: number,
 ) {
-  const gapMin = gapValues.length > 0 ? gapValues[0] : 0;
-  const gapMax = gapValues.length > 0 ? gapValues[gapValues.length - 1] : 0;
+  const gapMin = gapValues.length > 0 ? gapValues[0]! : 0;
+  const gapMax = gapValues.length > 0 ? gapValues[gapValues.length - 1]! : 0;
   const pct =
     gapMax > gapMin
       ? Math.min(1, Math.max(0, (raw - gapMin) / (gapMax - gapMin)))
@@ -133,7 +133,9 @@ export function MergeSlider({
         <button
           type="button"
           aria-label={t('merge.increaseGap')}
-          disabled={disabled || value >= gapValues[gapValues.length - 1]}
+          disabled={
+            disabled || value >= (gapValues[gapValues.length - 1] ?? Infinity)
+          }
           onClick={stepToNext}
         >
           -
@@ -149,8 +151,8 @@ export function MergeSlider({
           </span>
           <input
             type="range"
-            min={gapValues[0]}
-            max={gapValues[gapValues.length - 1]}
+            min={gapValues[0] ?? 0}
+            max={gapValues[gapValues.length - 1] ?? 0}
             step={0.005}
             value={sliderValue}
             disabled={disabled}
@@ -160,7 +162,7 @@ export function MergeSlider({
         <button
           type="button"
           aria-label={t('merge.decreaseGap')}
-          disabled={disabled || value <= gapValues[0]}
+          disabled={disabled || value <= (gapValues[0] ?? -Infinity)}
           onClick={stepToPrev}
         >
           +

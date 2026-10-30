@@ -1,17 +1,17 @@
 import {memo, useId} from 'react';
+import {useT} from '../i18n';
 
 interface ListeningLoopIconProps {
   size?: number | string;
   className?: string;
+  /** Overrides the translated default (rarely needed). */
   title?: string;
 }
 
 export const ListeningLoopIcon = memo(
-  ({
-    size = 150,
-    className,
-    title = 'Listening loop',
-  }: ListeningLoopIconProps) => {
+  ({size = 150, className, title}: ListeningLoopIconProps) => {
+    const t = useT();
+    const label = title ?? t('app.listeningLoopIcon');
     /*
      * Unique IDs are important if several icons are rendered
      * on the same page. Otherwise SVG gradient IDs collide.
@@ -29,7 +29,7 @@ export const ListeningLoopIcon = memo(
         height={size}
         viewBox="0 0 150 150"
         role="img"
-        aria-label={title}
+        aria-label={label}
       >
         <defs>
           {/* Theme-aware background */}

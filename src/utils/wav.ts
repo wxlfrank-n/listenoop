@@ -44,7 +44,7 @@ export function audioBufferToWavBlob(buffer: AudioBuffer): Blob {
   if (numCh === 1) {
     const ch = buffer.getChannelData(0);
     for (let i = 0; i < length; i++) {
-      const s = Math.max(-1, Math.min(1, ch[i]));
+      const s = Math.max(-1, Math.min(1, ch[i]!));
       view.setInt16(offset, s < 0 ? s * 0x8000 : s * 0x7fff, true);
       offset += 2;
     }
@@ -52,7 +52,7 @@ export function audioBufferToWavBlob(buffer: AudioBuffer): Blob {
     const ch0 = buffer.getChannelData(0);
     const ch1 = buffer.getChannelData(1);
     for (let i = 0; i < length; i++) {
-      const s = Math.max(-1, Math.min(1, (ch0[i] + ch1[i]) * 0.5));
+      const s = Math.max(-1, Math.min(1, (ch0[i]! + ch1[i]!) * 0.5));
       view.setInt16(offset, s < 0 ? s * 0x8000 : s * 0x7fff, true);
       offset += 2;
     }

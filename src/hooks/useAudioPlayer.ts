@@ -1,7 +1,8 @@
 ﻿import {useRef, useCallback, useEffect} from 'react';
 import type {Track} from '../types';
-import {decodeAudioBuffer, initializeAudioContext} from '../utils/audio';
-import {audioBufferToWavBlob} from '../utils/wav';
+import {useState} from 'react';
+import {decodeAudio, evictAudio} from '../workers/audioDecoderClient';
+import {initializeAudioContext} from '../utils/audio';
 import {addListener, addListeners} from '../utils/listener';
 import {store} from '../store/store';
 import {useAppDispatch, useAppSelector} from '../store/hooks';
@@ -12,6 +13,7 @@ import {
   setCurrentTime,
   setDuration,
 } from '../store/playerSlice';
+import {selectDetectionOptions} from '../store/selectors';
 
 // iOS devices (including Chrome on iPhone, which uses the WebKit engine)
 // cannot route an <audio> element through the Web Audio graph reliably:
@@ -41,6 +43,11 @@ function snatchToStart(audio: HTMLAudioElement, time: number) {
 }
 
 export function useAudioPlayer(skipSeconds: number) {
+  const [playbackError, setPlaybackError] = useState(false);
+  const reportPlaybackError = useCallback((error: unknown) => {
+    if (error instanceof DOMException && error.name === 'AbortError') return;
+    setPlaybackError(true);
+  }, []);
   const dispatch = useAppDispatch();
   // Live playback state, kept in Redux so every component shares it.
   const state = useAppSelector(s => s.player);
@@ -48,11 +55,53 @@ export function useAudioPlayer(skipSeconds: number) {
   // Fresh read of player state for imperative callbacks (event handlers, rAF).
   const getPlayer = () => store.getState().player;
 
+  // Detection options for the worker's `decode` request. Read via a ref so
+  // changes don't trigger re-decode — only the URL matters; the cache is
+  // keyed by URL, so a fresh decode only happens on track switch.
+  const detectionOptionsRef = useRef({
+    blockMs: 12,
+    silenceRatio: 0.01,
+    minClipLength: 0.3,
+    minSplitPieceSec: 0.1,
+  });
+  // Keep the ref in sync with the latest config from the player slice's
+  // owner (App.tsx). Memoized via `selectDetectionOptions` so a config
+  // object reference is reused across renders — the previous inline
+  // `useAppSelector(s => ({...}))` returned a new object every call and
+  // tripped Redux's selector-stability warning on every store tick.
+  const detectionOptions = useAppSelector(selectDetectionOptions);
+  useEffect(() => {
+    detectionOptionsRef.current = detectionOptions;
+  });
+
   const audioRef = useRef<HTMLAudioElement>(new Audio());
   const nextRef = useRef<() => void>(() => {});
   const expectedRawUrlRef = useRef<string | null>(null);
   const trackLoadIdRef = useRef(0);
   const wavBlobCacheRef = useRef<Map<string, string>>(new Map());
+  // Handle of the pending `setTimeout(() => startTrack(...), 0)` scheduled
+  // by `addTracks`, so it can be cancelled on unmount instead of firing
+  // against a stale audio element.
+  const startTrackTimerRef = useRef<number | undefined>(undefined);
+  // Every `blob:` URL we hand out (file picks + WAV re-encodes) is tracked here
+  // so it can be revoked when the corresponding track is removed. Without
+  // revocation each blob lives for the lifetime of the page and the leaked
+  // memory grows with the number of files the user has ever loaded.
+  const blobUrlsRef = useRef<Set<string>>(new Set());
+
+  // Track a blob URL for later cleanup. Non-blob URLs (e.g. the bundled
+  // sample track served from /public) are ignored — revoking them would be
+  // a no-op anyway.
+  const trackBlobUrl = useCallback((url: string) => {
+    if (url.startsWith('blob:')) blobUrlsRef.current.add(url);
+  }, []);
+
+  // Revoke a blob URL (if it is one) and drop it from the tracking set.
+  const revokeBlobUrl = useCallback((url: string) => {
+    if (!url.startsWith('blob:')) return;
+    URL.revokeObjectURL(url);
+    blobUrlsRef.current.delete(url);
+  }, []);
   // True while a clip range is paused only to seek back to its start for the
   // next repetition. During that window the element's native `pause` event and
   // the range restart must not publish isPlaying=false, or the waveform views
@@ -138,17 +187,23 @@ export function useAudioPlayer(skipSeconds: number) {
    * @param url - The URL of the original audio file
    * @returns A blob URL pointing to the WAV-encoded audio data
    */
-  const getPlayableUrl = useCallback(async (url: string): Promise<string> => {
-    const cache = wavBlobCacheRef.current;
-    const cached = cache.get(url);
-    if (cached) return cached;
+  const getPlayableUrl = useCallback(
+    async (url: string): Promise<string> => {
+      const cache = wavBlobCacheRef.current;
+      const cached = cache.get(url);
+      if (cached) return cached;
 
-    const {buffer} = await decodeAudioBuffer(url);
-    const blob = audioBufferToWavBlob(buffer);
-    const objectUrl = URL.createObjectURL(blob);
-    cache.set(url, objectUrl);
-    return objectUrl;
-  }, []);
+      const {wavBlob} = await decodeAudio(url, detectionOptionsRef.current);
+      if (!getPlayer().tracks.some(track => track.url === url)) {
+        throw new DOMException('Track removed', 'AbortError');
+      }
+      const objectUrl = URL.createObjectURL(wavBlob);
+      cache.set(url, objectUrl);
+      trackBlobUrl(objectUrl);
+      return objectUrl;
+    },
+    [trackBlobUrl],
+  );
 
   // Point the audio element at a new source.
   /**
@@ -176,6 +231,7 @@ export function useAudioPlayer(skipSeconds: number) {
       // Initialize AudioContext on user gesture (from next/prev buttons or click)
       getAnalyser();
       const loadId = ++trackLoadIdRef.current;
+      setPlaybackError(false);
       audio.pause();
       holdAtEndRef.current = false;
       dispatch(setIsPlaying(false));
@@ -219,6 +275,7 @@ export function useAudioPlayer(skipSeconds: number) {
           .then(() => dispatch(setIsPlaying(true)))
           .catch(err => {
             console.debug('Start track play failed:', err);
+            if (trackLoadIdRef.current === loadId) reportPlaybackError(err);
           });
       };
 
@@ -230,7 +287,7 @@ export function useAudioPlayer(skipSeconds: number) {
         load(url);
       }
     },
-    [dispatch, getAnalyser, getPlayableUrl],
+    [dispatch, getAnalyser, getPlayableUrl, reportPlaybackError],
   );
 
   useEffect(() => {
@@ -281,7 +338,10 @@ export function useAudioPlayer(skipSeconds: number) {
       dispatch(setCurrentTime(audio.currentTime));
     };
     const onLoadedMetadata = () => dispatch(setDuration(audio.duration));
-    const onPlay = () => dispatch(setIsPlaying(true));
+    const onPlay = () => {
+      setPlaybackError(false);
+      dispatch(setIsPlaying(true));
+    };
     const onPause = () => {
       // A transient pause fired purely to seek a clip range back to its start.
       // The loop is still "playing" — publishing isPlaying=false here would
@@ -311,6 +371,7 @@ export function useAudioPlayer(skipSeconds: number) {
       nextRef.current();
     };
     const onError = () => {
+      setPlaybackError(true);
       dispatch(setIsPlaying(false));
       console.error('Audio error', audio.error);
     };
@@ -357,8 +418,9 @@ export function useAudioPlayer(skipSeconds: number) {
       .then(() => dispatch(setIsPlaying(true)))
       .catch(err => {
         console.debug('Play failed (may retry):', err);
+        reportPlaybackError(err);
       });
-  }, [dispatch, getAnalyser]);
+  }, [dispatch, getAnalyser, reportPlaybackError]);
 
   // Reference to the range's active rAF loop / ended listener so that starting a
   // new range (e.g. clicking another clip) drops the previous one instead of
@@ -389,6 +451,14 @@ export function useAudioPlayer(skipSeconds: number) {
     dispatch(setIsPlaying(false));
   }, [dispatch, stopRangeMonitoring]);
 
+  useEffect(() => {
+    if (playbackError) {
+      stopRangeMonitoring();
+      audioRef.current.pause();
+      dispatch(setIsPlaying(false));
+    }
+  }, [playbackError, stopRangeMonitoring, dispatch]);
+
   const togglePlay = useCallback(() => {
     const audio = audioRef.current;
     if (getPlayer().isPlaying) {
@@ -407,8 +477,9 @@ export function useAudioPlayer(skipSeconds: number) {
       .then(() => dispatch(setIsPlaying(true)))
       .catch(err => {
         console.debug('Toggle play failed (may retry):', err);
+        reportPlaybackError(err);
       });
-  }, [dispatch, getAnalyser, stopRangeMonitoring]);
+  }, [dispatch, getAnalyser, stopRangeMonitoring, reportPlaybackError]);
 
   /*
    * The "skip to end" button works in two steps:
@@ -481,13 +552,17 @@ export function useAudioPlayer(skipSeconds: number) {
         supported.some(ext => f.name.toLowerCase().endsWith(ext)),
       );
       const skipped = all.length - audioFiles.length;
-      const newTracks: Track[] = audioFiles.map(file => ({
-        id: crypto.randomUUID(),
-        title: file.name.replace(/\.[^/.]+$/, ''),
-        artist: 'Unknown Artist',
-        duration: 0,
-        url: URL.createObjectURL(file),
-      }));
+      const newTracks: Track[] = audioFiles.map(file => {
+        const url = URL.createObjectURL(file);
+        trackBlobUrl(url);
+        return {
+          id: crypto.randomUUID(),
+          title: file.name.replace(/\.[^/.]+$/, ''),
+          artist: 'Unknown Artist',
+          duration: 0,
+          url,
+        };
+      });
       if (newTracks.length === 0) return {added: 0, skipped};
 
       const s = getPlayer();
@@ -497,7 +572,16 @@ export function useAudioPlayer(skipSeconds: number) {
       if (playAfter || s.currentTrackIndex === -1) {
         const track = newTracks[0];
         if (track) {
-          setTimeout(() => startTrack(audioRef.current, track.url), 0);
+          // Tracked so the pending `startTrack` can be cancelled on unmount
+          // (see the cleanup effect below); otherwise it fires against a
+          // stale audio element after the hook is gone.
+          if (startTrackTimerRef.current !== undefined) {
+            window.clearTimeout(startTrackTimerRef.current);
+          }
+          startTrackTimerRef.current = window.setTimeout(
+            () => startTrack(audioRef.current, track.url),
+            0,
+          );
           dispatch(setCurrentTrackIndex(startIndex));
           dispatch(setCurrentTime(0));
           dispatch(setDuration(0));
@@ -512,6 +596,7 @@ export function useAudioPlayer(skipSeconds: number) {
   const removeTrack = useCallback(
     (index: number) => {
       const s = getPlayer();
+      const removedTrack = s.tracks[index];
       const newTracks = s.tracks.filter((_, i) => i !== index);
       let newIndex = s.currentTrackIndex;
       const audio = audioRef.current;
@@ -538,8 +623,20 @@ export function useAudioPlayer(skipSeconds: number) {
 
       dispatch(setTracks(newTracks));
       dispatch(setCurrentTrackIndex(newIndex));
+
+      // Release the blob URLs held by the removed track: both the original
+      // file pick URL (if user-added) and the cached WAV re-encode URL.
+      if (removedTrack) {
+        evictAudio(removedTrack.url);
+        const wavUrl = wavBlobCacheRef.current.get(removedTrack.url);
+        if (wavUrl) {
+          revokeBlobUrl(wavUrl);
+          wavBlobCacheRef.current.delete(removedTrack.url);
+        }
+        revokeBlobUrl(removedTrack.url);
+      }
     },
-    [dispatch, startTrack],
+    [dispatch, startTrack, revokeBlobUrl],
   );
 
   const selectTrack = useCallback(
@@ -783,7 +880,9 @@ export function useAudioPlayer(skipSeconds: number) {
 
               dispatch(setIsPlaying(true));
             })
-            .catch(() => {});
+            .catch(error => {
+              if (runId === rangeRunIdRef.current) reportPlaybackError(error);
+            });
         }, 50);
       };
 
@@ -834,7 +933,10 @@ export function useAudioPlayer(skipSeconds: number) {
 
                   dispatch(setIsPlaying(true));
                 })
-                .catch(() => {});
+                .catch(error => {
+                  if (runId === rangeRunIdRef.current)
+                    reportPlaybackError(error);
+                });
             } else {
               abortLoop();
 
@@ -917,7 +1019,7 @@ export function useAudioPlayer(skipSeconds: number) {
 
       rangeRafRef.current = requestAnimationFrame(tick);
     },
-    [dispatch, getAnalyser, stopRangeMonitoring],
+    [dispatch, getAnalyser, stopRangeMonitoring, reportPlaybackError],
   );
 
   /*
@@ -984,8 +1086,26 @@ export function useAudioPlayer(skipSeconds: number) {
     state.isPlaying,
   ]);
 
+  // Cancel the pending `startTrack` timer on unmount so it doesn't fire
+  // against a stale audio element (relevant for HMR / test teardown).
+  useEffect(() => {
+    return () => {
+      if (startTrackTimerRef.current !== undefined) {
+        window.clearTimeout(startTrackTimerRef.current);
+        startTrackTimerRef.current = undefined;
+      }
+    };
+  }, []);
+
   return {
     state,
+    playbackError,
+    retryPlayback: () => {
+      const s = getPlayer();
+      const track = s.tracks[s.currentTrackIndex];
+      if (track) void startTrack(audioRef.current, track.url);
+    },
+    nextTrack: () => nextRef.current(),
     play,
     pause,
     togglePlay,

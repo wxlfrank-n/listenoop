@@ -6,7 +6,7 @@
  */
 
 import {configureStore} from '@reduxjs/toolkit';
-import configReducer from './configSlice';
+import configReducer, {saveConfig} from './configSlice';
 import playerReducer from './playerSlice';
 import analysisReducer from './analysisSlice';
 
@@ -25,6 +25,15 @@ export const store = configureStore({
         ignoredActionPaths: ['payload.data'],
       },
     }),
+});
+
+let lastConfig = store.getState().config;
+store.subscribe(() => {
+  const config = store.getState().config;
+  if (config !== lastConfig) {
+    lastConfig = config;
+    saveConfig(config);
+  }
 });
 
 export type RootState = ReturnType<typeof store.getState>;

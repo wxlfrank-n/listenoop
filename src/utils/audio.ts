@@ -61,20 +61,33 @@ export function initializeAudioContext(): AudioContext {
  * - Caches results to avoid redundant decodes
  *
  * @param url - The URL of the audio file to decode
+ * @param signal - Optional AbortSignal; aborts the in-flight `fetch` (the
+ *   subsequent `decodeAudioData` call is un-interruptible, but at least the
+ *   network transfer stops and the result is discarded).
  * @returns Promise resolving to decoded audio buffer and byte length
  * @throws Error if audio fetch fails or context creation is not supported
  */
-export function decodeAudioBuffer(url: string): Promise<DecodedAudio> {
-  // Return cached result if already decoded
+export function decodeAudioBuffer(
+  url: string,
+  signal?: AbortSignal,
+): Promise<DecodedAudio> {
+  // Return cached result if already decoded. If a decode is in flight and the
+  // caller passes a signal that subsequently aborts, the original promise still
+  // resolves (the cache is shared) but the caller's `.then` is a no-op thanks
+  // to its own `cancelled` flag / signal check.
   const cached = decodeCache.get(url);
   if (cached) return cached;
 
   const pending = (async () => {
-    // Fetch the audio file
-    const response = await fetch(url);
+    // Fetch the audio file. Pass the signal so the network transfer aborts
+    // when the caller switches tracks mid-decode.
+    const response = await fetch(url, signal ? {signal} : undefined);
     if (!response.ok)
       throw new Error(`Failed to fetch audio (${response.status})`);
     const arrayBuffer = await response.arrayBuffer();
+    // If we were aborted during fetch/arrayBuffer read, bail before the
+    // expensive decode step (which is itself un-interruptible).
+    if (signal?.aborted) throw new DOMException('Aborted', 'AbortError');
     // `decodeAudioData` detaches (transfers) its input buffer, after which
     // `byteLength` reads 0. Capture the size up front so the bitrate stays
     // accurate.

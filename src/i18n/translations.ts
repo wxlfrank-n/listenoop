@@ -13,6 +13,9 @@ export const en = {
 
   player: {
     play: 'Play',
+    playbackError: 'This track could not play. Retry or choose the next track.',
+    retry: 'Retry',
+    nextTrack: 'Next track',
     pause: 'Pause',
     backToStart: 'Go to start',
     skipToEnd: 'Go to end',
@@ -33,6 +36,14 @@ export const en = {
     addMusic: 'Add an MP3 file to get started',
     mono: 'Mono',
     stereo: 'Stereo',
+  },
+
+  waveform: {
+    ariaLabel: 'Waveform — use arrow keys to seek',
+    loading: 'Loading waveform…',
+    unavailable: 'Waveform unavailable',
+    noClips: 'No clips detected — lower the Silence threshold in Settings.',
+    splittable: 'Splittable',
   },
 
   playlist: {
@@ -158,6 +169,7 @@ export const en = {
       'Skipped {count} file because only supported audio formats are accepted.',
     skippedNonMp3Plural:
       'Skipped {count} files because only supported audio formats are accepted.',
+    listeningLoopIcon: 'Listening loop',
   },
 
   errorBoundary: {
@@ -171,6 +183,10 @@ export const no: Messages = {
   },
 
   player: {
+    playbackError:
+      'Sporet kunne ikke spilles. Prøv igjen eller velg neste spor.',
+    retry: 'Prøv igjen',
+    nextTrack: 'Neste spor',
     play: 'Spill av',
     pause: 'Pause',
     backToStart: 'G\u00e5 til start',
@@ -192,6 +208,14 @@ export const no: Messages = {
     addMusic: 'Legg til en lydfil for \u00e5 komme i gang',
     mono: 'Mono',
     stereo: 'Stereo',
+  },
+
+  waveform: {
+    ariaLabel: 'B\u00f8lgjeform – bruk piltastene for \u00e5 spole',
+    loading: 'Laster b\u00f8lgjeform\u2026',
+    unavailable: 'B\u00f8lgjeform utilgjengelig',
+    noClips: 'Ingen klipp funnet – senk Stillhetsterskelen i innstillingene.',
+    splittable: 'Kan splittes',
   },
 
   playlist: {
@@ -319,6 +343,7 @@ export const no: Messages = {
       'Hoppet over {count} fil fordi bare støttede lydformater aksepteres.',
     skippedNonMp3Plural:
       'Hoppet over {count} filer fordi bare støttede lydformater aksepteres.',
+    listeningLoopIcon: 'Lytte\u00f8kke',
   },
 
   errorBoundary: {
@@ -332,6 +357,9 @@ export const zh: Messages = {
   },
 
   player: {
+    playbackError: '无法播放此音轨。请重试或选择下一首。',
+    retry: '重试',
+    nextTrack: '下一首',
     play: '播放',
     pause: '暂停',
     backToStart: '回到开头',
@@ -353,6 +381,14 @@ export const zh: Messages = {
     addMusic: '添加音频文件开始使用',
     mono: '单声道',
     stereo: '立体声',
+  },
+
+  waveform: {
+    ariaLabel: '波形图 — 使用方向键定位',
+    loading: '正在加载波形…',
+    unavailable: '波形不可用',
+    noClips: '未检测到片段 — 请在设置中降低静音阈值。',
+    splittable: '可拆分',
   },
 
   playlist: {
@@ -471,6 +507,7 @@ export const zh: Messages = {
   app: {
     skippedNonMp3: '已跳过 {count} 个文件，目前仅支持常见音频格式。',
     skippedNonMp3Plural: '已跳过 {count} 个文件，目前仅支持常见音频格式。',
+    listeningLoopIcon: '循环聆听',
   },
 
   errorBoundary: {

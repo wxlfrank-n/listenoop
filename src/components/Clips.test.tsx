@@ -80,7 +80,7 @@ describe('Clips list', () => {
       onActivate,
     });
 
-    fireEvent.click(container.querySelectorAll('.waveform-clip')[1]);
+    fireEvent.click(container.querySelectorAll('.waveform-clip')[1]!);
 
     expect(onStopPlayback).not.toHaveBeenCalled();
     expect(onActivate).toHaveBeenCalledWith(1);

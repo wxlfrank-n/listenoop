@@ -29,8 +29,9 @@ import {startFrameLoop} from '../utils/raf';
 import {addListener} from '../utils/listener';
 import {useClipPlayRequest} from '../hooks/useClipPlayRequest';
 import {useClipPinchMerge} from '../hooks/useClipPinchMerge';
-import {useAppSelector} from '../store/hooks';
-import {selectMergeScope} from '../store/selectors';
+import {useConfig} from '../hooks/useConfig';
+import {useWaveformKeyboard} from '../hooks/useWaveformKeyboard';
+import {useT} from '../i18n';
 import './StackedWaveform.css';
 import {getWindowSecs} from '../utils/rowWaveform';
 
@@ -118,12 +119,14 @@ export const StackedWaveform = memo(
   }: StackedWaveformProps) => {
     const scrollerRef = useRef<HTMLDivElement>(null);
     const [scrollerWidth, setScrollerWidth] = useState(0);
-    const mergeScope = useAppSelector(selectMergeScope);
-    /*
-     * Last window length rendered. Fed back into getWindowSecs so small changes
-     * (a new selection, a clip growing slightly) do not re-paginate the rows.
-     */
-    const prevWindowSecsRef = useRef(0);
+    const {config} = useConfig();
+    const t = useT();
+    const onKeyDown = useWaveformKeyboard({
+      duration: waveform.duration,
+      getCurrentTime,
+      onSeek,
+      skipSeconds: config.skipSeconds,
+    });
     /*
      * =========================================================
      * ROWS
@@ -131,18 +134,9 @@ export const StackedWaveform = memo(
      */
 
     const windowSecs = useMemo(
-      () =>
-        getWindowSecs(scrollerWidth, displayClips, waveform.duration, {
-          activeClip,
-          mergeScope,
-          previousWindowSecs: prevWindowSecsRef.current,
-        }),
-      [scrollerWidth, displayClips, waveform.duration, activeClip, mergeScope],
+      () => getWindowSecs(scrollerWidth),
+      [scrollerWidth],
     );
-
-    useEffect(() => {
-      prevWindowSecsRef.current = windowSecs;
-    }, [windowSecs]);
 
     const stackedRows = useMemo<StackedRow[]>(() => {
       const rows: StackedRow[] = [];
@@ -193,16 +187,14 @@ export const StackedWaveform = memo(
          * the waveform even if the first detected
          * clip starts slightly later.
          */
-        rows[0].start = 0;
+        rows[0]!.start = 0;
 
         /*
          * Last row reaches the physical end of
          * the audio.
          */
-        rows[rows.length - 1].end = Math.max(
-          rows[rows.length - 1].end,
-          waveform.duration,
-        );
+        const lastRow = rows[rows.length - 1]!;
+        lastRow.end = Math.max(lastRow.end, waveform.duration);
       }
 
       return rows;
@@ -219,6 +211,13 @@ export const StackedWaveform = memo(
     const autoScrollResetRef = useRef<number | undefined>(undefined);
 
     const currentPageRef = useRef(-1);
+
+    // Tracks whether the active-clip follow effect has run at least once
+    // for this view instance. The first run corresponds to mount (or a
+    // view switch from single-row); it uses `behavior: 'auto'` (instant)
+    // so the scroll snaps cleanly to the target page instead of being
+    // interrupted mid-animation by `scroll-snap-type: x mandatory`.
+    const activeClipFirstRunRef = useRef(true);
 
     const previousTimeRef = useRef(currentTime);
 
@@ -387,16 +386,16 @@ export const StackedWaveform = memo(
 
       const last = pages.length - 1;
 
-      if (time < pages[0].start) {
+      if (time < pages[0]!.start) {
         return 0;
       }
 
-      if (time >= pages[last].end) {
+      if (time >= pages[last]!.end) {
         return last;
       }
 
       for (let i = 0; i < pages.length; i++) {
-        if (time < pages[i].end) {
+        if (time < pages[i]!.end) {
           return i;
         }
       }
@@ -731,17 +730,52 @@ export const StackedWaveform = memo(
        * A split or merge re-packs the rows, so the edited clip can land on
        * another page. Follow it there: the clip the user is working on must
        * stay on screen. When it is already on the visible page nothing moves.
+       *
+       * On the FIRST run (mount / view switch from single-row), scroll
+       * INSTANTLY (`behavior: 'auto'`) instead of smoothly. A smooth scroll
+       * from 0 to the target page gets interrupted by the container's
+       * `scroll-snap-type: x mandatory`, landing between pages — the user
+       * sees "half of page 1 and half of page 2". Instant scroll snaps
+       * cleanly to the target page on mount; subsequent active-clip changes
+       * (a split/merge landing the clip on another page) use the smooth
+       * animation, which is fine because the scroll is between adjacent
+       * pages with snap points that the animation can settle on.
        */
       const page = pageForTime((clip.vStart + clip.vEnd) / 2);
 
       if (page !== currentPageRef.current) {
+        const isFirstRun = activeClipFirstRunRef.current;
+        activeClipFirstRunRef.current = false;
+
         currentPageRef.current = page;
 
         setViewPage(page);
 
-        scrollToPage(page);
+        scrollToPage(page, isFirstRun ? 'auto' : 'smooth');
+      } else {
+        activeClipFirstRunRef.current = false;
       }
     }, [activeClip, displayClips, pageForTime, scrollToPage]);
+
+    /*
+     * Mount-time fallback: if there is no active clip but the playhead is
+     * already past the start (e.g. the user was playing audio in the
+     * single-row view and switched to stacked), scroll to the page
+     * containing the current playback position so the user doesn't lose
+     * their place. Instant scroll for the same snap-settling reason as
+     * above. Runs once on mount only.
+     */
+    useEffect(() => {
+      if (activeClip >= 0) return; // the effect above handles this case
+      if (currentTime <= 0) return;
+
+      const page = pageForTime(currentTime);
+      if (page <= 0) return;
+
+      currentPageRef.current = page;
+      setViewPage(page);
+      scrollToPage(page, 'auto');
+    }, []);
 
     /*
      * =========================================================
@@ -802,6 +836,13 @@ export const StackedWaveform = memo(
       <div
         className="stacked-waveform"
         ref={scrollerRef}
+        role="slider"
+        tabIndex={0}
+        aria-label={t('waveform.ariaLabel')}
+        aria-valuemin={0}
+        aria-valuemax={Math.max(0, waveform.duration)}
+        aria-valuenow={currentTime}
+        onKeyDown={onKeyDown}
         onPointerDown={e => {
           pinchBind.onPointerDown(e);
           pageDragPointerDown?.(e);

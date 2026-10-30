@@ -20,7 +20,7 @@ interface PlayerActionsProps {
 const MENU_LABELS = ['playlist', 'settings'] as const;
 
 export const PlayerActions = memo(
-  ({onTogglePlaylist, onOpenSettings}: PlayerActionsProps) => {
+  ({playlistOpen, onTogglePlaylist, onOpenSettings}: PlayerActionsProps) => {
     const t = useT();
     const [open, setOpen] = useState(false);
     const rootRef = useRef<HTMLDivElement>(null);
@@ -70,7 +70,12 @@ export const PlayerActions = memo(
               <li
                 key={label}
                 role="menuitem"
-                className="player-actions__item"
+                className={`player-actions__item ${
+                  // Highlight the entry whose panel is already visible, so
+                  // the menu communicates current state, not just actions.
+                  i === 0 && playlistOpen ? 'player-actions__item--active' : ''
+                }`}
+                aria-current={i === 0 && playlistOpen ? 'true' : undefined}
                 onClick={() => activate(i)}
               >
                 {i === 0 ? (

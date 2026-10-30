@@ -26,15 +26,15 @@
 
 import './App.css';
 
-import {useRef, useCallback, useState, useEffect, useMemo} from 'react';
+import {useRef, useCallback, useState} from 'react';
 import {useAudioPlayer} from './hooks/useAudioPlayer';
 import {useConfig} from './hooks/useConfig';
 import {useWaveform} from './hooks/useWaveform';
+import {useClipDetection} from './hooks/useClipDetection';
 import {useAddFiles} from './hooks/useAddFiles';
-import {getInitClipData, type InitClipData} from './utils/clips';
-import {useAppDispatch, useAppSelector} from './store/hooks';
+import {useDocumentLang} from './hooks/useDocumentLang';
+import {useAppSelector} from './store/hooks';
 import {selectCurrentTrack} from './store/selectors';
-import {setClips} from './store/analysisSlice';
 import {NowPlaying} from './components/NowPlaying';
 import {PlayerActions} from './components/PlayerActions';
 import {PlayerControls} from './components/PlayerControls';
@@ -47,8 +47,11 @@ import {useT} from './i18n';
 export default function App() {
   // Load user configuration from localStorage
   const {config} = useConfig();
-  const dispatch = useAppDispatch();
   const t = useT();
+
+  // Keep <html lang> in sync with the active locale so screen readers use
+  // the right pronunciation rules (Norwegian for "no", etc.).
+  useDocumentLang();
 
   // Set up audio player with all playback controls and state
   const {
@@ -64,6 +67,9 @@ export default function App() {
     playRange,
     getAnalyser,
     getCurrentTime,
+    playbackError,
+    retryPlayback,
+    nextTrack,
   } = useAudioPlayer(config.skipSeconds);
 
   // UI state for overlays
@@ -104,35 +110,21 @@ export default function App() {
   // Get current playing track from the store
   const currentTrack = useAppSelector(selectCurrentTrack);
 
-  // Decode and extract waveform data for visualization
-  const waveform = useWaveform(currentTrack?.url ?? null);
+  // Decode and extract waveform data for visualization. The worker also
+  // returns the first set of clips (computed with the current config),
+  // and publishes both to Redux.
+  useWaveform(currentTrack?.url ?? null);
 
-  // Clips detected from the current audio's silence gaps, recomputed only
-  // when the waveform (i.e. the loaded track) changes, then published to the
-  // analysis slice so every component can read them.
-  const clipData: InitClipData = useMemo(
-    () =>
-      getInitClipData(
-        waveform.data?.data ?? null,
-        waveform.data?.sampleRate ?? 0,
-        {
-          blockMs: config.blockMs,
-          silenceRatio: config.silenceRatio,
-          minClipLength: config.minClipLength,
-          minSplitPieceSec: config.minSplitPieceSec,
-        },
-      ),
-    [
-      waveform.status,
-      config.blockMs,
-      config.silenceRatio,
-      config.minClipLength,
-      config.minSplitPieceSec,
-    ],
-  );
-  useEffect(() => {
-    dispatch(setClips(clipData));
-  }, [clipData, dispatch]);
+  // Re-run clip detection in the worker whenever the user changes
+  // detection settings (silence threshold, analysis detail, min clip
+  // length). The worker reuses its cached mono samples so this is fast
+  // and doesn't re-fetch or re-decode the file.
+  useClipDetection(currentTrack?.url ?? null, {
+    blockMs: config.blockMs,
+    silenceRatio: config.silenceRatio,
+    minClipLength: config.minClipLength,
+    minSplitPieceSec: config.minSplitPieceSec,
+  });
 
   const showNotice = useCallback(
     (msg: string, type: 'info' | 'error' = 'info') => {
@@ -187,6 +179,13 @@ export default function App() {
                 onSkipForward={skipForward}
                 onSkipBackward={skipBackward}
               />
+              {playbackError && (
+                <div className="playback-error" role="alert">
+                  <p>{t('player.playbackError')}</p>
+                  <button onClick={retryPlayback}>{t('player.retry')}</button>
+                  <button onClick={nextTrack}>{t('player.nextTrack')}</button>
+                </div>
+              )}
             </div>
           ) : (
             <>

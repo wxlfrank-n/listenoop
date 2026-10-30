@@ -10,7 +10,6 @@ export default defineConfig(({command, mode}) => {
     plugins: [react(), svgr()],
     base: env.VITE_BASE_URL || '/',
     server: {
-      host: true,
       port: 5173,
     },
     build: {

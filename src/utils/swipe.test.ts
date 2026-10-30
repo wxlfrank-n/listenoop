@@ -39,7 +39,7 @@ describe('splitClip', () => {
 
     expect(result?.mergeGap).toBeCloseTo(0.499999);
     expect(result?.activeClip).toBe(0);
-    expect(mergeClipsByGap(clips, result!.mergeGap)[0].children).toEqual([
+    expect(mergeClipsByGap(clips, result!.mergeGap)[0]!.children).toEqual([
       clips[0],
       clips[1],
     ]);
@@ -75,7 +75,7 @@ describe('splitClip', () => {
     const splitIdx = 3;
 
     expect(displayClips).toHaveLength(4);
-    expect(displayClips[splitIdx].children).toEqual([clips[5], clips[6]]);
+    expect(displayClips[splitIdx]!.children).toEqual([clips[5], clips[6]]);
 
     const result = splitClip(clips, displayClips, splitIdx, 'global');
 
@@ -89,8 +89,8 @@ describe('splitClip', () => {
     // activeClip must follow the first piece of the group that was split:
     // the first clip starting at or after the pre-split clip's start.
     expect(result!.activeClip).toBe(5);
-    expect(nextClips[result!.activeClip].start).toBe(
-      displayClips[splitIdx].start,
+    expect(nextClips[result!.activeClip]!.start).toBe(
+      displayClips[splitIdx]!.start,
     );
     expect(nextClips[result!.activeClip]).toBe(clips[5]);
 
@@ -99,8 +99,8 @@ describe('splitClip', () => {
      * playback must read its bounds from the new list -- reusing the
      * pre-split clip would replay past the split point.
      */
-    expect(nextClips[result!.activeClip].vEnd).toBeCloseTo(8.5, 6);
-    expect(displayClips[splitIdx].vEnd).toBeCloseTo(9.6, 6);
+    expect(nextClips[result!.activeClip]!.vEnd).toBeCloseTo(8.5, 6);
+    expect(displayClips[splitIdx]!.vEnd).toBeCloseTo(9.6, 6);
   });
 
   it('cuts at one boundary only, leaving earlier groups alone', () => {
@@ -120,7 +120,7 @@ describe('splitClip', () => {
       [0, 1],
       [2, 5],
     ]);
-    expect(result.clips![1].children).toEqual([clips[1], clips[2]]);
+    expect(result.clips![1]!.children).toEqual([clips[1], clips[2]]);
     expect(result.activeClip).toBe(0);
   });
 
@@ -157,8 +157,8 @@ describe('splitClip', () => {
       [7.15, 8],
       [12, 14],
     ]);
-    expect(result.clips![0].children).toEqual([clips[0], clips[1]]);
-    expect(result.clips![3].children).toEqual([clips[4], clips[5]]);
+    expect(result.clips![0]!.children).toEqual([clips[0], clips[1]]);
+    expect(result.clips![3]!.children).toEqual([clips[4], clips[5]]);
     expect(result.activeClip).toBe(1);
   });
 
@@ -325,7 +325,7 @@ describe('splitClipEnd', () => {
       [0, 3],
       [4, 5],
     ]);
-    expect(result.clips![0].children).toEqual([
+    expect(result.clips![0]!.children).toEqual([
       clip.children![0],
       clip.children![1],
     ]);
@@ -351,7 +351,7 @@ describe('splitClipEnd', () => {
       [2, 5],
     ]);
     expect(result.clips![0]).toEqual(clip.children![0]);
-    expect(result.clips![1].children).toEqual([
+    expect(result.clips![1]!.children).toEqual([
       clip.children![1],
       clip.children![2],
     ]);
@@ -377,7 +377,7 @@ describe('splitClipEnd', () => {
       [0, 1],
       [2, 3.03],
     ]);
-    expect(result.clips![1].children).toEqual([
+    expect(result.clips![1]!.children).toEqual([
       clip.children![1],
       clip.children![2],
     ]);
@@ -399,7 +399,7 @@ describe('splitClipEnd', () => {
       [0, 1],
       [2, 5],
     ]);
-    expect(result.clips![0].children).toEqual([
+    expect(result.clips![0]!.children).toEqual([
       clip.children![0],
       clip.children![1],
     ]);
@@ -458,14 +458,14 @@ describe('splitClipEnd', () => {
     const result = splitClipEnd(clips, displayClips, 1, 'right', 'clip')!;
 
     // c-d peels its rightmost child off; a-b and e-f stay merged.
-    expect(bounds(result.clips)).toEqual([
+    expect(bounds(result.clips!)).toEqual([
       [0, 2],
       [6, 7],
       [7.15, 8],
       [12, 14],
     ]);
-    expect(result.clips![0].children).toEqual([clips[0], clips[1]]);
-    expect(result.clips![3].children).toEqual([clips[4], clips[5]]);
+    expect(result.clips![0]!.children).toEqual([clips[0], clips[1]]);
+    expect(result.clips![3]!.children).toEqual([clips[4], clips[5]]);
     expect(result.activeClip).toBe(1);
   });
 
@@ -512,12 +512,12 @@ describe('mergeClips', () => {
 
     // nearest gap for idx 1 is the previous (0.2 vs 0.5)
     expect(result?.clips).toHaveLength(3);
-    expect(result?.clips[0].children).toEqual([clips[0], clips[1]]);
+    expect(result?.clips[0]!.children).toEqual([clips[0], clips[1]]);
     expect(result?.clips[2]).toEqual(clips[3]);
     expect(result?.activeClip).toBe(0);
     expect(result?.mergeGap).toBeCloseTo(0.2);
-    expect(result?.clips[0].start).toBe(0);
-    expect(result?.clips[0].end).toBe(2);
+    expect(result?.clips[0]!.start).toBe(0);
+    expect(result?.clips[0]!.end).toBe(2);
   });
 
   it('merges toward the nearest neighbor when the next gap is smaller', () => {
@@ -526,7 +526,7 @@ describe('mergeClips', () => {
 
     const result = mergeClips(clips, displayClips, 0, 'global');
 
-    expect(result?.clips[0].children).toEqual([clips[0], clips[1]]);
+    expect(result?.clips[0]!.children).toEqual([clips[0], clips[1]]);
     expect(result?.activeClip).toBe(0);
     expect(result?.mergeGap).toBeCloseTo(0.2);
   });
@@ -539,7 +539,7 @@ describe('mergeClips', () => {
     const second = mergeClips(clips, first.clips, first.activeClip, 'global')!;
 
     expect(second.clips).toHaveLength(2);
-    expect(second.clips[0].children).toEqual([clips[0], clips[1], clips[2]]);
+    expect(second.clips[0]!.children).toEqual([clips[0], clips[1], clips[2]]);
     expect(second.activeClip).toBe(0);
     expect(second.mergeGap).toBeCloseTo(0.5);
   });
@@ -593,7 +593,7 @@ describe('mergeClips', () => {
       [4, 6],
       [8, 9],
     ]);
-    expect(second.clips[0].children).toEqual([clips[0], clips[1]]);
+    expect(second.clips[0]!.children).toEqual([clips[0], clips[1]]);
   });
 
   it('merges exactly one pair regardless of the merge gap', () => {
@@ -607,12 +607,12 @@ describe('mergeClips', () => {
 
     const result = mergeClips(clips, displayClips, 1, 'clip')!;
 
-    expect(bounds(result.clips)).toEqual([
+    expect(bounds(result.clips!)).toEqual([
       [0, 2],
       [2.6, 3],
       [4.1, 5],
     ]);
-    expect(result.clips[0].children).toEqual([clips[0], clips[1]]);
+    expect(result.clips[0]!.children).toEqual([clips[0], clips[1]]);
     expect(result.activeClip).toBe(0);
   });
 
@@ -636,7 +636,7 @@ describe('mergeClipRange', () => {
       [1.2, 5],
       [8, 9],
     ]);
-    expect(result.clips![1].children).toEqual([
+    expect(result.clips![1]!.children).toEqual([
       expect.objectContaining({
         start: 1.2,
         end: 3,
@@ -696,12 +696,12 @@ describe('mergeClipRange', () => {
 
     const result = mergeClipRange(clips, displayClips, 1, 2, 'clip')!;
 
-    expect(bounds(result.clips)).toEqual([
+    expect(bounds(result.clips!)).toEqual([
       [0, 1],
       [1.2, 5],
       [10, 12],
     ]);
-    expect(result.clips[1].children).toEqual([
+    expect(result.clips![1]!.children).toEqual([
       displayClips[1],
       displayClips[2],
     ]);
@@ -718,12 +718,12 @@ describe('mergeClipRange', () => {
 
     const result = mergeClipRange(clips, displayClips, 0, 1, 'clip')!;
 
-    expect(bounds(result.clips)).toEqual([
+    expect(bounds(result.clips!)).toEqual([
       [0, 2],
       [2.3, 3],
       [10, 12],
     ]);
-    expect(result.clips[0].children).toEqual([
+    expect(result.clips![0]!.children).toEqual([
       displayClips[0],
       displayClips[1],
     ]);

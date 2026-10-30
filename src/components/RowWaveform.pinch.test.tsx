@@ -151,8 +151,8 @@ beforeEach(() => {
 describe('RowWaveform clip pinch merge', () => {
   it('merges the clips between two fingers that squeeze together', () => {
     const {clipsEls, onPinchMergeClip} = renderRow();
-    const a = clipsEls[0];
-    const b = clipsEls[2];
+    const a = clipsEls[0]!;
+    const b = clipsEls[2]!;
 
     fireEvent.pointerDown(a, {
       pointerId: 11,
@@ -184,13 +184,13 @@ describe('RowWaveform clip pinch merge', () => {
   it('does not merge when the fingers move apart', () => {
     const {clipsEls, onPinchMergeClip} = renderRow();
 
-    fireEvent.pointerDown(clipsEls[0], {
+    fireEvent.pointerDown(clipsEls[0]!, {
       pointerId: 21,
       pointerType: 'touch',
       clientX: 60,
       clientY: 50,
     });
-    fireEvent.pointerDown(clipsEls[1], {
+    fireEvent.pointerDown(clipsEls[1]!, {
       pointerId: 22,
       pointerType: 'touch',
       clientX: 260,
@@ -212,13 +212,13 @@ describe('RowWaveform clip pinch merge', () => {
       '.row-waveform__track',
     ) as HTMLElement;
 
-    fireEvent.pointerDown(clipsEls[0], {
+    fireEvent.pointerDown(clipsEls[0]!, {
       pointerId: 31,
       pointerType: 'touch',
       clientX: 150,
       clientY: 50,
     });
-    fireEvent.pointerDown(clipsEls[1], {
+    fireEvent.pointerDown(clipsEls[1]!, {
       pointerId: 32,
       pointerType: 'touch',
       clientX: 250,
@@ -240,13 +240,13 @@ describe('RowWaveform clip pinch merge', () => {
   it('never activates a clip that took part in a pinch', () => {
     const {clipsEls, onActiveClipChange, onPlayRange} = renderRow();
 
-    fireEvent.pointerDown(clipsEls[0], {
+    fireEvent.pointerDown(clipsEls[0]!, {
       pointerId: 41,
       pointerType: 'touch',
       clientX: 60,
       clientY: 50,
     });
-    fireEvent.pointerDown(clipsEls[1], {
+    fireEvent.pointerDown(clipsEls[1]!, {
       pointerId: 42,
       pointerType: 'touch',
       clientX: 260,
@@ -263,7 +263,7 @@ describe('RowWaveform clip pinch merge', () => {
   it('still taps a clip normally when only one finger is used', () => {
     const {clipsEls, onActiveClipChange, onPlayRange} = renderRow();
 
-    fireEvent.pointerDown(clipsEls[1], {
+    fireEvent.pointerDown(clipsEls[1]!, {
       pointerId: 51,
       pointerType: 'touch',
       clientX: 100,
@@ -285,13 +285,13 @@ describe('RowWaveform clip pinch merge', () => {
       renderRow();
     const merged: InitClipData = {start: 1, end: 9, vStart: 1, vEnd: 9};
 
-    fireEvent.pointerDown(clipsEls[0], {
+    fireEvent.pointerDown(clipsEls[0]!, {
       pointerId: 81,
       pointerType: 'touch',
       clientX: 60,
       clientY: 50,
     });
-    fireEvent.pointerDown(clipsEls[2], {
+    fireEvent.pointerDown(clipsEls[2]!, {
       pointerId: 82,
       pointerType: 'touch',
       clientX: 460,
@@ -332,7 +332,7 @@ describe('RowWaveform clip pinch merge', () => {
 describe('RowWaveform clip pinch split (anti-snip)', () => {
   it('splits the clip under two fingers that spread apart', () => {
     const {clipsEls, onPinchSplitClip, onPinchMergeClip} = renderRow();
-    const clip = clipsEls[1];
+    const clip = clipsEls[1]!;
 
     fireEvent.pointerDown(clip, {
       pointerId: 101,
@@ -371,7 +371,7 @@ describe('RowWaveform clip pinch split (anti-snip)', () => {
 
   it('does not split when two fingers on one clip squeeze together', () => {
     const {clipsEls, onPinchSplitClip, onPinchMergeClip} = renderRow();
-    const clip = clipsEls[1];
+    const clip = clipsEls[1]!;
 
     fireEvent.pointerDown(clip, {
       pointerId: 111,
@@ -409,7 +409,7 @@ describe('RowWaveform clip pinch split (anti-snip)', () => {
     const track = view.container.querySelector(
       '.row-waveform__track',
     ) as HTMLElement;
-    const clip = clipsEls[1];
+    const clip = clipsEls[1]!;
 
     fireEvent.pointerDown(clip, {
       pointerId: 121,
@@ -445,13 +445,13 @@ describe('RowWaveform clip pinch split (anti-snip)', () => {
   it('does not split when the two fingers land on different clips', () => {
     const {clipsEls, onPinchSplitClip} = renderRow();
 
-    fireEvent.pointerDown(clipsEls[0], {
+    fireEvent.pointerDown(clipsEls[0]!, {
       pointerId: 131,
       pointerType: 'touch',
       clientX: 100,
       clientY: 40,
     });
-    fireEvent.pointerDown(clipsEls[1], {
+    fireEvent.pointerDown(clipsEls[1]!, {
       pointerId: 132,
       pointerType: 'touch',
       clientX: 140,

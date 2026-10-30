@@ -31,6 +31,7 @@
 import {memo, useEffect, useRef, useState, type ReactNode} from 'react';
 import {createPortal} from 'react-dom';
 import {useDrag} from '@use-gesture/react';
+import {useT} from '../i18n';
 
 import {clipGestureLedger} from './clipPinch';
 
@@ -173,6 +174,7 @@ export const Clip = memo(
     onSwipe,
   }: ClipProps) => {
     const {windowStartSec, windowLen, innerH, vbH} = window;
+    const t = useT();
 
     const suppressClickRef = useRef(false);
 
@@ -451,6 +453,14 @@ export const Clip = memo(
           swipeAction ? 'waveform-clip--swiping' : ''
         }`}
         data-clip-idx={id}
+        role="button"
+        tabIndex={0}
+        aria-label={
+          active
+            ? `Clip ${id + 1}, active — press Enter to toggle playback`
+            : `Clip ${id + 1} — press Enter to play`
+        }
+        aria-pressed={active}
         style={{
           left: `${leftPct}%`,
           top: `${topPct}%`,
@@ -458,13 +468,19 @@ export const Clip = memo(
           height: `${heightPct}%`,
         }}
         onClick={handleClick}
+        onKeyDown={e => {
+          if (e.key === 'Enter' || e.key === ' ') {
+            e.preventDefault();
+            activateClip();
+          }
+        }}
         {...bindClip()}
       >
         {active && canSplit && !swipeAction && (
           <span
             className="waveform-clip__split-hint waveform-clip__action-chip"
             role="img"
-            aria-label="Splittable"
+            aria-label={t('waveform.splittable')}
           >
             ✂️
           </span>

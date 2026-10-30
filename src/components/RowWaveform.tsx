@@ -1,4 +1,4 @@
-import {memo, useRef} from 'react';
+import {memo, useMemo, useRef} from 'react';
 import {Clips} from './Clips';
 import {ClipLabel, clipLabelProps} from './ClipLabel';
 import {DancingLines} from './DancingLines';
@@ -9,6 +9,8 @@ import {useRowWaveformScroll, VB_W, VB_H} from '../hooks/useRowWaveformScroll';
 import {useClipPlayRequest} from '../hooks/useClipPlayRequest';
 import {useClipPinchMerge} from '../hooks/useClipPinchMerge';
 import {useConfig} from '../hooks/useConfig';
+import {useWaveformKeyboard} from '../hooks/useWaveformKeyboard';
+import {useT} from '../i18n';
 import type {Clip as InitClipData} from '../utils/clips';
 import type {ClipPlayRequest, SwipeDirection} from '../types';
 import './RowWaveform.css';
@@ -75,6 +77,13 @@ export const RowWaveform = memo(
     const clipLabelLayerRef = useRef<HTMLDivElement>(null);
     const {config} = useConfig();
     const theme = config.theme;
+    const t = useT();
+    const onKeyDown = useWaveformKeyboard({
+      duration: waveform.duration,
+      getCurrentTime,
+      onSeek,
+      skipSeconds: config.skipSeconds,
+    });
     const {
       hsRef,
       trackRef,
@@ -88,14 +97,11 @@ export const RowWaveform = memo(
       playClip,
     } = useRowWaveformScroll({
       waveformDuration: waveform.duration,
-      displayClips,
       currentTime,
       onSeek,
       onPlayRange,
       repetitions,
       onStopPlayback,
-      activeClip,
-      mergeScope: config.mergeScope,
       onActiveClipChange,
       onSwipeClip,
       getCurrentTime,
@@ -106,6 +112,19 @@ export const RowWaveform = memo(
       cursorElRef,
       playedElRef,
       clipLabelLayerRef,
+      // On mount (including a view switch from stacked → single-row), open
+      // the viewport at the active clip's midpoint so the user keeps seeing
+      // the clip they were working on. With no active clip, fall back to the
+      // playhead so the viewport tracks the current playback position
+      // instead of jumping to 0. Empty deps: this is a MOUNT-TIME value —
+      // subsequent anchor changes go through the normal follow/seek flow.
+      initialAnchorSec: useMemo(() => {
+        if (activeClip >= 0) {
+          const clip = displayClips[activeClip];
+          if (clip) return (clip.vStart + clip.vEnd) / 2;
+        }
+        return currentTime;
+      }, []),
     });
     /*
      A split/merge changes which clip should be playing. The parent describes
@@ -129,26 +148,43 @@ export const RowWaveform = memo(
     const bufferLen = bufferLengthRef.current;
     const bufferScale = bufferLen > 0 ? hsWinLenRef.current / bufferLen : 1;
     const vbW = VB_W * bufferScale;
-    const waveformWindow = {
-      windowStartSec: renderedBufferAnchor,
-      windowLen: bufferLen,
-      innerH,
-      vbW,
-      vbH: VB_H,
-    };
-    const canvasStyle: React.CSSProperties = {
-      position: 'absolute',
-      inset: 0,
-      width: '100%',
-      height: '100%',
-    };
+    // Memoized so the memoized `WaveformCanvas` children (and `Clips`) don't
+    // see a new object identity on every parent re-render — which would
+    // defeat their memo and re-run the canvas draw effect each time.
+    const waveformWindow = useMemo(
+      () => ({
+        windowStartSec: renderedBufferAnchor,
+        windowLen: bufferLen,
+        innerH,
+        vbW,
+        vbH: VB_H,
+      }),
+      [renderedBufferAnchor, bufferLen, innerH, vbW],
+    );
+    // Static per-mount: no reactive inputs, so allocate once.
+    const canvasStyle: React.CSSProperties = useMemo(
+      () => ({
+        position: 'absolute' as const,
+        inset: 0,
+        width: '100%',
+        height: '100%',
+      }),
+      [],
+    );
 
     return (
       <div
         className="row-waveform"
         ref={hsRef}
+        role="slider"
+        tabIndex={0}
+        aria-label={t('waveform.ariaLabel')}
+        aria-valuemin={0}
+        aria-valuemax={Math.max(0, waveform.duration)}
+        aria-valuenow={currentTime}
         onPointerDown={onHsPointerDown}
         onClickCapture={onRootClickCapture}
+        onKeyDown={onKeyDown}
       >
         <div className="row-waveform__inner">
           <DancingLines

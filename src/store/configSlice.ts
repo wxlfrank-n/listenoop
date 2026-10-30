@@ -88,6 +88,28 @@ export const CONFIG_RANGES = {
   repetitions: {min: 1, max: 20},
 } as const;
 
+/**
+ * Clamp a numeric localStorage value into `range`, falling back to
+ * `fallback` when the stored value isn't a finite number. Prevents a
+ * hand-edited or corrupted localStorage entry (e.g. `skipSeconds: NaN`,
+ * a string, or an absurd value) from propagating into the player — a NaN
+ * skipSeconds would freeze the playhead at NaN the first time skip is used.
+ */
+function clampNumber(
+  value: unknown,
+  range: {min: number; max: number},
+  fallback: number,
+  {round = false}: {round?: boolean} = {},
+): number {
+  const n = typeof value === 'number' ? value : Number(value);
+  if (!Number.isFinite(n)) return fallback;
+  const clamped = Math.min(
+    range.max,
+    Math.max(range.min, round ? Math.round(n) : n),
+  );
+  return clamped;
+}
+
 function loadConfig(): ConfigState {
   try {
     const raw = localStorage.getItem(STORAGE_KEY);
@@ -122,12 +144,36 @@ function loadConfig(): ConfigState {
           : DEFAULT_CONFIG.mergeScope,
         // Stored values from when the slider ran past the detector ceiling
         // still clamp to identical behavior.
-        silenceRatio: Number.isFinite(parsed.silenceRatio)
-          ? Math.min(
-              CONFIG_RANGES.silenceRatio.max,
-              Math.max(CONFIG_RANGES.silenceRatio.min, parsed.silenceRatio),
-            )
-          : DEFAULT_CONFIG.silenceRatio,
+        silenceRatio: clampNumber(
+          parsed.silenceRatio,
+          CONFIG_RANGES.silenceRatio,
+          DEFAULT_CONFIG.silenceRatio,
+        ),
+        // Every remaining numeric field is clamped: a NaN or out-of-range
+        // seed from a corrupted localStorage would otherwise propagate
+        // into `audio.currentTime` arithmetic and freeze the playhead.
+        skipSeconds: clampNumber(
+          parsed.skipSeconds,
+          CONFIG_RANGES.skipSeconds,
+          DEFAULT_CONFIG.skipSeconds,
+          {round: true},
+        ),
+        blockMs: clampNumber(
+          parsed.blockMs,
+          CONFIG_RANGES.blockMs,
+          DEFAULT_CONFIG.blockMs,
+          {round: true},
+        ),
+        minClipLength: clampNumber(
+          parsed.minClipLength,
+          CONFIG_RANGES.minClipLength,
+          DEFAULT_CONFIG.minClipLength,
+        ),
+        minSplitPieceSec: clampNumber(
+          parsed.minSplitPieceSec,
+          CONFIG_RANGES.minSplitPieceSec,
+          DEFAULT_CONFIG.minSplitPieceSec,
+        ),
       };
     }
   } catch {
@@ -136,8 +182,15 @@ function loadConfig(): ConfigState {
   return {...DEFAULT_CONFIG};
 }
 
-function saveConfig(config: ConfigState) {
-  localStorage.setItem(STORAGE_KEY, JSON.stringify(config));
+export function saveConfig(config: ConfigState) {
+  try {
+    localStorage.setItem(STORAGE_KEY, JSON.stringify(config));
+  } catch {
+    // Settings still work for this session when storage is blocked or full.
+    console.warn(
+      'Unable to save settings; changes apply to this session only.',
+    );
+  }
 }
 
 const initialState: ConfigState = loadConfig();
@@ -147,9 +200,7 @@ export const configSlice = createSlice({
   initialState,
   reducers: {
     updateConfig(state, action: PayloadAction<Partial<ConfigState>>) {
-      const next = {...state, ...action.payload};
-      saveConfig(next);
-      return next;
+      return {...state, ...action.payload};
     },
   },
 });

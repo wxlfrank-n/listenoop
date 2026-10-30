@@ -6,9 +6,6 @@
  * or following a clip (`resolveViewportAnchor` and friends).
  */
 
-import type {Clip} from './clips';
-import type {MergeScope} from '../types';
-
 export const HS_FOLLOW_FRAC = 0.8;
 export const HS_PAN_DECIDE_PX = 8;
 export const CURSOR_CLICK_HOLD_MS = 400;
@@ -19,16 +16,47 @@ export const BARS_TAIL_SEC = 0;
 export const WAVE_BUFFER_WINDOWS = 3;
 export const WAVE_BUFFER_MARGIN_WINDOWS = 0.4;
 
-const TARGET_CLIP_WIDTH_PX = 60;
+const CLIP_PLAY_MARGIN = 0.1;
 
 /**
- * Desired minimum rendered width of a typical clip.
+ * Fixed ratio between audio time and viewport width:
+ * 0.2s of audio is always rendered across 24px of viewport width.
  *
- * This does not force every clip to be >= 60px. Very short clips are allowed.
- * It only prevents the overall clip layout from becoming too crowded.
+ * `getWindowSecs` uses this constant — see that function for the rationale.
  */
+const SECS_PER_24PX = 0.2;
+const PX_PER_0_2S = 24;
 
-const CLIP_PLAY_MARGIN = 0.1;
+/**
+ * Viewport width at (and below) which `getWindowSecs` stops shrinking the
+ * time window and instead holds it at `MIN_WINDOW_SECS`.
+ *
+ * Above this width the ideal 120px-per-second scale applies (0.2s = 24px),
+ * so a 1-second clip is rendered 120px wide everywhere — consistent visual
+ * size across desktop and tablet.
+ *
+ * Below this width the window is held fixed at 5s so small screens still
+ * show a usable slice of audio. The trade-off: 1-second clips shrink
+ * proportionally (e.g. 72px at a 360px viewport), so the "same length
+ * everywhere" property only holds above the threshold.
+ *
+ * 600px is chosen because:
+ *   - It matches the design's reference mobile-landscape width.
+ *   - 5s of audio is the minimum useful practice loop length (a single
+ *     phrase or exercise repetition), so anything shorter than that on
+ *     screen hurts usability more than slightly smaller clips help it.
+ */
+export const SMALL_VIEWPORT_THRESHOLD_PX = 600;
+
+/**
+ * Minimum number of seconds `getWindowSecs` ever returns.
+ *
+ * Equal to the threshold width scaled at the ideal ratio:
+ * `600 * 0.2 / 24 = 5`. Exported so callers and tests can reference the
+ * same floor without re-deriving it.
+ */
+export const MIN_WINDOW_SECS =
+  (SMALL_VIEWPORT_THRESHOLD_PX * SECS_PER_24PX) / PX_PER_0_2S;
 
 export function getBaseWindowSecs(width: number): number {
   if (width >= 1600) return 32;
@@ -36,150 +64,29 @@ export function getBaseWindowSecs(width: number): number {
   return 12;
 }
 
-export interface WindowSizingOptions {
-  /** Index of the selected clip (only consulted in "clip" scope). */
-  activeClip?: number;
-  /**
-   * Merge scope in effect. In "clip" scope the window sizes off the average
-   * duration of the clips around the selected one (a local neighbourhood),
-   * because editing works on a local stretch of the track. In "global" scope it
-   * sizes off the whole-track average, as before.
-   */
-  mergeScope?: MergeScope;
-  /**
-   * Window length currently shown by the viewport. When set, a freshly computed
-   * length is only adopted if it differs from this by more than
-   * `WINDOW_HYSTERESIS_SECS`; otherwise the previous value is kept. This stops
-   * the window from jittering as the selection moves between clips whose
-   * neighbourhood averages are close.
-   */
-  previousWindowSecs?: number;
-}
-
-/**
- * How much the freshly computed window must differ from the one on screen before
- * it is worth re-laying out. Smaller changes are ignored so the window is stable
- * while tapping through clips.
- */
-const WINDOW_HYSTERESIS_SECS = 1;
-
-/**
- * How many clips around the selected clip feed the clip-scope window average.
- * Small enough to track a local stretch of the track, wide enough not to jump
- * when a single clip's length changes.
- */
-const WINDOW_NEIGHBOURHOOD_CLIPS = 8;
-
-/**
- * Average clip duration across a run of clips.
- *
- * The total is the bounding span (`last.vEnd - first.vStart`), not the sum of
- * the individual clips, so the silent gaps between them count too — the same
- * way the whole-track average divides the full `waveformDuration` by the clip
- * count.
- */
-function averageClipDuration(clips: Clip[]): number {
-  if (clips.length === 0) {
-    return 0;
-  }
-
-  const first = clips[0];
-  const last = clips[clips.length - 1];
-
-  return (last.vEnd - first.vStart) / clips.length;
-}
-
-/**
- * Average clip duration over up to `WINDOW_NEIGHBOURHOOD_CLIPS` clips centred on
- * `activeClip`, clamped to the ends of the track. Returns 0 when there is no
- * selected clip, so the caller falls back to the whole-track average.
- */
-function neighbourhoodAverageDuration(
-  clips: Clip[],
-  activeClip: number,
-): number {
-  if (activeClip < 0 || activeClip >= clips.length) {
-    return 0;
-  }
-
-  const size = Math.min(WINDOW_NEIGHBOURHOOD_CLIPS, clips.length);
-  const start = Math.min(
-    Math.max(0, activeClip - Math.floor(size / 2)),
-    clips.length - size,
-  );
-
-  return averageClipDuration(clips.slice(start, start + size));
-}
-
-export function getWindowSecs(
-  width: number,
-  clips: Clip[] = [],
-  waveformDuration: number,
-  {
-    activeClip = -1,
-    mergeScope = 'clip',
-    previousWindowSecs,
-  }: WindowSizingOptions = {},
-): number {
-  const baseWindowSecs = getBaseWindowSecs(width);
-
-  if (width <= 0 || clips.length === 0) {
-    return baseWindowSecs;
-  }
-
+export function getWindowSecs(width: number): number {
   /*
-   * Global scope sizes off the whole track; clip scope follows the local
-   * neighbourhood of the selected clip so a stretch of long merged clips (or a
-   * run of tiny ones) sizes the window for what is actually being edited.
+   * Two regimes:
+   *
+   *   1. width >= SMALL_VIEWPORT_THRESHOLD_PX (>= 600px):
+   *      Fixed 120px-per-second scale — 0.2s of audio occupies 24px of
+   *      viewport width, so the window covers `width * 0.2 / 24` seconds.
+   *      A 1-second clip is 120px wide on every viewport in this regime.
+   *
+   *   2. width < SMALL_VIEWPORT_THRESHOLD_PX (< 600px):
+   *      The window is held at MIN_WINDOW_SECS (5s) so small screens still
+   *      show ~5 seconds of audio. The px-per-second ratio drops as the
+   *      viewport shrinks (1s = 80px at 400px, 72px at 360px), so clips
+   *      appear smaller — the explicit trade for keeping the window usable
+   *      on phones in portrait.
+   *
+   *   width = 360  → 5.000s  (held; clips ~72px/s)
+   *   width = 400  → 5.000s  (held; clips ~80px/s)
+   *   width = 600  → 5.000s  (threshold; clips 120px/s)
+   *   width = 1200 → 10.000s (clips 120px/s)
+   *   width = 1600 → 13.333s (clips 120px/s)
    */
-  const neighbourhoodAvgDuration =
-    mergeScope === 'clip' ? neighbourhoodAverageDuration(clips, activeClip) : 0;
-  const avgDuration =
-    neighbourhoodAvgDuration > 0
-      ? neighbourhoodAvgDuration
-      : waveformDuration / clips.length;
-
-  /*
-   * At windowSecs, a clip of duration D occupies:
-   *
-   *     D / windowSecs * width
-   *
-   * We want the median clip to occupy approximately
-   * TARGET_CLIP_WIDTH_PX.
-   *
-   * Therefore:
-   *
-   *     windowSecs =
-   *       D * width / TARGET_CLIP_WIDTH_PX
-   */
-
-  const minSecond = 0.1;
-  const minWindowSecs = (minSecond * width) / TARGET_CLIP_WIDTH_PX;
-
-  const ratio = (width - TARGET_CLIP_WIDTH_PX) / (baseWindowSecs - minSecond);
-  const densityWindowPx =
-    (avgDuration - minSecond) * ratio + TARGET_CLIP_WIDTH_PX;
-  const densityWindowSecs = (avgDuration * width) / densityWindowPx;
-
-  const result = Math.max(
-    minWindowSecs,
-    Math.min(baseWindowSecs, densityWindowSecs),
-  );
-
-  /*
-   * Hysteresis: keep the length already on screen unless the freshly computed
-   * one is further than WINDOW_HYSTERESIS_SECS away, so the window does not
-   * jitter on small changes (a new selection, a clip growing slightly).
-   */
-  if (
-    previousWindowSecs !== undefined &&
-    previousWindowSecs > 0 &&
-    Math.abs(result - previousWindowSecs) <= WINDOW_HYSTERESIS_SECS
-  ) {
-    return previousWindowSecs;
-  }
-
-  return result;
+  return Math.max((width * SECS_PER_24PX) / PX_PER_0_2S, MIN_WINDOW_SECS);
 }
 
 export function clampWindowAnchor(anchor: number, maxStart: number): number {

@@ -94,11 +94,7 @@ function renderRow({playing = false, currentTime = 0} = {}) {
     const transform = track?.style.transform ?? '';
     const m = transform.match(/translate3d\((-?[0-9.]+)px/);
     const px = m ? Number(m[1]) : 0;
-    const win = getWindowSecs(
-      row.clientWidth || window.innerWidth,
-      clips,
-      waveform.duration,
-    );
+    const win = getWindowSecs(row.clientWidth || window.innerWidth);
     const pxPerSec = (inner.clientWidth || 1) / win;
     return buffer - px / pxPerSec;
   };
@@ -125,7 +121,7 @@ function renderRow({playing = false, currentTime = 0} = {}) {
     );
   };
   // clientWidth is patched post-mount; one extra render lets the width effect
-  // settle on the 600px window (12s) before the test interacts.
+  // settle on the 600px window (5s) before the test interacts.
   rerender({});
   return {
     ...view,
@@ -180,7 +176,7 @@ describe('RowWaveform clip dragging', () => {
     });
     act(() => flushRaf());
 
-    expect(viewportStart()).toBe(3);
+    expect(viewportStart()).toBe(1.25);
   });
 
   it('does not scroll horizontally for a vertical clip swipe', () => {
@@ -248,7 +244,7 @@ describe('RowWaveform clip dragging', () => {
     });
     act(() => flushRaf());
 
-    expect(viewportStart()).toBe(3);
+    expect(viewportStart()).toBe(1.25);
   });
 
   it('keeps a manual drag in control when playback time is outside the window', () => {
@@ -274,7 +270,12 @@ describe('RowWaveform clip dragging', () => {
     });
     act(() => flushRaf());
 
-    expect(viewportStart()).toBe(3);
+    // The viewport now opens at currentTime on mount (the view-switch
+    // initial-anchor fix), so the starting anchor is 60s. The drag pans
+    // 150px at 120px/s (600px viewport = 5s window), moving the anchor
+    // forward by 1.25s to 61.25 — and the manual drag must keep control
+    // even though the playhead (61) is now outside the 61.25-66.25 window.
+    expect(viewportStart()).toBe(61.25);
   });
 
   it('does not scroll when the swipe starts above the track (dancing line area)', () => {
@@ -302,7 +303,11 @@ describe('RowWaveform clip dragging', () => {
   it('plays the clip described by a clipPlayRequest', () => {
     const onPlayRange = vi.fn();
 
-    render(
+    // Mount WITHOUT a pending request first (the normal initial state),
+    // then issue one via rerender. This exercises the post-mount path
+    // that a real user click triggers; mounting with a request already
+    // pending is the view-switch case, covered separately below.
+    const {rerender} = render(
       <Provider store={makeStore()}>
         <RowWaveform
           waveform={waveform}
@@ -318,14 +323,36 @@ describe('RowWaveform clip dragging', () => {
           scrolling={false}
           setScrolling={vi.fn()}
           scrollTimeoutRef={{current: undefined}}
-          clipPlayRequest={{clip: clips[0], repetitions: 3, nonce: 1}}
+        />
+      </Provider>,
+    );
+
+    expect(onPlayRange).not.toHaveBeenCalled();
+
+    rerender(
+      <Provider store={makeStore()}>
+        <RowWaveform
+          waveform={waveform}
+          displayClips={clips}
+          currentTime={0}
+          onSeek={vi.fn()}
+          onPlayRange={onPlayRange}
+          repetitions={3}
+          activeClip={-1}
+          onActiveClipChange={vi.fn()}
+          getCurrentTime={() => 0}
+          playing={false}
+          scrolling={false}
+          setScrolling={vi.fn()}
+          scrollTimeoutRef={{current: undefined}}
+          clipPlayRequest={{clip: clips[0]!, repetitions: 3, nonce: 1}}
         />
       </Provider>,
     );
 
     expect(onPlayRange).toHaveBeenCalledWith(
-      clips[0].vStart,
-      clips[0].vEnd,
+      clips[0]!.vStart,
+      clips[0]!.vEnd,
       3,
       expect.any(Function),
       expect.any(Function),
@@ -334,9 +361,30 @@ describe('RowWaveform clip dragging', () => {
 
   it('ignores a repeated clipPlayRequest nonce', () => {
     const onPlayRange = vi.fn();
-    const request = {clip: clips[0], repetitions: 3, nonce: 7};
+    const request = {clip: clips[0]!, repetitions: 3, nonce: 7};
 
+    // Mount without a request, then issue one — the post-mount path.
     const {rerender} = render(
+      <Provider store={makeStore()}>
+        <RowWaveform
+          waveform={waveform}
+          displayClips={clips}
+          currentTime={0}
+          onSeek={vi.fn()}
+          onPlayRange={onPlayRange}
+          repetitions={3}
+          activeClip={-1}
+          onActiveClipChange={vi.fn()}
+          getCurrentTime={() => 0}
+          playing={false}
+          scrolling={false}
+          setScrolling={vi.fn()}
+          scrollTimeoutRef={{current: undefined}}
+        />
+      </Provider>,
+    );
+
+    rerender(
       <Provider store={makeStore()}>
         <RowWaveform
           waveform={waveform}
@@ -387,6 +435,7 @@ describe('RowWaveform clip dragging', () => {
   it('replays the same clip when the request nonce advances', () => {
     const onPlayRange = vi.fn();
 
+    // Mount without a request, then issue nonce 1 and nonce 2 in turn.
     const {rerender} = render(
       <Provider store={makeStore()}>
         <RowWaveform
@@ -403,7 +452,27 @@ describe('RowWaveform clip dragging', () => {
           scrolling={false}
           setScrolling={vi.fn()}
           scrollTimeoutRef={{current: undefined}}
-          clipPlayRequest={{clip: clips[0], repetitions: 3, nonce: 1}}
+        />
+      </Provider>,
+    );
+
+    rerender(
+      <Provider store={makeStore()}>
+        <RowWaveform
+          waveform={waveform}
+          displayClips={clips}
+          currentTime={0}
+          onSeek={vi.fn()}
+          onPlayRange={onPlayRange}
+          repetitions={3}
+          activeClip={-1}
+          onActiveClipChange={vi.fn()}
+          getCurrentTime={() => 0}
+          playing={false}
+          scrolling={false}
+          setScrolling={vi.fn()}
+          scrollTimeoutRef={{current: undefined}}
+          clipPlayRequest={{clip: clips[0]!, repetitions: 3, nonce: 1}}
         />
       </Provider>,
     );
@@ -426,11 +495,113 @@ describe('RowWaveform clip dragging', () => {
           scrolling={false}
           setScrolling={vi.fn()}
           scrollTimeoutRef={{current: undefined}}
-          clipPlayRequest={{clip: clips[0], repetitions: 3, nonce: 2}}
+          clipPlayRequest={{clip: clips[0]!, repetitions: 3, nonce: 2}}
         />
       </Provider>,
     );
 
     expect(onPlayRange).toHaveBeenCalledTimes(2);
+  });
+
+  /*
+   * View-switch safety: when the user flips between the stacked and
+   * single-row waveform views, the previously-mounted view unmounts and
+   * a fresh view mounts with whatever `clipPlayRequest` was last issued
+   * still in the parent's state. A fresh view must NOT treat that stale
+   * request as new — otherwise the current clip restarts every time the
+   * user flips the view. The first effect run on mount treats any
+   * pre-existing request as already handled; only requests that arrive
+   * AFTER mount trigger playback.
+   */
+  it('does not replay a pre-existing clipPlayRequest on mount (view switch)', () => {
+    const onPlayRange = vi.fn();
+
+    // Mount WITH a pending request — simulates a fresh view mounting
+    // after the user flipped the waveform view while a request was
+    // outstanding. The clip must NOT start playing just from the mount.
+    render(
+      <Provider store={makeStore()}>
+        <RowWaveform
+          waveform={waveform}
+          displayClips={clips}
+          currentTime={0}
+          onSeek={vi.fn()}
+          onPlayRange={onPlayRange}
+          repetitions={3}
+          activeClip={-1}
+          onActiveClipChange={vi.fn()}
+          getCurrentTime={() => 0}
+          playing={false}
+          scrolling={false}
+          setScrolling={vi.fn()}
+          scrollTimeoutRef={{current: undefined}}
+          clipPlayRequest={{clip: clips[0]!, repetitions: 3, nonce: 1}}
+        />
+      </Provider>,
+    );
+
+    expect(onPlayRange).not.toHaveBeenCalled();
+  });
+
+  it('plays the clip when a new clipPlayRequest arrives after mount', () => {
+    // Continuation of the view-switch scenario: after the fresh view
+    // mounted (and skipped the pre-existing request), a genuinely new
+    // request from a real user click must still play.
+    const onPlayRange = vi.fn();
+
+    const {rerender} = render(
+      <Provider store={makeStore()}>
+        <RowWaveform
+          waveform={waveform}
+          displayClips={clips}
+          currentTime={0}
+          onSeek={vi.fn()}
+          onPlayRange={onPlayRange}
+          repetitions={3}
+          activeClip={-1}
+          onActiveClipChange={vi.fn()}
+          getCurrentTime={() => 0}
+          playing={false}
+          scrolling={false}
+          setScrolling={vi.fn()}
+          scrollTimeoutRef={{current: undefined}}
+          clipPlayRequest={{clip: clips[0]!, repetitions: 3, nonce: 1}}
+        />
+      </Provider>,
+    );
+
+    // Mount with the stale request — no playback.
+    expect(onPlayRange).not.toHaveBeenCalled();
+
+    // A new request (different nonce) arrives after mount — play it.
+    rerender(
+      <Provider store={makeStore()}>
+        <RowWaveform
+          waveform={waveform}
+          displayClips={clips}
+          currentTime={0}
+          onSeek={vi.fn()}
+          onPlayRange={onPlayRange}
+          repetitions={3}
+          activeClip={-1}
+          onActiveClipChange={vi.fn()}
+          getCurrentTime={() => 0}
+          playing={false}
+          scrolling={false}
+          setScrolling={vi.fn()}
+          scrollTimeoutRef={{current: undefined}}
+          clipPlayRequest={{clip: clips[0]!, repetitions: 3, nonce: 2}}
+        />
+      </Provider>,
+    );
+
+    expect(onPlayRange).toHaveBeenCalledTimes(1);
+    expect(onPlayRange).toHaveBeenCalledWith(
+      clips[0]!.vStart,
+      clips[0]!.vEnd,
+      3,
+      expect.any(Function),
+      expect.any(Function),
+    );
   });
 });

@@ -94,7 +94,7 @@ export function getInitClipData(
     const i1 = Math.min(i0 + blockSamples, data.length);
     let peak = 0;
     for (let i = i0; i < i1; i += peakStride) {
-      const v = data[i];
+      const v = data[i]!;
       const a = v < 0 ? -v : v;
       if (a > peak) peak = a;
     }
@@ -105,14 +105,15 @@ export function getInitClipData(
   // A single block can't be misclassified as silence due to a single sample being quiet, because the block peak is compared to the track peak.
   let trackPeak = 0;
   for (let b = 0; b < numBlocks; b++) {
-    if (blockPeak[b] > trackPeak) trackPeak = blockPeak[b];
+    const peak = blockPeak[b]!;
+    if (peak > trackPeak) trackPeak = peak;
   }
 
   const silenceThreshold = silenceRatio * trackPeak;
   let clips: Clip[] = [];
   let clipStartBlock = -1;
   for (let b = 0; b <= numBlocks; b++) {
-    const isSound = b < numBlocks && blockPeak[b] > silenceThreshold;
+    const isSound = b < numBlocks && blockPeak[b]! > silenceThreshold;
     if (isSound && clipStartBlock === -1) {
       clipStartBlock = b;
     } else if (!isSound && clipStartBlock !== -1) {
@@ -144,9 +145,10 @@ function expandClips(
   // up to 25% of the gap on each side, but never past the clip boundaries.
   // This makes clips more natural and less abrupt.
   for (let i = 0; i < clips.length; i++) {
-    const clip = clips[i];
-    const prevEnd = i > 0 ? clips[i - 1].end : 0;
-    const nextStart = i < clips.length - 1 ? clips[i + 1].start : audioDuration;
+    const clip = clips[i]!;
+    const prevEnd = i > 0 ? clips[i - 1]!.end : 0;
+    const nextStart =
+      i < clips.length - 1 ? clips[i + 1]!.start : audioDuration;
     expandClip(clip, prevEnd, nextStart, expandRatio, audioDuration);
   }
 }
@@ -174,17 +176,19 @@ export function mergeClipsByGap(clips: Clip[], minGap: number): Clip[] {
   if (clips.length === 0) return [];
 
   const result: Clip[] = [];
-  let group: Clip[] = [clips[0]];
+  let group: Clip[] = [clips[0]!];
 
   const flush = () => {
     if (group.length === 1) {
-      result.push(group[0]);
+      result.push(group[0]!);
     } else {
+      const first = group[0]!;
+      const last = group[group.length - 1]!;
       result.push({
-        start: group[0].start,
-        end: group[group.length - 1].end,
-        vStart: group[0].vStart,
-        vEnd: group[group.length - 1].vEnd,
+        start: first.start,
+        end: last.end,
+        vStart: first.vStart,
+        vEnd: last.vEnd,
         children: group,
       });
     }
@@ -192,12 +196,13 @@ export function mergeClipsByGap(clips: Clip[], minGap: number): Clip[] {
   };
 
   for (let i = 1; i < clips.length; i++) {
-    const gap = clips[i].start - group[group.length - 1].end;
+    const next = clips[i]!;
+    const gap = next.start - group[group.length - 1]!.end;
     if (gap <= minGap) {
-      group.push(clips[i]);
+      group.push(next);
     } else {
       flush();
-      group = [clips[i]];
+      group = [next];
     }
   }
   flush();
@@ -211,7 +216,7 @@ export function mergeClipsByGap(clips: Clip[], minGap: number): Clip[] {
 export function getClipGaps(clips: Clip[]): number[] {
   const gaps: number[] = [];
   for (let i = 1; i < clips.length; i++) {
-    const gap = clips[i].start - clips[i - 1].end;
+    const gap = clips[i]!.start - clips[i - 1]!.end;
     if (Number.isFinite(gap) && gap > 0.01) gaps.push(gap);
   }
   return [...new Set(gaps)].sort((a, b) => a - b);
@@ -223,14 +228,14 @@ export function getClipGaps(clips: Clip[]): number[] {
  * A group of one would be unsplittable, so single clips stay single clips.
  */
 function asGroup(clips: Clip[]): Clip {
-  const last = clips[clips.length - 1];
+  const last = clips[clips.length - 1]!;
 
   return clips.length === 1
-    ? clips[0]
+    ? clips[0]!
     : {
-        start: clips[0].start,
+        start: clips[0]!.start,
         end: last.end,
-        vStart: clips[0].vStart,
+        vStart: clips[0]!.vStart,
         vEnd: last.vEnd,
         children: clips,
       };
@@ -281,10 +286,10 @@ const isSplittableBoundary = (
 ): boolean => {
   if (minPieceSec <= 0) return true;
 
-  const left = children[i - 1];
-  const right = children[i];
-  const first = children[0];
-  const last = children[children.length - 1];
+  const left = children[i - 1]!;
+  const right = children[i]!;
+  const first = children[0]!;
+  const last = children[children.length - 1]!;
 
   const longEnough = (child: Clip) => child.end - child.start >= minPieceSec;
 
@@ -304,6 +309,13 @@ export function splitClipAtLargestGap(
   clip: Clip,
   minPieceSec = 0,
 ): {pieces: Clip[]; gap: number} | null {
+  // An expanded clip (its vStart/vEnd pushed out into surrounding silence
+  // by `expandClip`) is treated as a single visual unit and never split.
+  // Splitting it would create pieces whose visual boundaries no longer
+  // match the user's mental model of what's on screen, so the gesture is
+  // rejected up-front and the UI hides the split affordance for it.
+  if (clip.expanded) return null;
+
   const children = clip.children ?? [];
 
   if (children.length < 2) return null;
@@ -314,7 +326,7 @@ export function splitClipAtLargestGap(
   for (let i = 1; i < children.length; i++) {
     if (!isSplittableBoundary(children, i, minPieceSec)) continue;
 
-    const gap = children[i].start - children[i - 1].end;
+    const gap = children[i]!.start - children[i - 1]!.end;
 
     // Strictly greater, so equal gaps split at the earliest boundary.
     if (gap > largestGap) {
@@ -378,7 +390,7 @@ export function splitClipAtEnd(
       asGroup(children.slice(0, splitAt)),
       asGroup(children.slice(splitAt)),
     ],
-    gap: children[splitAt].start - children[splitAt - 1].end,
+    gap: children[splitAt]!.start - children[splitAt - 1]!.end,
   };
 }
 
@@ -411,7 +423,7 @@ export function mergeClipsByGapScoped(
 
   let lastIdx = -1;
   for (let i = displayClips.length - 1; i >= 0; i--) {
-    if (displayClips[i].end <= focus.end) {
+    if (displayClips[i]!.end <= focus.end) {
       lastIdx = i;
       break;
     }
@@ -465,7 +477,7 @@ export function findMinMergeGap(
 
   while (low <= high) {
     const mid = Math.floor((low + high) / 2);
-    const gap = gaps[mid];
+    const gap = gaps[mid]!;
 
     const mergedClips = mergeClipsByGap(clips, gap);
 
@@ -512,7 +524,7 @@ export function mergeClipsByConfig(
     let merged = false;
 
     for (let i = 0; i < result.length; i++) {
-      const clip = result[i];
+      const clip = result[i]!;
       const clipLength = clip.end - clip.start;
 
       // Keep clips that are already long enough.

@@ -104,8 +104,9 @@ export const DancingLines = memo(
               Math.floor((1 - Math.pow(1 - i / BAR_COUNT, 1.5)) * (len - 1)),
             );
             if (len === 0) continue;
-            const v = data[bin] / 255;
-            levels[i] += (Math.pow(v, 1.7) - levels[i]) * SMOOTHING;
+            const v = data[bin]! / 255;
+            const prev108 = levels[i] ?? 0;
+            levels[i] = prev108 + (Math.pow(v, 1.7) - prev108) * SMOOTHING;
           }
         } else if (waveform && getCurrentTime) {
           // Energy profile of the decoded samples at the playhead — the live
@@ -138,16 +139,18 @@ export const DancingLines = memo(
             const b = Math.min(s1, a + perBar);
             let peak = 0;
             for (let s = a; s < b; s += stride) {
-              const v = Math.abs(samples[s]);
+              const v = Math.abs(samples[s]!);
               if (v > peak) peak = v;
             }
             const v = Math.min(1, Math.pow(peak, 0.55) * 3);
-            levels[i] += (v - levels[i]) * SMOOTHING;
+            const prev145 = levels[i] ?? 0;
+            levels[i] = prev145 + (v - prev145) * SMOOTHING;
           }
         } else {
           // No analyser and no waveform source: decay bars to rest.
           for (let i = 0; i < BAR_COUNT; i++) {
-            levels[i] += (0 - levels[i]) * SMOOTHING;
+            const prev = levels[i] ?? 0;
+            levels[i] = prev + (0 - prev) * SMOOTHING;
           }
         }
 
@@ -157,7 +160,7 @@ export const DancingLines = memo(
         const base = ch - 4;
         const maxH = ch - 8;
         for (let i = 0; i < BAR_COUNT; i++) {
-          const h = Math.max(MIN_BAR_HEIGHT_PX, levels[i] * maxH);
+          const h = Math.max(MIN_BAR_HEIGHT_PX, levels[i]! * maxH);
           const x = i * bw + bw * 0.25;
           ctx.fillRect(x, base - h, bw * 0.5, h);
         }

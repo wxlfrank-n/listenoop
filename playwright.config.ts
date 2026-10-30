@@ -1,5 +1,8 @@
 import {defineConfig, devices} from '@playwright/test';
 
+const port = Number(process.env.PLAYWRIGHT_PORT || 5173);
+const baseURL = `http://127.0.0.1:${port}`;
+
 /**
  * End-to-end tests.
  *
@@ -33,7 +36,7 @@ export default defineConfig({
   reporter: process.env.CI ? 'github' : 'list',
 
   use: {
-    baseURL: 'http://localhost:5173',
+    baseURL,
     trace: 'on-first-retry',
   },
 
@@ -55,8 +58,8 @@ export default defineConfig({
   ],
 
   webServer: {
-    command: 'npm run dev',
-    url: 'http://localhost:5173',
+    command: `npm run dev -- --host 127.0.0.1 --port ${port} --strictPort`,
+    url: baseURL,
     reuseExistingServer: !process.env.CI,
     timeout: 120_000,
   },

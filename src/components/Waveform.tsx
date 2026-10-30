@@ -27,10 +27,20 @@ interface WaveformCanvasProps {
 
 const MIN_BAR_PX = 2;
 
-interface Segment {
-  x: number;
-  y0: number;
-  y1: number;
+/** Reusable draw buffers so per-frame rAF redraws don't heap-allocate. */
+interface DrawBuffers {
+  size: number;
+  top: Float64Array;
+  bot: Float64Array;
+  topSm: Float64Array;
+  botSm: Float64Array;
+}
+
+/** Cached computed colors, invalidated when theme/color/colorVar change. */
+interface ColorCache {
+  key: string;
+  base: string;
+  silent: string;
 }
 
 export const WaveformCanvas = memo(
@@ -48,6 +58,14 @@ export const WaveformCanvas = memo(
     theme,
   }: WaveformCanvasProps) => {
     const canvasRef = useRef<HTMLCanvasElement>(null);
+    // Buffers grow geometrically; the largest view width determines steady-
+    // state size, after which zero allocations happen per redraw.
+    const drawBufsRef = useRef<DrawBuffers | null>(null);
+    // `getComputedStyle` forces style resolution — calling it every rAF
+    // redraw triggers a layout pass. Colors only change with theme/color
+    // props (both in `draw`'s dep array), so cache by that key and refresh
+    // the cache at most once per change.
+    const colorCacheRef = useRef<ColorCache | null>(null);
     const {
       windowStartSec: bufferStartSec,
       windowLen: bufferLen,
@@ -115,22 +133,50 @@ export const WaveformCanvas = memo(
 
       const midY = vbH / 2;
       const scaleY = innerH / 2;
-      const cs = getComputedStyle(canvas);
 
-      const override =
-        color ||
-        (colorVar ? cs.getPropertyValue(colorVar).trim() : '') ||
-        undefined;
-      const baseColor =
-        override || cs.getPropertyValue('--waveform-bar').trim() || '#8f96a0';
-      const silentColor =
-        override ||
-        cs.getPropertyValue('--waveform-bar-silent').trim() ||
-        '#434a53';
+      // Colors: resolve via getComputedStyle only when the cache key
+      // (theme + color props) differs from the last draw.
+      const cacheKey = `${theme ?? ''}|${color ?? ''}|${colorVar ?? ''}`;
+      let baseColor: string;
+      let silentColor: string;
+      const cachedColors = colorCacheRef.current;
+      if (cachedColors && cachedColors.key === cacheKey) {
+        baseColor = cachedColors.base;
+        silentColor = cachedColors.silent;
+      } else {
+        const cs = getComputedStyle(canvas);
+        const override =
+          color ||
+          (colorVar ? cs.getPropertyValue(colorVar).trim() : '') ||
+          undefined;
+        baseColor =
+          override || cs.getPropertyValue('--waveform-bar').trim() || '#8f96a0';
+        silentColor =
+          override ||
+          cs.getPropertyValue('--waveform-bar-silent').trim() ||
+          '#434a53';
+        colorCacheRef.current = {
+          key: cacheKey,
+          base: baseColor,
+          silent: silentColor,
+        };
+      }
 
-      const topV: number[] = [];
-      const botV: number[] = [];
+      // Buffers: (re)allocate only when the visible frame count grows.
+      let bufs = drawBufsRef.current;
+      if (!bufs || bufs.size < frames) {
+        const newSize = Math.max(frames, bufs ? bufs.size * 2 : 256);
+        bufs = {
+          size: newSize,
+          top: new Float64Array(newSize),
+          bot: new Float64Array(newSize),
+          topSm: new Float64Array(newSize),
+          botSm: new Float64Array(newSize),
+        };
+        drawBufsRef.current = bufs;
+      }
 
+      let count = 0;
       for (let frame = 0; frame < frames; frame++) {
         const s0 = latticeStart + frame * step;
         if (s0 >= contentEndSample) break;
@@ -139,67 +185,72 @@ export const WaveformCanvas = memo(
         const readEnd = Math.min(contentEndSample, s0 + step);
         if (readStart >= readEnd) continue;
 
-        let min = data[readStart];
+        let min = data[readStart]!;
         let max = min;
 
         for (let sample = readStart + 1; sample < readEnd; sample++) {
-          const value = data[sample];
+          const value = data[sample]!;
           if (value < min) min = value;
           if (value > max) max = value;
         }
 
-        topV.push(midY - max * scaleY);
-        botV.push(midY - min * scaleY);
+        bufs.top[count] = midY - max * scaleY;
+        bufs.bot[count] = midY - min * scaleY;
+        count++;
       }
 
-      const smooth = (values: number[]) => {
-        const output = new Array<number>(values.length);
-        for (let i = 0; i < values.length; i++) {
-          const left = values[Math.max(0, i - 1)];
-          const center = values[i];
-          const right = values[Math.min(values.length - 1, i + 1)];
-          output[i] = (left + 2 * center + right) / 4;
-        }
-        return output;
-      };
+      // 3-tap [1 2 1]/4 smoothing, written into the sibling buffers.
+      for (let i = 0; i < count; i++) {
+        const lt = bufs.top[Math.max(0, i - 1)]!;
+        const ct = bufs.top[i]!;
+        const rt = bufs.top[Math.min(count - 1, i + 1)]!;
+        bufs.topSm[i] = (lt + 2 * ct + rt) / 4;
 
-      const topSm = smooth(topV);
-      const botSm = smooth(botV);
+        const lb = bufs.bot[Math.max(0, i - 1)]!;
+        const cb = bufs.bot[i]!;
+        const rb = bufs.bot[Math.min(count - 1, i + 1)]!;
+        bufs.botSm[i] = (lb + 2 * cb + rb) / 4;
+      }
+
       const sy = cssH / vbH;
 
-      const waveSegments: Segment[] = [];
-      const silentSegments: Segment[] = [];
-
-      for (let frame = 0; frame < topSm.length; frame++) {
-        const top = topSm[frame];
-        const bottom = botSm[frame];
-        const x = frame * spacingPx;
+      // Stroke the two bar classes in separate passes over the reusable
+      // buffers — no per-draw Segment objects.
+      ctx.strokeStyle = baseColor;
+      ctx.lineWidth = strokeWidth;
+      ctx.lineCap = 'butt';
+      ctx.beginPath();
+      let strokedWave = false;
+      for (let i = 0; i < count; i++) {
+        const top = bufs.topSm[i]!;
+        const bottom = bufs.botSm[i]!;
         const height = (bottom - top) * sy;
-
         if (height >= MIN_BAR_PX) {
-          waveSegments.push({x, y0: top * sy, y1: bottom * sy});
-        } else {
-          const mid = ((top + bottom) / 2) * sy;
-          const half = MIN_BAR_PX / 2;
-          silentSegments.push({x, y0: mid - half, y1: mid + half});
+          const x = i * spacingPx;
+          ctx.moveTo(x, top * sy);
+          ctx.lineTo(x, bottom * sy);
+          strokedWave = true;
         }
       }
+      if (strokedWave) ctx.stroke();
 
-      const strokeSegments = (segments: Segment[], strokeColor: string) => {
-        if (segments.length === 0) return;
-        ctx.strokeStyle = strokeColor;
-        ctx.lineWidth = strokeWidth;
-        ctx.lineCap = 'butt';
-        ctx.beginPath();
-        for (const segment of segments) {
-          ctx.moveTo(segment.x, segment.y0);
-          ctx.lineTo(segment.x, segment.y1);
+      ctx.strokeStyle = silentColor;
+      ctx.beginPath();
+      let strokedSilent = false;
+      for (let i = 0; i < count; i++) {
+        const top = bufs.topSm[i]!;
+        const bottom = bufs.botSm[i]!;
+        const height = (bottom - top) * sy;
+        if (height < MIN_BAR_PX) {
+          const x = i * spacingPx;
+          const mid = ((top + bottom) / 2) * sy;
+          const half = MIN_BAR_PX / 2;
+          ctx.moveTo(x, mid - half);
+          ctx.lineTo(x, mid + half);
+          strokedSilent = true;
         }
-        ctx.stroke();
-      };
-
-      strokeSegments(waveSegments, baseColor);
-      strokeSegments(silentSegments, silentColor);
+      }
+      if (strokedSilent) ctx.stroke();
     }, [
       data,
       sampleRate,

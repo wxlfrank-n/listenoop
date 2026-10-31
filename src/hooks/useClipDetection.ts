@@ -63,6 +63,7 @@ export function useClipDetection(
     options.blockMs,
     options.silenceRatio,
     options.minClipLength,
+    options.expansionRate,
     status,
     dispatch,
   ]);

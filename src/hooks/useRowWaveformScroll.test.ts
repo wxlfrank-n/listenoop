@@ -77,6 +77,7 @@ function createHarness(options?: {
   const result = renderHook(() =>
     useRowWaveformScroll({
       waveformDuration: options?.duration ?? 100,
+      minClipLength: 0.3,
 
       currentTime: time,
 

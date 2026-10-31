@@ -190,7 +190,8 @@ Initial grouping uses `initGap`, the arithmetic average of the sorted, distinct
 positive values returned by `getClipGaps`, or zero when there are no gaps.
 With one detected gap, that gap is selected and the two intervals are initially
 grouped. Manual split/merge remains available.
-Playback padding extends each interval into 25% of the surrounding silent gaps.
+By default, playback padding extends each interval into 25% of the surrounding
+silent gaps; Expansion rate can increase this to 40%.
 
 Existing settings migrate automatically. This preview changes web only; the mobile
 apps retain the previous detector until the web behavior has been evaluated.
@@ -204,3 +205,16 @@ returned for it; normal track playback remains available. The constraint uses
 counts playback padding. Manual splits must leave both resulting intervals at
 least this long. The former **Minimum split piece** setting and the post-expansion
 minimum-length merge-gap search have been removed.
+
+
+Waveform window sizing uses `max(viewportWidth, 600) * minClipLength / 27`.
+Above the 600px reference width, a minimum-length clip occupies 27px. Smaller
+screens retain the reference time window. Changing the minimum clip length
+updates both horizontal and stacked waveform scales immediately.
+
+
+**Expansion rate** in Settings → Clip detection controls how much of each
+surrounding silent gap is included in playback: default/minimum 0.25, maximum
+0.4, adjustable in 0.01 steps. It is saved automatically and applies immediately.
+Expansion changes playback bounds only; detected sound bounds and the minimum
+clip-length constraint remain unchanged.

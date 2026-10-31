@@ -94,7 +94,7 @@ function renderRow({playing = false, currentTime = 0} = {}) {
     const transform = track?.style.transform ?? '';
     const m = transform.match(/translate3d\((-?[0-9.]+)px/);
     const px = m ? Number(m[1]) : 0;
-    const win = getWindowSecs(row.clientWidth || window.innerWidth);
+    const win = getWindowSecs(row.clientWidth || window.innerWidth, 0.3);
     const pxPerSec = (inner.clientWidth || 1) / win;
     return buffer - px / pxPerSec;
   };
@@ -176,7 +176,7 @@ describe('RowWaveform clip dragging', () => {
     });
     act(() => flushRaf());
 
-    expect(viewportStart()).toBe(1.25);
+    expect(viewportStart()).toBeCloseTo(getWindowSecs(600, 0.3) / 4, 6);
   });
 
   it('does not scroll horizontally for a vertical clip swipe', () => {
@@ -244,7 +244,7 @@ describe('RowWaveform clip dragging', () => {
     });
     act(() => flushRaf());
 
-    expect(viewportStart()).toBe(1.25);
+    expect(viewportStart()).toBeCloseTo(getWindowSecs(600, 0.3) / 4, 6);
   });
 
   it('keeps a manual drag in control when playback time is outside the window', () => {
@@ -272,10 +272,9 @@ describe('RowWaveform clip dragging', () => {
 
     // The viewport now opens at currentTime on mount (the view-switch
     // initial-anchor fix), so the starting anchor is 60s. The drag pans
-    // 150px at 120px/s (600px viewport = 5s window), moving the anchor
-    // forward by 1.25s to 61.25 — and the manual drag must keep control
-    // even though the playhead (61) is now outside the 61.25-66.25 window.
-    expect(viewportStart()).toBe(61.25);
+    // A 150px pan advances by one quarter of the configured 600px window.
+    // The manual drag keeps control even when the playhead is left behind.
+    expect(viewportStart()).toBeCloseTo(60 + getWindowSecs(600, 0.3) / 4, 6);
   });
 
   it('does not scroll when the swipe starts above the track (dancing line area)', () => {

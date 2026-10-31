@@ -63,6 +63,7 @@ export function useAudioPlayer(skipSeconds: number) {
     blockMs: 12,
     silenceRatio: 0.01,
     minClipLength: 0.3,
+    expansionRate: 0.25,
   });
   // Keep the ref in sync with the latest config from the player slice's
   // owner (App.tsx). Memoized via `selectDetectionOptions` so a config

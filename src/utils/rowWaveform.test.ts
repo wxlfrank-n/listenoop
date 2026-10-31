@@ -1,6 +1,5 @@
 import {describe, expect, it} from 'vitest';
 import {
-  MIN_WINDOW_SECS,
   SMALL_VIEWPORT_THRESHOLD_PX,
   clampWindowAnchor,
   getBaseWindowSecs,
@@ -28,95 +27,38 @@ describe('getBaseWindowSecs', () => {
 });
 
 describe('getWindowSecs', () => {
-  /*
-   * Above SMALL_VIEWPORT_THRESHOLD_PX the ideal 120px-per-second scale
-   * applies: windowSecs = width * 0.2 / 24. A 1-second clip is rendered
-   * 120px wide everywhere in this regime — consistent visual size.
-   */
-  const linearCases: Array<[number, number]> = [
-    // [width, expected seconds]
-    [SMALL_VIEWPORT_THRESHOLD_PX, 5],
-    [600, 5],
-    [1200, 10],
-    [1600, 13.3333],
-  ];
-
-  it.each(linearCases)(
-    'width %spx (>= threshold) → %ss of audio at 120px/s',
-    (width, expected) => {
-      expect(getWindowSecs(width)).toBeCloseTo(expected, 4);
-    },
-  );
-
-  /*
-   * Below SMALL_VIEWPORT_THRESHOLD_PX the window is held at MIN_WINDOW_SECS
-   * so small screens still show ~5 seconds of audio. The px-per-second
-   * ratio drops as the viewport shrinks (1s = 80px at 400px, 72px at 360px).
-   */
-  const smallScreenCases: Array<[number, number]> = [
-    // [width, expected seconds (always MIN_WINDOW_SECS)]
-    [0, MIN_WINDOW_SECS],
-    [120, MIN_WINDOW_SECS],
-    [240, MIN_WINDOW_SECS],
-    [360, MIN_WINDOW_SECS],
-    [400, MIN_WINDOW_SECS],
-    [599, MIN_WINDOW_SECS],
-  ];
-
-  it.each(smallScreenCases)(
-    'width %spx (< threshold) → held at MIN_WINDOW_SECS (%ss)',
-    (width, expected) => {
-      expect(getWindowSecs(width)).toBe(expected);
-      expect(getWindowSecs(width)).toBe(MIN_WINDOW_SECS);
-    },
-  );
-
-  /*
-   * Continuity: at the threshold itself, the two regimes agree — both the
-   * linear formula and the floor give 5s. This avoids a visual jump when
-   * the viewport is resized across the boundary.
-   */
-  it('is continuous at the threshold (no visual jump on resize)', () => {
-    const justBelow = getWindowSecs(SMALL_VIEWPORT_THRESHOLD_PX - 1);
-    const at = getWindowSecs(SMALL_VIEWPORT_THRESHOLD_PX);
-    const justAbove = getWindowSecs(SMALL_VIEWPORT_THRESHOLD_PX + 1);
-
-    expect(justBelow).toBeCloseTo(at, 4);
-    expect(at).toBeCloseTo(5, 4);
-    expect(justAbove).toBeCloseTo(at + 1 / 120, 4);
+  it('renders a minimum-length clip at 27px above the small-screen threshold', () => {
+    for (const width of [600, 900, 1200, 1600]) {
+      for (const minimum of [0.3, 0.5, 1]) {
+        const seconds = getWindowSecs(width, minimum);
+        expect((width * minimum) / seconds).toBeCloseTo(27, 8);
+      }
+    }
   });
 
-  it('scales linearly with width above the threshold', () => {
-    const at600 = getWindowSecs(600);
-    const at1200 = getWindowSecs(1200);
-
-    expect(at1200).toBeCloseTo(at600 * 2, 4);
+  it('keeps small screens at the time window of the 600px reference width', () => {
+    for (const minimum of [0.3, 0.5, 1]) {
+      const reference = getWindowSecs(600, minimum);
+      for (const width of [-100, 0, 120, 360, 599]) {
+        expect(getWindowSecs(width, minimum)).toBe(reference);
+      }
+    }
   });
 
-  it('is purely a function of width (no hysteresis, deterministic)', () => {
-    expect(getWindowSecs(600)).toBe(getWindowSecs(600));
-    expect(getWindowSecs(400)).toBe(getWindowSecs(400));
-    expect(getWindowSecs(600)).toBeCloseTo(5, 4);
-    expect(getWindowSecs(400)).toBeCloseTo(5, 4);
+  it('responds proportionally when the configured minimum changes', () => {
+    expect(getWindowSecs(600, 0.3)).toBeCloseTo(6.66666667, 7);
+    expect(getWindowSecs(1200, 0.3)).toBeCloseTo(13.33333333, 7);
+    expect(getWindowSecs(1200, 0.6)).toBeCloseTo(
+      getWindowSecs(1200, 0.3) * 2,
+      8,
+    );
   });
 
-  it('never returns less than MIN_WINDOW_SECS', () => {
-    expect(getWindowSecs(0)).toBeGreaterThanOrEqual(MIN_WINDOW_SECS);
-    expect(getWindowSecs(100)).toBeGreaterThanOrEqual(MIN_WINDOW_SECS);
-    expect(getWindowSecs(300)).toBeGreaterThanOrEqual(MIN_WINDOW_SECS);
-    expect(getWindowSecs(599)).toBeGreaterThanOrEqual(MIN_WINDOW_SECS);
-  });
-
-  it('never returns less than 0', () => {
-    expect(getWindowSecs(0)).toBeGreaterThanOrEqual(0);
-    expect(getWindowSecs(-100)).toBeGreaterThanOrEqual(0);
-  });
-});
-
-describe('constants', () => {
-  it('exposes the threshold and floor for callers and tests', () => {
+  it('is continuous across the small-screen threshold', () => {
     expect(SMALL_VIEWPORT_THRESHOLD_PX).toBe(600);
-    expect(MIN_WINDOW_SECS).toBeCloseTo(5, 4);
+    const at = getWindowSecs(600, 0.3);
+    expect(getWindowSecs(599, 0.3)).toBe(at);
+    expect(getWindowSecs(601, 0.3)).toBeCloseTo(at + 0.3 / 27, 8);
   });
 });
 

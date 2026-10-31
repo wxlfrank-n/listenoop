@@ -134,8 +134,8 @@ export const StackedWaveform = memo(
      */
 
     const windowSecs = useMemo(
-      () => getWindowSecs(scrollerWidth),
-      [scrollerWidth],
+      () => getWindowSecs(scrollerWidth, minClipLength ?? config.minClipLength),
+      [scrollerWidth, minClipLength, config.minClipLength],
     );
 
     const stackedRows = useMemo<StackedRow[]>(() => {

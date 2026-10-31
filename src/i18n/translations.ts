@@ -130,6 +130,10 @@ export const en = {
     analysisHint:
       'Smaller values find more precise split points but may take slightly longer to process.',
 
+    expansionRate: 'Expansion rate',
+    expansionRateHint:
+      'Fraction of each surrounding silent gap included in playback. 0.25 means 25% on each side.',
+
     minClipLength: 'Minimum clip length',
     minClipLengthHint:
       'Shorter detected segments join their nearest neighbor before playback padding. An isolated segment below this length is omitted. Manual splits use the same minimum.',
@@ -299,6 +303,10 @@ export const no: Messages = {
     analysisHint:
       'Mindre verdier finner mer presise delpunkter men kan ta litt lenger \u00e5 prosessere.',
 
+    expansionRate: 'Utvidelsesgrad',
+    expansionRateHint:
+      'Andelen av hver omkringliggende stille pause som tas med i avspillingen. 0.25 betyr 25 % på hver side.',
+
     minClipLength: 'Minste klipplengde',
     minClipLengthHint:
       'Kortere segmenter slås sammen med nærmeste nabo før avspillingsmargin legges til. Et isolert segment under grensen utelates. Manuell deling bruker samme grense.',
@@ -463,6 +471,9 @@ export const zh: Messages = {
 
     analysisDetail: '分段精度',
     analysisHint: '数值越小，分段位置越精确，但处理时间可能稍长。',
+
+    expansionRate: '扩展比例',
+    expansionRateHint: '播放时包含的两侧静音间隔比例。0.25 表示每侧扩展 25%。',
 
     minClipLength: '最短片段长度',
     minClipLengthHint:

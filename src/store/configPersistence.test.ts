@@ -59,3 +59,24 @@ it('retires the old split-piece setting and preserves the single clip minimum', 
   expect(config).not.toHaveProperty('minSilenceSec');
   localStorage.clear();
 });
+
+it('migrates and bounds the expansion rate while preserving older settings', async () => {
+  for (const [stored, expected] of [
+    [{}, 0.25],
+    [{expansionRate: 0.33}, 0.33],
+    [{expansionRate: 0.1}, 0.25],
+    [{expansionRate: 0.9}, 0.4],
+    [{expansionRate: 'bad'}, 0.25],
+  ] as const) {
+    vi.resetModules();
+    localStorage.setItem(
+      'Listeenoop_config',
+      JSON.stringify({minClipLength: 0.7, ...stored}),
+    );
+    const {default: reducer} = await import('./configSlice');
+    const config = reducer(undefined, {type: 'init'});
+    expect(config.expansionRate).toBe(expected);
+    expect(config.minClipLength).toBe(0.7);
+  }
+  localStorage.clear();
+});

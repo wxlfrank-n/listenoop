@@ -73,6 +73,7 @@ export function useWaveform(url: string | null): {
             blockMs: configRef.current.blockMs,
             silenceRatio: configRef.current.silenceRatio,
             minClipLength: configRef.current.minClipLength,
+            expansionRate: configRef.current.expansionRate,
           },
           controller.signal,
         );

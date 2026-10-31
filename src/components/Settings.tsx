@@ -312,7 +312,8 @@ function PlaybackTab() {
 function ClipDetectionTab() {
   const {config, updateConfig} = useConfig();
   const t = useT();
-  const {blockMs, silenceRatio, minClipLength, mergeScope} = config;
+  const {blockMs, silenceRatio, minClipLength, expansionRate, mergeScope} =
+    config;
   return (
     <>
       <SliderSetting
@@ -346,6 +347,16 @@ function ClipDetectionTab() {
         step={0.05}
         unit="s"
         onChange={v => updateConfig({minClipLength: v})}
+      />
+      <SliderSetting
+        label={t('settings.expansionRate')}
+        hint={t('settings.expansionRateHint')}
+        presets={[0.25, 0.3, 0.35, 0.4]}
+        value={expansionRate}
+        min={CONFIG_RANGES.expansionRate.min}
+        max={CONFIG_RANGES.expansionRate.max}
+        step={0.01}
+        onChange={v => updateConfig({expansionRate: v})}
       />
       <SegmentedSetting
         label={t('settings.mergeScope')}

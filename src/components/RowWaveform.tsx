@@ -97,6 +97,7 @@ export const RowWaveform = memo(
       playClip,
     } = useRowWaveformScroll({
       waveformDuration: waveform.duration,
+      minClipLength: minClipLength ?? config.minClipLength,
       currentTime,
       onSeek,
       onPlayRange,

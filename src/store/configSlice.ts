@@ -10,6 +10,7 @@
  * - minClipLength: Minimum interval length before expansion and after manual
  *   splits (default: 0.3). Short detected intervals merge with neighbors; an
  *   isolated interval below the minimum is omitted.
+ * - expansionRate: Fraction of surrounding gaps included in playback (0.25–0.4).
  * - repetitions: How many times a clicked clip is repeated (default: 3).
  * - loopPlaylist: Whether reaching the end of a track rolls on to the next
  *   track in the playlist; when off playback stops at the end (default: false).
@@ -46,6 +47,7 @@ interface ConfigState {
   blockMs: number;
   silenceRatio: number;
   minClipLength: number;
+  expansionRate: number;
   repetitions: number;
   loopPlaylist: boolean;
   showAdvancedControls: boolean;
@@ -60,6 +62,7 @@ export const DEFAULT_CONFIG: ConfigState = {
   blockMs: 12,
   silenceRatio: 0.01,
   minClipLength: 0.3,
+  expansionRate: 0.25,
   repetitions: 3,
   loopPlaylist: false,
   showAdvancedControls: false,
@@ -77,6 +80,7 @@ export const CONFIG_RANGES = {
   // dead range.
   silenceRatio: {min: 0.005, max: 0.02},
   minClipLength: {min: 0.3, max: 1},
+  expansionRate: {min: 0.25, max: 0.4},
   repetitions: {min: 1, max: 20},
 } as const;
 
@@ -158,6 +162,11 @@ function loadConfig(): ConfigState {
           CONFIG_RANGES.blockMs,
           DEFAULT_CONFIG.blockMs,
           {round: true},
+        ),
+        expansionRate: clampNumber(
+          parsed.expansionRate,
+          CONFIG_RANGES.expansionRate,
+          DEFAULT_CONFIG.expansionRate,
         ),
         minClipLength: clampNumber(
           parsed.minClipLength,

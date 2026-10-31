@@ -44,6 +44,7 @@ export {
 
 export interface UseRowWaveformScrollArgs {
   waveformDuration: number;
+  minClipLength: number;
   currentTime: number;
   onSeek: (time: number) => void;
   onPlayRange: (
@@ -78,6 +79,7 @@ export interface UseRowWaveformScrollArgs {
 
 export function useRowWaveformScroll({
   waveformDuration,
+  minClipLength,
   currentTime,
   onSeek,
   onPlayRange,
@@ -197,7 +199,10 @@ export function useRowWaveformScroll({
   const applyWidth = useCallback(
     (width: number) => {
       if (width <= 0 || waveformDuration <= 0) return;
-      const nextWindowSecs = Math.min(getWindowSecs(width), waveformDuration);
+      const nextWindowSecs = Math.min(
+        getWindowSecs(width, minClipLength),
+        waveformDuration,
+      );
       if (!Number.isFinite(nextWindowSecs) || nextWindowSecs <= 0) return;
       if (Math.abs(nextWindowSecs - hsWinLenRef.current) < 1e-6) return;
       hsWinLenRef.current = nextWindowSecs;
@@ -219,7 +224,13 @@ export function useRowWaveformScroll({
         setViewportFollow(getCurrentTime());
       }
     },
-    [getCurrentTime, setLiveAnchor, setViewportFollow, waveformDuration],
+    [
+      getCurrentTime,
+      minClipLength,
+      setLiveAnchor,
+      setViewportFollow,
+      waveformDuration,
+    ],
   );
   useLayoutEffect(() => {
     const element = hsRef.current;

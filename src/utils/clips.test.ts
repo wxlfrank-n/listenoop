@@ -1,7 +1,6 @@
 import {describe, expect, it} from 'vitest';
 import {
   getClipGaps,
-  expandClip,
   enforceMinClipLength,
   mergeClipsByGap,
   mergeClipsByGapScoped,
@@ -81,6 +80,9 @@ describe('getInitClipData — adaptive RMS', () => {
     const {clips} = detect([[1, 0.001]]);
     expect(clips).toHaveLength(1);
     expect(bounds(clips)).toEqual([[0, 1]]);
+    expect(clips[0]!.vStart).toBe(0);
+    expect(clips[0]!.vEnd).toBe(1);
+    expect(clips[0]!.expanded).toBe(true);
   });
 
   it('detects separated speech over a steady noise floor', () => {
@@ -212,6 +214,81 @@ describe('getInitClipData — adaptive RMS', () => {
     expect(clip.vEnd - clip.end).toBeCloseTo((7.5 - clip.end) * 0.25, 5);
     expect(clip.vStart).toBeGreaterThanOrEqual(0);
     expect(clip.vEnd).toBeLessThanOrEqual(7.5);
+    expect(clip.expanded).toBe(true);
+  });
+
+  it('expands both sides of each shared gap consistently and marks every clip expanded', () => {
+    const result = detect([
+      [0.3, 0],
+      [0.4, 0.1],
+      [0.2, 0],
+      [0.5, 0.1],
+      [0.4, 0],
+      [0.6, 0.1],
+      [0.3, 0],
+    ]);
+    expect(result.clips).toHaveLength(3);
+    expect(result.clips.every(clip => clip.expanded)).toBe(true);
+    const first = result.clips[0]!;
+    const last = result.clips.at(-1)!;
+    expect(first.start - first.vStart).toBeCloseTo(first.start * 0.25, 8);
+    expect(last.vEnd - last.end).toBeCloseTo((2.7 - last.end) * 0.25, 8);
+    for (let i = 1; i < result.clips.length; i++) {
+      const left = result.clips[i - 1]!;
+      const right = result.clips[i]!;
+      const expansion = (right.start - left.end) * 0.25;
+      expect(left.vEnd - left.end).toBeCloseTo(expansion, 8);
+      expect(right.start - right.vStart).toBeCloseTo(expansion, 8);
+    }
+  });
+
+  it('backtracks from a stronger onset to retain a soft lead-in above the offset threshold', () => {
+    const {clips} = detect([
+      [0.3, 0],
+      [0.2, 0.008],
+      [0.4, 1],
+      [0.3, 0],
+    ]);
+    expect(clips).toHaveLength(1);
+    expect(clips[0]!.start).toBeCloseTo(0.3, 1);
+  });
+
+  it('uses the configured expansion rate without changing sound boundaries or initial grouping', () => {
+    const parts: [number, number][] = [
+      [0.3, 0],
+      [0.4, 0.1],
+      [0.2, 0],
+      [0.5, 0.1],
+      [0.3, 0],
+    ];
+    const baseline = detect(parts);
+    const expanded = detect(parts, {expansionRate: 0.4});
+    expect(bounds(expanded.clips)).toEqual(bounds(baseline.clips));
+    expect(expanded.initGap).toBe(baseline.initGap);
+    const [left, right] = expanded.clips;
+    const gap = right!.start - left!.end;
+    expect(left!.vStart).toBeCloseTo(left!.start * 0.6, 8);
+    expect(left!.vEnd).toBeCloseTo(left!.end + gap * 0.4, 8);
+    expect(right!.vStart).toBeCloseTo(right!.start - gap * 0.4, 8);
+    expect(left!.vEnd).toBeLessThan(right!.vStart);
+  });
+
+  it('clamps expansion to 0.25–0.4 and falls back to 0.25 for nonfinite values', () => {
+    const parts: [number, number][] = [
+      [1, 0],
+      [0.5, 0.1],
+      [1, 0],
+    ];
+    const baseline = detect(parts, {expansionRate: 0.25});
+    for (const expansionRate of [0, 0.1, NaN, Infinity]) {
+      expect(detect(parts, {expansionRate})).toEqual(baseline);
+    }
+    expect(detect(parts, {expansionRate: 0.9})).toEqual(
+      detect(parts, {expansionRate: 0.4}),
+    );
+    expect(detect(parts, {expansionRate: 0.3}).clips[0]!.vStart).toBeLessThan(
+      baseline.clips[0]!.vStart,
+    );
   });
 
   it('never extends a partial final frame beyond the file duration', () => {
@@ -236,35 +313,6 @@ describe('getInitClipData — adaptive RMS', () => {
       expect(clips[0]!.start).toBeCloseTo(0.5, 1);
       expect(clips[0]!.end).toBeCloseTo(1, 1);
     }
-  });
-});
-
-describe('expandClip', () => {
-  it('expands clip bounds into neighboring silence by 25% of each gap', () => {
-    const clip = {start: 0.6, end: 1.0, vStart: 0.6, vEnd: 1.0};
-
-    expandClip(clip, 0.2, 1.8, 0.25, 2.0);
-
-    expect(clip.vStart).toBeCloseTo(0.5, 5);
-    expect(clip.vEnd).toBeCloseTo(1.2, 5);
-  });
-
-  it('leaves a clip unchanged when there is no surrounding silence to absorb', () => {
-    const clip = {start: 0.5, end: 1.0, vStart: 0.5, vEnd: 1.0};
-
-    expandClip(clip, 0.5, 1.0, 0.25, 2.0);
-
-    expect(clip.vStart).toBe(0.5);
-    expect(clip.vEnd).toBe(1.0);
-  });
-
-  it('expands by 25% of each gap even with very large surrounding silence', () => {
-    const clip = {start: 1.0, end: 2.0, vStart: 1.0, vEnd: 2.0};
-
-    expandClip(clip, 0.0, 100.0, 0.25, 100.0);
-
-    expect(clip.vStart).toBeCloseTo(0.75, 5);
-    expect(clip.vEnd).toBeCloseTo(26.5, 5);
   });
 });
 

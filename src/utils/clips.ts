@@ -24,6 +24,8 @@ export interface SplitOptions {
   silenceRatio: number;
   /** Minimum detected and manually split clip span in seconds, before padding. */
   minClipLength: number;
+  /** Fraction of each surrounding silent gap included in playback (0.25–0.4). */
+  expansionRate?: number;
 }
 
 export interface InitClipData {
@@ -62,7 +64,11 @@ export function getInitClipData(
   const rms = calculateFrameRms(data, window);
   const thresholds = estimateSoundThresholds(rms, options.silenceRatio);
   const clips = detectSoundClips(rms, window, thresholds, sampleRate, duration);
-  return finalizeClips(clips, options.minClipLength, duration);
+  const expansionRate = Math.max(
+    0.25,
+    Math.min(0.4, finiteOr(options.expansionRate, 0.25)),
+  );
+  return finalizeClips(clips, options.minClipLength, duration, expansionRate);
 }
 
 function finiteOr(value: number | undefined, fallback: number): number {
@@ -173,6 +179,7 @@ function detectSoundClips(
   const clips: Clip[] = [];
   const finish = (end: number) => {
     if (active < 0) return;
+    while (active > 0 && rms[active - 1]! >= offsetThreshold) active--;
     const start = (active * hopSize) / sampleRate;
     // Frame energy includes samples after the frame's start. Keep those samples
     // in the sound boundary; playback padding is added separately below.
@@ -207,12 +214,13 @@ function finalizeClips(
   clips: Clip[],
   minClipLength: number,
   duration: number,
+  expansionRate: number,
 ): InitClipData {
   // Overlapping windows may touch. Coalesce those without manufacturing a gap.
   clips = mergeClipsByGap(clips, 0);
   clips = enforceMinClipLength(clips, minClipLength);
   if (!clips.length) return {clips: [], gaps: [], initGap: 0};
-  expandClips(clips, duration);
+  expandClips(clips, duration, expansionRate);
   const gaps = getClipGaps(clips);
   return {
     clips,
@@ -226,32 +234,21 @@ function finalizeClips(
 function expandClips(
   clips: Clip[],
   audioDuration: number,
-  expandRatio: number = 0.25,
+  expansionRate: number,
 ) {
-  // Expand each clip's start and end by a fraction of the surrounding silence,
-  // up to 25% of the gap on each side, but never past the clip boundaries.
-  // This makes clips more natural and less abrupt.
-  for (let i = 0; i < clips.length; i++) {
-    const clip = clips[i]!;
-    const prevEnd = i > 0 ? clips[i - 1]!.end : 0;
-    const nextStart =
-      i < clips.length - 1 ? clips[i + 1]!.start : audioDuration;
-    expandClip(clip, prevEnd, nextStart, expandRatio, audioDuration);
+  if (clips.length === 0) return;
+  let prev = clips[0]!;
+  prev.vStart = prev.start - expansionRate * prev.start;
+  for (let i = 1; i < clips.length; i++) {
+    const next = clips[i]!;
+    const expansion = (next.start - prev.end) * expansionRate;
+    prev.vEnd = prev.end + expansion;
+    prev.expanded = true;
+    next.vStart = next.start - expansion;
+    prev = next;
   }
-}
-
-export function expandClip(
-  clip: Clip,
-  prevEnd: number,
-  nextStart: number,
-  expandRatio: number,
-  maxEnd: number,
-): void {
-  const startExpand = expandRatio * (clip.start - prevEnd);
-  const endExpand = expandRatio * (nextStart - clip.end);
-  clip.vStart = Math.max(0, clip.start - startExpand);
-  clip.vEnd = Math.min(maxEnd, clip.end + endExpand);
-  clip.expanded = true;
+  prev.vEnd = prev.end + expansionRate * (audioDuration - prev.end);
+  prev.expanded = true;
 }
 
 /**

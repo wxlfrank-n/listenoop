@@ -77,6 +77,18 @@ test('automatic gap selection and the single clip minimum survive settings migra
     exact: true,
   });
   await expect(minimum).toHaveValue('0.3');
+  const expansion = page.getByRole('slider', {
+    name: 'Expansion rate',
+    exact: true,
+  });
+  await expect(expansion).toHaveAttribute('min', '0.25');
+  await expect(expansion).toHaveAttribute('max', '0.4');
+  await expect(expansion).toHaveValue('0.25');
+  const originalWidth = (await clips.first().boundingBox())!.width;
+  await expansion.fill('0.4');
+  await expect
+    .poll(async () => (await clips.first().boundingBox())!.width)
+    .toBeGreaterThan(originalWidth);
   await minimum.fill('1');
   await expect(clips).toHaveCount(1);
   await expect
@@ -91,9 +103,14 @@ test('automatic gap selection and the single clip minimum survive settings migra
     key => JSON.parse(localStorage.getItem(key)!),
     CONFIG_KEY,
   );
+  expect(saved.expansionRate).toBe(0.4);
   expect(saved).not.toHaveProperty('minSilenceSec');
   expect(saved).not.toHaveProperty('minSplitPieceSec');
   await page.reload();
   await waitForClips(page);
   await expect(clips).toHaveCount(1);
+  await openClipDetectionTab(page);
+  await expect(
+    page.getByRole('slider', {name: 'Expansion rate', exact: true}),
+  ).toHaveValue('0.4');
 });

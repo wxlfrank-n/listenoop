@@ -40,6 +40,7 @@ export const selectDetectionOptions = createSelector(
     blockMs: config.blockMs,
     silenceRatio: config.silenceRatio,
     minClipLength: config.minClipLength,
+    expansionRate: config.expansionRate,
   }),
 );
 

@@ -18,45 +18,11 @@ export const WAVE_BUFFER_MARGIN_WINDOWS = 0.4;
 
 const CLIP_PLAY_MARGIN = 0.1;
 
-/**
- * Fixed ratio between audio time and viewport width:
- * 0.2s of audio is always rendered across 24px of viewport width.
- *
- * `getWindowSecs` uses this constant — see that function for the rationale.
- */
-const SECS_PER_24PX = 0.2;
-const PX_PER_0_2S = 24;
-
-/**
- * Viewport width at (and below) which `getWindowSecs` stops shrinking the
- * time window and instead holds it at `MIN_WINDOW_SECS`.
- *
- * Above this width the ideal 120px-per-second scale applies (0.2s = 24px),
- * so a 1-second clip is rendered 120px wide everywhere — consistent visual
- * size across desktop and tablet.
- *
- * Below this width the window is held fixed at 5s so small screens still
- * show a usable slice of audio. The trade-off: 1-second clips shrink
- * proportionally (e.g. 72px at a 360px viewport), so the "same length
- * everywhere" property only holds above the threshold.
- *
- * 600px is chosen because:
- *   - It matches the design's reference mobile-landscape width.
- *   - 5s of audio is the minimum useful practice loop length (a single
- *     phrase or exercise repetition), so anything shorter than that on
- *     screen hurts usability more than slightly smaller clips help it.
- */
+/** Small screens retain the time window calculated for a 600px viewport. */
 export const SMALL_VIEWPORT_THRESHOLD_PX = 600;
 
-/**
- * Minimum number of seconds `getWindowSecs` ever returns.
- *
- * Equal to the threshold width scaled at the ideal ratio:
- * `600 * 0.2 / 24 = 5`. Exported so callers and tests can reference the
- * same floor without re-deriving it.
- */
-export const MIN_WINDOW_SECS =
-  (SMALL_VIEWPORT_THRESHOLD_PX * SECS_PER_24PX) / PX_PER_0_2S;
+/** A minimum-length clip occupies 27px above the small-screen threshold. */
+const MIN_CLIP_WIDTH_PX = 27;
 
 export function getBaseWindowSecs(width: number): number {
   if (width >= 1600) return 32;
@@ -64,29 +30,11 @@ export function getBaseWindowSecs(width: number): number {
   return 12;
 }
 
-export function getWindowSecs(width: number): number {
-  /*
-   * Two regimes:
-   *
-   *   1. width >= SMALL_VIEWPORT_THRESHOLD_PX (>= 600px):
-   *      Fixed 120px-per-second scale — 0.2s of audio occupies 24px of
-   *      viewport width, so the window covers `width * 0.2 / 24` seconds.
-   *      A 1-second clip is 120px wide on every viewport in this regime.
-   *
-   *   2. width < SMALL_VIEWPORT_THRESHOLD_PX (< 600px):
-   *      The window is held at MIN_WINDOW_SECS (5s) so small screens still
-   *      show ~5 seconds of audio. The px-per-second ratio drops as the
-   *      viewport shrinks (1s = 80px at 400px, 72px at 360px), so clips
-   *      appear smaller — the explicit trade for keeping the window usable
-   *      on phones in portrait.
-   *
-   *   width = 360  → 5.000s  (held; clips ~72px/s)
-   *   width = 400  → 5.000s  (held; clips ~80px/s)
-   *   width = 600  → 5.000s  (threshold; clips 120px/s)
-   *   width = 1200 → 10.000s (clips 120px/s)
-   *   width = 1600 → 13.333s (clips 120px/s)
-   */
-  return Math.max((width * SECS_PER_24PX) / PX_PER_0_2S, MIN_WINDOW_SECS);
+export function getWindowSecs(width: number, minClipLength: number): number {
+  return (
+    (Math.max(width, SMALL_VIEWPORT_THRESHOLD_PX) * minClipLength) /
+    MIN_CLIP_WIDTH_PX
+  );
 }
 
 export function clampWindowAnchor(anchor: number, maxStart: number): number {

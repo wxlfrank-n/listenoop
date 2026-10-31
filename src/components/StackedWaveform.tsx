@@ -58,7 +58,7 @@ interface StackedWaveformProps {
   onSwipeClip?: (idx: number, direction: SwipeDirection) => void;
 
   /** Minimum seconds a split must leave on each side; controls the affordance. */
-  minSplitPieceSec?: number;
+  minClipLength?: number;
 
   /**
    * Two clips pinched together (fingers squeeze inward across the range) merges
@@ -108,7 +108,7 @@ export const StackedWaveform = memo(
     repetitions,
     onStopPlayback,
     onSwipeClip,
-    minSplitPieceSec,
+    minClipLength,
     onPinchMergeClip,
     onPinchSplitClip,
     onSeek,
@@ -873,7 +873,7 @@ export const StackedWaveform = memo(
                   onStopPlayback={onStopPlayback}
                   onActivate={onActiveClipChange}
                   onSwipeClip={onSwipeClip}
-                  minSplitPieceSec={minSplitPieceSec}
+                  minClipLength={minClipLength}
                   onPlayRange={stackedPlayClip}
                   onSeek={handleRowSeek}
                   getCurrentTime={getCurrentTime}

@@ -123,7 +123,6 @@ export default function App() {
     blockMs: config.blockMs,
     silenceRatio: config.silenceRatio,
     minClipLength: config.minClipLength,
-    minSplitPieceSec: config.minSplitPieceSec,
   });
 
   const showNotice = useCallback(

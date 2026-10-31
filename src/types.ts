@@ -91,7 +91,7 @@ export interface CurrentAudio {
   waveformStatus: WaveformStatus;
   clips: Clip[];
   gaps: number[];
-  minGap: number;
+  initGap: number;
   currentTime: number;
 }
 

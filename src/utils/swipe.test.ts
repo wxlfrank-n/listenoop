@@ -26,7 +26,7 @@ describe('splitClip', () => {
       children: [mk(0, 0.5), mk(0.8, 1.3), mk(2, 2.5)],
     };
     // largest child gap (0.7) sets the merge level just below itself
-    const result = splitClip([clip], [clip], 0, 'global');
+    const result = splitClip([clip], [clip], 0, 'global', 0.3);
     expect(result?.mergeGap).toBeCloseTo(0.699999);
     expect(result?.activeClip).toBe(0);
   });
@@ -35,7 +35,7 @@ describe('splitClip', () => {
     const clips = [mk(0, 1), mk(1.2, 2), mk(2.5, 3), mk(5, 6)];
     const displayClips = mergeClipsByGap(clips, 0.6);
 
-    const result = splitClip(clips, displayClips, 0, 'global');
+    const result = splitClip(clips, displayClips, 0, 'global', 0.3);
 
     expect(result?.mergeGap).toBeCloseTo(0.499999);
     expect(result?.activeClip).toBe(0);
@@ -77,7 +77,7 @@ describe('splitClip', () => {
     expect(displayClips).toHaveLength(4);
     expect(displayClips[splitIdx]!.children).toEqual([clips[5], clips[6]]);
 
-    const result = splitClip(clips, displayClips, splitIdx, 'global');
+    const result = splitClip(clips, displayClips, splitIdx, 'global', 0.3);
 
     expect(result?.mergeGap).toBeCloseTo(0.099999, 6);
 
@@ -114,7 +114,7 @@ describe('splitClip', () => {
     const displayClips = mergeClipsByGap(clips, 1);
     expect(displayClips).toHaveLength(1);
 
-    const result = splitClip(clips, displayClips, 0, 'clip')!;
+    const result = splitClip(clips, displayClips, 0, 'clip', 0.3)!;
 
     expect(bounds(result.clips!)).toEqual([
       [0, 1],
@@ -148,7 +148,7 @@ describe('splitClip', () => {
       [12, 14],
     ]);
 
-    const result = splitClip(clips, displayClips, 1, 'clip')!;
+    const result = splitClip(clips, displayClips, 1, 'clip', 0.3)!;
 
     // c-d splits back apart; a-b and e-f stay merged.
     expect(bounds(result.clips!)).toEqual([
@@ -162,13 +162,9 @@ describe('splitClip', () => {
     expect(result.activeClip).toBe(1);
   });
 
-  it('skips a gap between two sub-0.1s pieces in clip scope', () => {
-    /*
-     * Rule 1: a gap whose two bordering clips are each shorter than
-     * MIN_SPLIT_PIECE_SEC is not a candidate, even when the accumulated pieces
-     * on both sides would be long enough. So the 3.44 silence between the two
-     * 0.01s clips is ignored and the split lands on the next largest gap.
-     */
+  it('allows a gap between short children when both resulting groups meet the minimum', () => {
+    // Check the resulting group spans, not the lengths of the two children
+    // bordering the gap. Both resulting groups are over the minimum.
     const clip: Clip = {
       start: 0,
       end: 7,
@@ -177,11 +173,11 @@ describe('splitClip', () => {
       children: [mk(0, 1), mk(1.05, 1.06), mk(4.5, 4.51), mk(6, 7)],
     };
 
-    const result = splitClip([clip], [clip], 0, 'clip')!;
+    const result = splitClip([clip], [clip], 0, 'clip', 0.3)!;
 
     expect(bounds(result.clips!)).toEqual([
-      [0, 4.51],
-      [6, 7],
+      [0, 1.06],
+      [4.5, 7],
     ]);
     expect(result.activeClip).toBe(0);
   });
@@ -200,7 +196,7 @@ describe('splitClip', () => {
       children: [mk(0, 0.05), mk(1, 2), mk(3, 4)],
     };
 
-    const result = splitClip([clip], [clip], 0, 'clip')!;
+    const result = splitClip([clip], [clip], 0, 'clip', 0.3)!;
 
     expect(bounds(result.clips!)).toEqual([
       [0, 2],
@@ -223,7 +219,7 @@ describe('splitClip', () => {
       children: [mk(0, 1), mk(2, 3), mk(3.02, 3.03)],
     };
 
-    const result = splitClip([clip], [clip], 0, 'clip')!;
+    const result = splitClip([clip], [clip], 0, 'clip', 0.3)!;
 
     expect(bounds(result.clips!)).toEqual([
       [0, 1],
@@ -232,7 +228,7 @@ describe('splitClip', () => {
     expect(result.activeClip).toBe(0);
   });
 
-  it('allows a piece of exactly MIN_SPLIT_PIECE_SEC in clip scope', () => {
+  it('allows a piece of exactly the configured minimum in clip scope', () => {
     // 0.1s is not *less than* the minimum, so both surrounding gaps stay valid.
     const clip: Clip = {
       start: 0,
@@ -242,7 +238,7 @@ describe('splitClip', () => {
       children: [mk(0, 1), mk(1.15, 1.25), mk(3, 4)],
     };
 
-    const result = splitClip([clip], [clip], 0, 'clip')!;
+    const result = splitClip([clip], [clip], 0, 'clip', 0.3)!;
 
     expect(bounds(result.clips!)).toEqual([
       [0, 1.25],
@@ -260,7 +256,7 @@ describe('splitClip', () => {
       children: [mk(0, 0.05), mk(2, 3)],
     };
 
-    expect(splitClip([clip], [clip], 0, 'clip')).toBeNull();
+    expect(splitClip([clip], [clip], 0, 'clip', 0.3)).toBeNull();
   });
 
   it('applies the 0.1s piece rule to the global merge gap too', () => {
@@ -277,7 +273,7 @@ describe('splitClip', () => {
       children: [mk(0, 1), mk(1.05, 1.06), mk(5, 5.5)],
     };
 
-    const result = splitClip([clip], [clip], 0, 'global')!;
+    const result = splitClip([clip], [clip], 0, 'global', 0.3)!;
 
     expect(result.mergeGap).toBeCloseTo(3.939999, 6);
   });
@@ -287,7 +283,7 @@ describe('splitClip', () => {
      * The largest gap (5.95) sits next to the 0.05s leading clip and would
      * leave it alone on one side, so global scope must not set the merge level
      * just below it. It falls to the gap that keeps both sides at least
-     * MIN_SPLIT_PIECE_SEC.
+     * the configured minimum.
      */
     const clip: Clip = {
       start: 0,
@@ -297,7 +293,7 @@ describe('splitClip', () => {
       children: [mk(0, 0.05), mk(6, 6.5), mk(7, 8)], // 5.95 silence > 0.5
     };
 
-    const result = splitClip([clip], [clip], 0, 'global')!;
+    const result = splitClip([clip], [clip], 0, 'global', 0.3)!;
 
     expect(result.mergeGap).toBeCloseTo(0.499999, 6);
   });
@@ -319,7 +315,7 @@ describe('splitClipEnd', () => {
       children: [mk(0, 1), mk(2, 3), mk(4, 5)],
     };
 
-    const result = splitClipEnd([clip], [clip], 0, 'right', 'clip')!;
+    const result = splitClipEnd([clip], [clip], 0, 'right', 'clip', 0.3)!;
 
     expect(bounds(result.clips!)).toEqual([
       [0, 3],
@@ -344,7 +340,7 @@ describe('splitClipEnd', () => {
       children: [mk(0, 1), mk(2, 3), mk(4, 5)],
     };
 
-    const result = splitClipEnd([clip], [clip], 0, 'left', 'clip')!;
+    const result = splitClipEnd([clip], [clip], 0, 'left', 'clip', 0.3)!;
 
     expect(bounds(result.clips!)).toEqual([
       [0, 1],
@@ -371,7 +367,7 @@ describe('splitClipEnd', () => {
       children: [mk(0, 1), mk(2, 3), mk(3.02, 3.03)],
     };
 
-    const result = splitClipEnd([clip], [clip], 0, 'right', 'clip')!;
+    const result = splitClipEnd([clip], [clip], 0, 'right', 'clip', 0.3)!;
 
     expect(bounds(result.clips!)).toEqual([
       [0, 1],
@@ -392,7 +388,7 @@ describe('splitClipEnd', () => {
       children: [mk(0, 0.03), mk(0.07, 1), mk(2, 3), mk(4, 5)],
     };
 
-    const result = splitClipEnd([clip], [clip], 0, 'left', 'clip')!;
+    const result = splitClipEnd([clip], [clip], 0, 'left', 'clip', 0.3)!;
 
     // The 0.03s leading clip strands alone, so the boundary moves onward.
     expect(bounds(result.clips!)).toEqual([
@@ -418,7 +414,7 @@ describe('splitClipEnd', () => {
       children: [mk(0, 1), mk(3, 4), mk(4.05, 5), mk(5.1, 5.5)],
     };
 
-    const result = splitClipEnd([clip], [clip], 0, 'right', 'clip')!;
+    const result = splitClipEnd([clip], [clip], 0, 'right', 'clip', 0.3)!;
 
     expect(bounds(result.clips!)).toEqual([
       [0, 5],
@@ -436,7 +432,7 @@ describe('splitClipEnd', () => {
       children: [mk(0, 1), mk(1.05, 2), mk(3, 4), mk(4.5, 5.5)],
     };
 
-    const result = splitClipEnd([clip], [clip], 0, 'left', 'clip')!;
+    const result = splitClipEnd([clip], [clip], 0, 'left', 'clip', 0.3)!;
 
     expect(bounds(result.clips!)).toEqual([
       [0, 1],
@@ -455,7 +451,7 @@ describe('splitClipEnd', () => {
     ];
     const displayClips = mergeClipsByGap(clips, 0.2);
 
-    const result = splitClipEnd(clips, displayClips, 1, 'right', 'clip')!;
+    const result = splitClipEnd(clips, displayClips, 1, 'right', 'clip', 0.3)!;
 
     // c-d peels its rightmost child off; a-b and e-f stay merged.
     expect(bounds(result.clips!)).toEqual([
@@ -473,7 +469,14 @@ describe('splitClipEnd', () => {
     const clips = [mk(0, 1), mk(1.2, 2), mk(2.5, 3), mk(5, 6)];
     const displayClips = mergeClipsByGap(clips, 0.6);
 
-    const result = splitClipEnd(clips, displayClips, 0, 'right', 'global')!;
+    const result = splitClipEnd(
+      clips,
+      displayClips,
+      0,
+      'right',
+      'global',
+      0.3,
+    )!;
 
     /*
      * The group {c0,c1,c2} is split at its trailing gap (0.5), so the whole
@@ -498,8 +501,8 @@ describe('splitClipEnd', () => {
     };
 
     // The single gap strands the 0.05s leading clip on both sides.
-    expect(splitClipEnd([clip], [clip], 0, 'right', 'clip')).toBeNull();
-    expect(splitClipEnd([clip], [clip], 0, 'left', 'clip')).toBeNull();
+    expect(splitClipEnd([clip], [clip], 0, 'right', 'clip', 0.3)).toBeNull();
+    expect(splitClipEnd([clip], [clip], 0, 'left', 'clip', 0.3)).toBeNull();
   });
 });
 
@@ -741,7 +744,7 @@ describe('ClipSplitResult.pieces', () => {
       children: [mk(0, 0.5), mk(0.8, 1.3), mk(2, 2.5)],
     };
 
-    const result = splitClip([clip], [clip], 0, 'clip')!;
+    const result = splitClip([clip], [clip], 0, 'clip', 0.3)!;
 
     // largest child gap (0.7) cuts between the last two children
     expect(bounds(result.pieces)).toEqual([
@@ -759,7 +762,7 @@ describe('ClipSplitResult.pieces', () => {
       children: [mk(0, 0.5), mk(0.8, 1.3), mk(2, 2.5)],
     };
 
-    const result = splitClipEnd([clip], [clip], 0, 'left', 'clip')!;
+    const result = splitClipEnd([clip], [clip], 0, 'left', 'clip', 0.3)!;
 
     expect(bounds(result.pieces)).toEqual([
       [0, 0.5],
@@ -771,7 +774,7 @@ describe('ClipSplitResult.pieces', () => {
     const clips = [mk(0, 0.5), mk(0.8, 1.3), mk(2, 2.5)];
     const displayClips = mergeClipsByGap(clips, 0.9);
 
-    const result = splitClip(clips, displayClips, 0, 'global')!;
+    const result = splitClip(clips, displayClips, 0, 'global', 0.3)!;
 
     expect(bounds(result.pieces)).toEqual([
       [0, 1.3],

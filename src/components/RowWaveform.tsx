@@ -34,7 +34,7 @@ export interface RowWaveformProps {
   onActiveClipChange: (idx: number) => void;
   onSwipeClip?: (idx: number, direction: SwipeDirection) => void;
   /** Minimum seconds a split must leave on each side; controls the affordance. */
-  minSplitPieceSec?: number;
+  minClipLength?: number;
   /** Pinching two clips together merges the clip range between them. */
   onPinchMergeClip?: (lowIndex: number, highIndex: number) => void;
   /** Spreading two fingers apart on one clip splits that clip normally. */
@@ -60,7 +60,7 @@ export const RowWaveform = memo(
     activeClip,
     onActiveClipChange,
     onSwipeClip,
-    minSplitPieceSec,
+    minClipLength,
     onPinchMergeClip,
     onPinchSplitClip,
     getAnalyser,
@@ -247,7 +247,7 @@ export const RowWaveform = memo(
                 activeClip={activeClip}
                 onActivate={onActiveClipChange}
                 onSwipe={onSwipeClip}
-                minSplitPieceSec={minSplitPieceSec}
+                minClipLength={minClipLength}
                 renderLabel={(id, c) => (
                   <div
                     key={`hlbl-${id}`}

@@ -5,15 +5,11 @@
  * - skipSeconds: Skip duration for forward/backward buttons (default: 10s)
  * - waveformView: Waveform display mode ("stacked" or "horizontal",
  *   default: "horizontal")
- * - blockMs: Silence-detection block size in milliseconds (default: 12)
- * - silenceRatio: Silence cutoff as a ratio of the track peak (default: 0.01)
- * - minClipLength: Minimum clip length detection attempts to achieve by
- *   merging short runs into neighbors (default: 0.3). Not a guarantee: a lone
- *   short clip may survive, and the unmerged fallback can also leave shorter
- *   clips.
- * - minSplitPieceSec: Smallest piece a clip may be left alone as after a
- *   split, and the floor detection also merges short runs up to (default: 0.1,
- *   see `MIN_SPLIT_PIECE_SEC`).
+ * - blockMs: RMS analysis window in milliseconds (default: 12)
+ * - silenceRatio: Relative energy/noise-floor sensitivity (default: 0.01)
+ * - minClipLength: Minimum interval length before expansion and after manual
+ *   splits (default: 0.3). Short detected intervals merge with neighbors; an
+ *   isolated interval below the minimum is omitted.
  * - repetitions: How many times a clicked clip is repeated (default: 3).
  * - loopPlaylist: Whether reaching the end of a track rolls on to the next
  *   track in the playlist; when off playback stops at the end (default: false).
@@ -35,7 +31,6 @@ import type {MergeScope, WaveformView} from '../types';
 import type {ThemeId} from '../themes';
 import {DEFAULT_THEME, THEME_IDS} from '../themes';
 import {isLocale, type LocaleId} from '../i18n/translations';
-import {MIN_SPLIT_PIECE_SEC} from '../utils/clips';
 
 const STORAGE_KEY = 'Listeenoop_config';
 
@@ -51,7 +46,6 @@ interface ConfigState {
   blockMs: number;
   silenceRatio: number;
   minClipLength: number;
-  minSplitPieceSec: number;
   repetitions: number;
   loopPlaylist: boolean;
   showAdvancedControls: boolean;
@@ -66,7 +60,6 @@ export const DEFAULT_CONFIG: ConfigState = {
   blockMs: 12,
   silenceRatio: 0.01,
   minClipLength: 0.3,
-  minSplitPieceSec: MIN_SPLIT_PIECE_SEC,
   repetitions: 3,
   loopPlaylist: false,
   showAdvancedControls: false,
@@ -83,8 +76,7 @@ export const CONFIG_RANGES = {
   // values behave identically, so the slider stops here instead of offering a
   // dead range.
   silenceRatio: {min: 0.005, max: 0.02},
-  minClipLength: {min: 0.2, max: 1},
-  minSplitPieceSec: {min: 0.01, max: 0.5},
+  minClipLength: {min: 0.3, max: 1},
   repetitions: {min: 1, max: 20},
 } as const;
 
@@ -115,6 +107,9 @@ function loadConfig(): ConfigState {
     const raw = localStorage.getItem(STORAGE_KEY);
     if (raw) {
       const parsed = JSON.parse(raw);
+      // Retired controls must not return through the stored-field spread.
+      delete parsed.minSplitPieceSec;
+      delete parsed.minSilenceSec;
       return {
         ...DEFAULT_CONFIG,
         ...parsed,
@@ -168,11 +163,6 @@ function loadConfig(): ConfigState {
           parsed.minClipLength,
           CONFIG_RANGES.minClipLength,
           DEFAULT_CONFIG.minClipLength,
-        ),
-        minSplitPieceSec: clampNumber(
-          parsed.minSplitPieceSec,
-          CONFIG_RANGES.minSplitPieceSec,
-          DEFAULT_CONFIG.minSplitPieceSec,
         ),
       };
     }

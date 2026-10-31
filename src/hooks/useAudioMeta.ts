@@ -64,7 +64,6 @@ export function useAudioMeta(url: string | null) {
               blockMs: configRef.current.blockMs,
               silenceRatio: configRef.current.silenceRatio,
               minClipLength: configRef.current.minClipLength,
-              minSplitPieceSec: configRef.current.minSplitPieceSec,
             },
             controller.signal,
           );

@@ -97,10 +97,12 @@ vi.mock('../workers/audioDecoderClient', () => ({
       duration: 0,
       numberOfChannels: 1,
       byteLength: 8,
-      clips: {clips: [], gaps: [], minGap: 0},
+      clips: {clips: [], gaps: [], initGap: 0},
     }),
   ),
-  redetectClips: vi.fn(() => Promise.resolve({clips: [], gaps: [], minGap: 0})),
+  redetectClips: vi.fn(() =>
+    Promise.resolve({clips: [], gaps: [], initGap: 0}),
+  ),
 }));
 
 /*

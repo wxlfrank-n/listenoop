@@ -14,6 +14,7 @@ import {
   setDuration,
 } from '../store/playerSlice';
 import {selectDetectionOptions} from '../store/selectors';
+import type {SplitOptions} from '../utils/clips';
 
 // iOS devices (including Chrome on iPhone, which uses the WebKit engine)
 // cannot route an <audio> element through the Web Audio graph reliably:
@@ -58,11 +59,10 @@ export function useAudioPlayer(skipSeconds: number) {
   // Detection options for the worker's `decode` request. Read via a ref so
   // changes don't trigger re-decode — only the URL matters; the cache is
   // keyed by URL, so a fresh decode only happens on track switch.
-  const detectionOptionsRef = useRef({
+  const detectionOptionsRef = useRef<SplitOptions>({
     blockMs: 12,
     silenceRatio: 0.01,
     minClipLength: 0.3,
-    minSplitPieceSec: 0.1,
   });
   // Keep the ref in sync with the latest config from the player slice's
   // owner (App.tsx). Memoized via `selectDetectionOptions` so a config

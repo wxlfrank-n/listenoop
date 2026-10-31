@@ -92,19 +92,14 @@ export function MergeSlider({
   // Steppers move the gap to the adjacent detected boundary; the slider drag
   // follows the pointer continuously and snaps only the effective merge gap.
   const stepToPrev = () => {
-    const i = gapValues.indexOf(value);
-    const next = gapValues[i > 0 ? i - 1 : 0];
+    const next = gapValues.filter(gap => gap < value).at(-1) ?? gapValues[0];
     if (next !== undefined) {
       setSliderValue(next);
       onChange(next);
     }
   };
   const stepToNext = () => {
-    const i = gapValues.indexOf(value);
-    const next =
-      gapValues[
-        i >= 0 && i < gapValues.length - 1 ? i + 1 : gapValues.length - 1
-      ];
+    const next = gapValues.find(gap => gap > value) ?? gapValues.at(-1);
     if (next !== undefined) {
       setSliderValue(next);
       onChange(next);

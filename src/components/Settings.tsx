@@ -87,6 +87,7 @@ function SliderSetting({
       {hint && <p className="settings-hint">{hint}</p>}
       <input
         type="range"
+        aria-label={label}
         className="settings-slider"
         min={min}
         max={max}
@@ -311,8 +312,7 @@ function PlaybackTab() {
 function ClipDetectionTab() {
   const {config, updateConfig} = useConfig();
   const t = useT();
-  const {blockMs, silenceRatio, minClipLength, minSplitPieceSec, mergeScope} =
-    config;
+  const {blockMs, silenceRatio, minClipLength, mergeScope} = config;
   return (
     <>
       <SliderSetting
@@ -339,24 +339,13 @@ function ClipDetectionTab() {
       <SliderSetting
         label={t('settings.minClipLength')}
         hint={t('settings.minClipLengthHint')}
-        presets={[0.1, 0.2, 0.3, 0.5, 1.0]}
+        presets={[0.3, 0.5, 1.0]}
         value={minClipLength}
         min={CONFIG_RANGES.minClipLength.min}
         max={CONFIG_RANGES.minClipLength.max}
         step={0.05}
         unit="s"
         onChange={v => updateConfig({minClipLength: v})}
-      />
-      <SliderSetting
-        label={t('settings.minSplitPiece')}
-        hint={t('settings.minSplitPieceHint')}
-        presets={[0.05, 0.1, 0.2, 0.3]}
-        value={minSplitPieceSec}
-        min={CONFIG_RANGES.minSplitPieceSec.min}
-        max={CONFIG_RANGES.minSplitPieceSec.max}
-        step={0.05}
-        unit="s"
-        onChange={v => updateConfig({minSplitPieceSec: v})}
       />
       <SegmentedSetting
         label={t('settings.mergeScope')}

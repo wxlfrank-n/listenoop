@@ -52,7 +52,7 @@ export interface ClipProps {
 
   /**
    * Whether the clip can currently be split (it is a merged group with a
-   * boundary that cleaves off at least `minSplitPieceSec`). Drives the split
+   * boundary that cleaves off at least `minClipLength`). Drives the split
    * affordance shown while the clip is active, and whether an up-swipe shows
    * the floating split icon.
    */

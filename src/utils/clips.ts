@@ -1,15 +1,8 @@
 /**
- * Silence-based clip detection.
- *
- * Explodes raw decoded audio into discrete clips by splitting around silent
- * gaps. Detection is block-based: the buffer is divided into fixed-width
- * windows and each window is classified sound/silent by its peak amplitude.
- *
- * Two user-configurable knobs are independent of one another:
- * - blockMs          - width of the quantization window, in milliseconds
- *                   (converted to samples via the sample rate)
- * - silenceRatio   - window whose peak <= ratio * trackPeak counts as silence
- *                   (how QUIET, not how short)
+ * Adaptive energy-based clip detection. Overlapping RMS frames use a robust
+ * recording reference and an estimated noise floor, with hysteresis and a
+ * short onset hold to avoid transient clicks. Short pauses remain editable
+ * boundaries; the average detected gap determines initial grouping.
  */
 
 /** A single detected audio segment, in seconds. */
@@ -25,115 +18,209 @@ export interface Clip {
 
 /** User-supplied silence-split parameters (config-driven). */
 export interface SplitOptions {
-  /** Block size in milliseconds. Controls the quantization of clip boundaries. */
+  /** RMS window in milliseconds; frames overlap by at least half a window. */
   blockMs: number;
-  /** A block whose peak is <= this ratio of the track peak counts as silence. */
+  /** Relative sensitivity, combined with an estimated recording noise floor. */
   silenceRatio: number;
-  /**
-   * Minimum clip length, in seconds, that `getInitClipData` *attempts* to
-   * achieve by merging short runs into neighbors. Not a guarantee: a lone
-   * short run, runs that only clear `mustMergeThan`, and the unmerged fallback
-   * in `findMinMergeGap` can all leave final clips shorter than this.
-   */
+  /** Minimum detected and manually split clip span in seconds, before padding. */
   minClipLength: number;
-  /**
-   * Smallest piece a clip may be left alone as, in seconds. Detection merges
-   * any run below this with a neighbor no matter what surrounds it (passed
-   * through as `mustMergeThan`), so nothing this short survives on its own.
-   */
-  minSplitPieceSec: number;
 }
 
 export interface InitClipData {
   clips: Clip[];
   gaps: number[];
-  minGap: number;
+  initGap: number;
 }
 
-/**
- * Split raw decoded audio into clips. Each contiguous run of blocks whose peak
- * exceeds `silenceRatio * trackPeak` becomes a clip, bounded by silent blocks.
- */
+interface AnalysisWindow {
+  windowSize: number;
+  hopSize: number;
+}
+
+interface SoundThresholds {
+  onsetThreshold: number;
+  offsetThreshold: number;
+}
+
+/** Detect sound islands, enforce the minimum, then pad and choose initial grouping. */
 export function getInitClipData(
   data: Float32Array | null,
   sampleRate: number,
   options: SplitOptions,
 ): InitClipData {
-  if (!data || data.length === 0 || sampleRate <= 0)
-    return {clips: [], minGap: 0, gaps: []};
+  if (
+    !data?.length ||
+    !Number.isFinite(sampleRate) ||
+    sampleRate <= 0 ||
+    !Number.isFinite(options.minClipLength) ||
+    options.minClipLength < 0
+  ) {
+    return {clips: [], initGap: 0, gaps: []};
+  }
+  const duration = data.length / sampleRate;
+  const window = createAnalysisWindow(sampleRate, options.blockMs);
+  const rms = calculateFrameRms(data, window);
+  const thresholds = estimateSoundThresholds(rms, options.silenceRatio);
+  const clips = detectSoundClips(rms, window, thresholds, sampleRate, duration);
+  return finalizeClips(clips, options.minClipLength, duration);
+}
 
-  const audioDuration = data.length / sampleRate;
-  // min blockSamples = 64 to avoid a pathological case where a single block is
-  // too short to compute a meaningful peak. blockMs is converted via the sample
-  // rate: e.g. 10ms at 48kHz is 480 samples.
-  const blockSamples = Math.max(
-    64,
-    Math.round((options.blockMs / 1000) * sampleRate),
+function finiteOr(value: number | undefined, fallback: number): number {
+  return value !== undefined && Number.isFinite(value) ? value : fallback;
+}
+
+/** Convert the analysis window and hop from time to integer sample counts. */
+function createAnalysisWindow(
+  sampleRate: number,
+  blockMs: number,
+): AnalysisWindow {
+  const windowMs = Math.max(2, Math.min(1000, finiteOr(blockMs, 20)));
+  const windowSize = Math.max(1, Math.round((windowMs * sampleRate) / 1000));
+  const hopSize = Math.max(
+    1,
+    Math.min(Math.round(sampleRate * 0.01), Math.floor(windowSize / 2)),
   );
-  // silenceRatio is clamped to [0.0001, 0.02] so a single block can't be
-  // misclassified as silence due to a single sample being quiet. A 0.02 ratio
-  // is ~-34 dB, which is already very quiet.
-  const silenceRatio = Math.min(0.02, Math.max(0.0001, options.silenceRatio));
+  return {windowSize, hopSize};
+}
 
-  // peakStride is the number of samples to skip when computing the peak of a
-  // block. A smaller stride gives a more accurate peak, but takes longer to
-  // compute. A larger stride is faster, but may miss short bursts of sound.
-  // The default is 1/8 of the block size, which is a good compromise.
-  const peakStride = Math.max(1, Math.round(blockSamples / 8));
-  // number of blocks in the audio buffer, rounded up to include a partial block
-  const numBlocks = Math.ceil(data.length / blockSamples);
-  // how long each block is in seconds, used to convert block indices to time
-  const blockSec = blockSamples / sampleRate;
-
-  // Per-block peak amplitudes, computed over every peakStride-th sample so a
-  // ~3.7M-sample track reads ~7k values instead of one iteration per sample.
-  // A sub-block burst still spans many samples, so bursts are caught too.
-  const blockPeak = new Float32Array(numBlocks);
-  for (let b = 0; b < numBlocks; b++) {
-    const i0 = b * blockSamples;
-    const i1 = Math.min(i0 + blockSamples, data.length);
-    let peak = 0;
-    for (let i = i0; i < i1; i += peakStride) {
-      const v = data[i]!;
-      const a = v < 0 ? -v : v;
-      if (a > peak) peak = a;
-    }
-    blockPeak[b] = peak;
+/** Measure the energy of each overlapping frame without rescanning samples. */
+function calculateFrameRms(
+  data: Float32Array,
+  {windowSize, hopSize}: AnalysisWindow,
+): Float32Array {
+  const frameCount = Math.ceil(data.length / hopSize);
+  const rms = new Float32Array(frameCount);
+  // Rolling energy visits each sample at most twice rather than rescanning
+  // every overlapping window. Partial final windows use their actual length.
+  const square = (index: number) => {
+    const sample = data[index]!;
+    return Number.isFinite(sample) ? sample * sample : 0;
+  };
+  let energy = 0;
+  let previousStart = 0;
+  let previousEnd = 0;
+  for (let frame = 0; frame < frameCount; frame++) {
+    const start = frame * hopSize;
+    const end = Math.min(start + windowSize, data.length);
+    for (let i = previousStart; i < start; i++) energy -= square(i);
+    for (let i = previousEnd; i < end; i++) energy += square(i);
+    // Floating-point subtraction can leave a tiny negative residue at silence.
+    rms[frame] = Math.sqrt(Math.max(0, energy) / (end - start));
+    previousStart = start;
+    previousEnd = end;
   }
+  return rms;
+}
 
-  // Track peak is the maximum of all block peaks, used to classify silence vs sound with silenceRatio.
-  // A single block can't be misclassified as silence due to a single sample being quiet, because the block peak is compared to the track peak.
-  let trackPeak = 0;
-  for (let b = 0; b < numBlocks; b++) {
-    const peak = blockPeak[b]!;
-    if (peak > trackPeak) trackPeak = peak;
-  }
-
-  const silenceThreshold = silenceRatio * trackPeak;
-  let clips: Clip[] = [];
-  let clipStartBlock = -1;
-  for (let b = 0; b <= numBlocks; b++) {
-    const isSound = b < numBlocks && blockPeak[b]! > silenceThreshold;
-    if (isSound && clipStartBlock === -1) {
-      clipStartBlock = b;
-    } else if (!isSound && clipStartBlock !== -1) {
-      clips.push({
-        start: clipStartBlock * blockSec,
-        end: b * blockSec,
-        vStart: clipStartBlock * blockSec,
-        vEnd: b * blockSec,
-      });
-      clipStartBlock = -1;
-    }
-  }
-  clips = mergeClipsByConfig(
-    clips,
-    options.minClipLength,
-    options.minSplitPieceSec,
+/** Estimate the recording's noise/signal levels and its start/stop thresholds. */
+function estimateSoundThresholds(
+  rms: Float32Array,
+  silenceRatio: number,
+): SoundThresholds {
+  // These are independent tuning heuristics, not three uses of one rule.
+  const amplitudeFloor = 1e-5;
+  const referenceNoiseMargin = 1.5;
+  const ratio = Math.max(0.0001, Math.min(0.02, finiteOr(silenceRatio, 0.01)));
+  // At the default ratio (0.01), sound must clear roughly 3x the noise floor.
+  const noiseThresholdMultiplier = 1.5 + ratio * 150;
+  const hysteresisRatio = 1.5;
+  const sorted = rms.slice().sort();
+  const percentile = (q: number) =>
+    sorted[Math.floor((sorted.length - 1) * q)]!;
+  const noiseFloor = percentile(0.2);
+  // Estimate the signal reference from frames above the noise floor, excluding
+  // digital silence. This remains robust to clicks even in mostly-silent files.
+  const signalStart = sorted.findIndex(
+    level =>
+      level > Math.max(amplitudeFloor, noiseFloor * referenceNoiseMargin),
   );
-  expandClips(clips, audioDuration);
+  const reference =
+    signalStart >= 0
+      ? sorted[
+          signalStart + Math.floor((sorted.length - signalStart - 1) * 0.9)
+        ]!
+      : percentile(0.9);
+  // The floor contribution is capped so continuous/quiet recordings are not
+  // erased simply because they have no noise-only frames to estimate from.
+  const onsetThreshold = Math.max(
+    amplitudeFloor,
+    reference * ratio,
+    Math.min(noiseFloor * noiseThresholdMultiplier, reference * 0.25),
+  );
+  // Start requires the higher threshold; an active interval may continue
+  // down to two thirds of it, retaining soft endings without rapid toggling.
+  const offsetThreshold = onsetThreshold / hysteresisRatio;
+  return {onsetThreshold, offsetThreshold};
+}
+
+/** Apply onset hold and hysteresis to turn frame energy into sound intervals. */
+function detectSoundClips(
+  rms: Float32Array,
+  {windowSize, hopSize}: AnalysisWindow,
+  {onsetThreshold, offsetThreshold}: SoundThresholds,
+  sampleRate: number,
+  duration: number,
+): Clip[] {
+  const frameCount = rms.length;
+  // A click occupies up to one full overlapping window. Require energy for
+  // longer than that footprint so increasing the window cannot admit clicks.
+  const onsetFrames = Math.max(
+    1,
+    Math.ceil((windowSize + 0.025 * sampleRate) / hopSize),
+  );
+  let candidate = -1;
+  let active = -1;
+  const clips: Clip[] = [];
+  const finish = (end: number) => {
+    if (active < 0) return;
+    const start = (active * hopSize) / sampleRate;
+    // Frame energy includes samples after the frame's start. Keep those samples
+    // in the sound boundary; playback padding is added separately below.
+    const stop = Math.min(
+      duration,
+      ((end - 1) * hopSize + windowSize) / sampleRate,
+    );
+    clips.push({start, end: stop, vStart: start, vEnd: stop});
+    active = -1;
+  };
+  for (let frame = 0; frame < frameCount; frame++) {
+    const level = rms[frame]!;
+    if (active >= 0) {
+      if (level < offsetThreshold) finish(frame);
+    } else if (level >= (candidate >= 0 ? offsetThreshold : onsetThreshold)) {
+      if (candidate < 0) candidate = frame;
+      // Require sustained energy before admitting an island as sound.
+      if (frame - candidate + 1 >= onsetFrames) {
+        active = candidate;
+        candidate = -1;
+      }
+    } else {
+      candidate = -1;
+    }
+  }
+  finish(frameCount);
+  return clips;
+}
+
+/** Enforce unpadded lengths before adding playback padding and the merge gap. */
+function finalizeClips(
+  clips: Clip[],
+  minClipLength: number,
+  duration: number,
+): InitClipData {
+  // Overlapping windows may touch. Coalesce those without manufacturing a gap.
+  clips = mergeClipsByGap(clips, 0);
+  clips = enforceMinClipLength(clips, minClipLength);
+  if (!clips.length) return {clips: [], gaps: [], initGap: 0};
+  expandClips(clips, duration);
   const gaps = getClipGaps(clips);
-  return findMinMergeGap(clips, gaps, options.minClipLength);
+  return {
+    clips,
+    gaps,
+    initGap: gaps.length
+      ? gaps.reduce((sum, gap) => sum + gap, 0) / gaps.length
+      : 0,
+  };
 }
 
 function expandClips(
@@ -169,10 +256,10 @@ export function expandClip(
 
 /**
  * Virtually merge consecutive clips whose intervening gap (in seconds) is at
- * most `minGap`. Each merged group becomes a parent clip spanning the first
+ * most `mergeGap`. Each merged group becomes a parent clip spanning the first
  * child's start to the last child's end, keeping the originals as children.
  */
-export function mergeClipsByGap(clips: Clip[], minGap: number): Clip[] {
+export function mergeClipsByGap(clips: Clip[], mergeGap: number): Clip[] {
   if (clips.length === 0) return [];
 
   const result: Clip[] = [];
@@ -198,7 +285,7 @@ export function mergeClipsByGap(clips: Clip[], minGap: number): Clip[] {
   for (let i = 1; i < clips.length; i++) {
     const next = clips[i]!;
     const gap = next.start - group[group.length - 1]!.end;
-    if (gap <= minGap) {
+    if (gap <= mergeGap) {
       group.push(next);
     } else {
       flush();
@@ -241,67 +328,20 @@ function asGroup(clips: Clip[]): Clip {
       };
 }
 
-/**
- * Smallest piece a split gesture is allowed to leave behind.
- *
- * A boundary is skipped when either resulting side would still be shorter than
- * this: gaps between two sub-minimum clips, or gaps where a sub-minimum clip's
- * accumulated side of the track is itself still short. Both merge scopes honor
- * this when picking the gap to cut at.
- */
-export const MIN_SPLIT_PIECE_SEC = 0.1;
-
-/**
- * Split a merged `clip` at its largest gap between consecutive children.
- *
- * Returns exactly two pieces plus the gap they were split at, or `null` when
- * `clip` is not a merged group (or, with `minPieceSec`, when no gap is a valid
- * boundary). The gap is only reported so callers can keep the merge slider
- * pointed at the boundary that was used -- the split itself never depends on a
- * threshold.
- *
- * With `minPieceSec > 0`, a gap is skipped when either side of the cut would
- * come out shorter than the minimum:
- *   1. both bordering clips are sub-minimum,
- *   2. the left clip is sub-minimum and the accumulated piece from the first
- *      child through it is still short,
- *   3. the right clip is sub-minimum and the accumulated piece from it through
- *      the last child is still short.
- */
-/**
- * Whether the gap between children `i - 1` and `i` is a viable split boundary.
- *
- * The boundary is skipped when either resulting side would be shorter than
- * `minPieceSec`:
- *   1. both bordering clips are sub-minimum,
- *   2. the left clip is sub-minimum and the accumulated piece from the first
- *      child through it is still short,
- *   3. the right clip is sub-minimum and the accumulated piece from it through
- *      the last child is still short.
- */
+/** A split is valid only when both resulting interval spans meet the minimum. */
 const isSplittableBoundary = (
   children: Clip[],
   i: number,
   minPieceSec: number,
 ): boolean => {
-  if (minPieceSec <= 0) return true;
-
   const left = children[i - 1]!;
   const right = children[i]!;
   const first = children[0]!;
   const last = children[children.length - 1]!;
 
-  const longEnough = (child: Clip) => child.end - child.start >= minPieceSec;
-
-  const leftStranded =
-    !longEnough(left) && left.end - first.start < minPieceSec;
-  const rightStranded =
-    !longEnough(right) && last.end - right.start < minPieceSec;
-
-  return !(
-    (!longEnough(left) && !longEnough(right)) ||
-    leftStranded ||
-    rightStranded
+  return (
+    left.end - first.start + 1e-9 >= minPieceSec &&
+    last.end - right.start + 1e-9 >= minPieceSec
   );
 };
 
@@ -445,132 +485,36 @@ export function mergeClipsByGapScoped(
   ];
 }
 
-export function findMinMergeGap(
-  clips: Clip[],
-  gaps: number[],
-  minClipLength: number,
-): InitClipData {
-  if (clips.length === 0) {
-    return {
-      minGap: 0,
-      gaps,
-      clips: [],
-    };
-  }
-
-  // Already valid without merging.
-  if (clips.every(clip => clip.end - clip.start >= minClipLength)) {
-    return {
-      minGap: 0,
-      gaps,
-      clips,
-    };
-  }
-
-  let low = 0;
-  let high = gaps.length - 1;
-
-  // Fall back to the unmerged clips (and no merge) when no gap can satisfy
-  // minClipLength, so a short track or a single short clip never wipes the
-  // clip list.
-  let result: InitClipData = {clips, minGap: 0, gaps};
-
-  while (low <= high) {
-    const mid = Math.floor((low + high) / 2);
-    const gap = gaps[mid]!;
-
-    const mergedClips = mergeClipsByGap(clips, gap);
-
-    const valid = mergedClips.every(
-      clip => clip.end - clip.start >= minClipLength,
-    );
-
-    if (valid) {
-      // Keep this result, but continue looking
-      // for a smaller gap.
-      result = {
-        minGap: gap,
-        gaps,
-        clips,
-      };
-
-      high = mid - 1;
-    } else {
-      low = mid + 1;
-    }
-  }
-  return result;
-}
-
 /**
- * Merge short detected clips into a neighbor until every clip is either long
- * enough, or too short to be left alone.
- *
- * A clip below `minClipLength` is a candidate; `mustMergeThan` matches
- * `MIN_SPLIT_PIECE_SEC` so nothing smaller than the split rule would accept is
- * ever left on its own. A clip that only clears `mustMergeThan` stays only
- * when its nearest neighbor already cleared `minClipLength`.
+ * Enforce the detected interval length before playback expansion. Merge each
+ * short island across its nearest gap (left wins ties), keeping other intervals
+ * intact. A final isolated interval below the minimum is omitted: padding must
+ * never make an otherwise invalid clip pass the minimum-length check.
  */
-export function mergeClipsByConfig(
+export function enforceMinClipLength(
   clips: Clip[],
   minClipLength: number,
-  mustMergeThan: number,
 ): Clip[] {
-  if (clips.length <= 1) return clips;
-
   const result = [...clips];
-
-  while (result.length > 1) {
-    let merged = false;
-
-    for (let i = 0; i < result.length; i++) {
-      const clip = result[i]!;
-      const clipLength = clip.end - clip.start;
-
-      // Keep clips that are already long enough.
-      if (clipLength >= minClipLength) {
-        continue;
-      }
-
-      const left = i > 0 ? result[i - 1] : undefined;
-      const right = i < result.length - 1 ? result[i + 1] : undefined;
-
-      const leftGap = left ? clip.start - left.end : Infinity;
-
-      const rightGap = right ? right.start - clip.end : Infinity;
-
-      // Find the nearest adjacent clip by silence length.
-      const mergeLeft = leftGap <= rightGap;
-      const nearest = mergeLeft ? left! : right!;
-
-      const nearestLength = nearest.end - nearest.start;
-
-      // Merge when:
-      // 1. The current clip is very short, or
-      // 2. Its nearest neighbour is also shorter than minClipLength.
-      if (clipLength > mustMergeThan && nearestLength >= minClipLength) {
-        continue;
-      }
-
-      if (mergeLeft) {
-        result.splice(i - 1, 2, mergeClipPair(left!, clip));
-      } else {
-        result.splice(i, 2, mergeClipPair(clip, right!));
-      }
-
-      // The structure changed, so restart and
-      // evaluate the new merged clips again.
-      merged = true;
-      break;
+  let index = 0;
+  while (index < result.length) {
+    const clip = result[index]!;
+    if (clip.end - clip.start + 1e-9 >= minClipLength) {
+      index++;
+      continue;
     }
-
-    // A complete pass without merging means
-    // the result is stable.
-    if (!merged) {
-      break;
+    if (result.length === 1) return [];
+    const left = result[index - 1];
+    const right = result[index + 1];
+    const leftGap = left ? clip.start - left.end : Infinity;
+    const rightGap = right ? right.start - clip.end : Infinity;
+    if (leftGap <= rightGap + 1e-9) {
+      result.splice(index - 1, 2, mergeClipPair(left!, clip));
+      index--;
+    } else {
+      result.splice(index, 2, mergeClipPair(clip, right!));
     }
   }
-
   return result;
 }
 

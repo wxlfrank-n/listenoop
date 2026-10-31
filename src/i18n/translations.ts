@@ -132,11 +132,7 @@ export const en = {
 
     minClipLength: 'Minimum clip length',
     minClipLengthHint:
-      'Detection tries to join clips shorter than this with a nearby one, but a lone short clip may be kept as it is.',
-
-    minSplitPiece: 'Minimum split piece',
-    minSplitPieceHint:
-      'The smallest piece a split may leave behind, and the shortest clip that is ever shown on its own. Shorter clips are always merged with a neighbor.',
+      'Shorter detected segments join their nearest neighbor before playback padding. An isolated segment below this length is omitted. Manual splits use the same minimum.',
 
     mergeScope: 'Merge scope',
     mergeScopeGlobal: 'Whole track',
@@ -305,11 +301,7 @@ export const no: Messages = {
 
     minClipLength: 'Minste klipplengde',
     minClipLengthHint:
-      'Deteksjonen pr\u00f8ver \u00e5 sl\u00e5 sammen klipp kortere enn dette med et naboklipp, men et enkeltst\u00e5ende kort klipp kan beholdes som det er.',
-
-    minSplitPiece: 'Minste del ved deling',
-    minSplitPieceHint:
-      'Den minste biten en deling kan etterlate, og det korteste klippet som noensinne vises alene. Kortere klipp sl\u00e5s alltid sammen med et naboklipp.',
+      'Kortere segmenter slås sammen med nærmeste nabo før avspillingsmargin legges til. Et isolert segment under grensen utelates. Manuell deling bruker samme grense.',
 
     mergeScope: 'Omfang for sl\u00e5ing sammen',
     mergeScopeGlobal: 'Hele sporet',
@@ -474,11 +466,7 @@ export const zh: Messages = {
 
     minClipLength: '最短片段长度',
     minClipLengthHint:
-      '检测会尝试将短于此长度的片段与附近的片段合并，但单独存在的短片段可能会被保留。',
-
-    minSplitPiece: '最小拆分片段',
-    minSplitPieceHint:
-      '拆分时允许留下的最小片段，也是可独立显示的最短片段。更短的片段将始终与相邻片段合并显示。',
+      '较短的片段会在添加播放留白前与最近的相邻片段合并。无法达到最短时长的孤立片段将被忽略，手动拆分也使用此限制。',
 
     mergeScope: '合并范围',
     mergeScopeGlobal: '整个音轨',

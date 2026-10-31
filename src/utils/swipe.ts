@@ -1,7 +1,6 @@
 import {
   mergeClipPair,
   mergeClipsByGap,
-  MIN_SPLIT_PIECE_SEC,
   splitClipAtEnd,
   splitClipAtLargestGap,
   type Clip,
@@ -111,7 +110,7 @@ export function splitClip(
   displayClips: Clip[],
   idx: number,
   scope: MergeScope = 'clip',
-  minPieceSec: number = MIN_SPLIT_PIECE_SEC,
+  minPieceSec: number = 0,
 ): ClipSplitResult | null {
   const clip = displayClips[idx];
   if (!clip) return null;
@@ -138,7 +137,7 @@ export function splitClipEnd(
   idx: number,
   side: 'left' | 'right',
   scope: MergeScope = 'clip',
-  minPieceSec: number = MIN_SPLIT_PIECE_SEC,
+  minPieceSec: number = 0,
 ): ClipSplitResult | null {
   const clip = displayClips[idx];
   if (!clip) return null;

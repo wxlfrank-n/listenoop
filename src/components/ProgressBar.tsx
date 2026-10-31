@@ -29,7 +29,7 @@ import {
   selectRepetitions,
   selectShowAdvancedControls,
   selectMergeScope,
-  selectMinSplitPieceSec,
+  selectMinClipLength,
 } from '../store/selectors';
 
 import {updateConfig} from '../store/configSlice';
@@ -92,9 +92,9 @@ export function ProgressBar({
 
   const mergeScope = useAppSelector(selectMergeScope);
 
-  const minSplitPieceSec = useAppSelector(selectMinSplitPieceSec);
+  const minClipLength = useAppSelector(selectMinClipLength);
 
-  const {waveform, waveformStatus, clips, currentTime, minGap} = audio;
+  const {waveform, waveformStatus, clips, currentTime, initGap} = audio;
 
   const hasWaveform = waveform !== null && waveform.data.length > 0;
 
@@ -102,19 +102,19 @@ export function ProgressBar({
    * Merge gap is derived from the detected silence gaps
    * for the current waveform.
    */
-  const [mergeGap, setMergeGap] = useState(minGap);
+  const [mergeGap, setMergeGap] = useState(initGap);
 
   useEffect(() => {
-    setMergeGap(minGap);
-  }, [minGap]);
+    setMergeGap(initGap);
+  }, [initGap]);
 
   /*
    * The grouping the detector itself asked for, before any user merge/split.
    * This is the starting point for "clip" scope.
    */
   const baselineClips = useMemo(
-    () => mergeClipsByGap(clips, minGap),
-    [clips, minGap],
+    () => mergeClipsByGap(clips, initGap),
+    [clips, initGap],
   );
 
   /*
@@ -328,14 +328,14 @@ export function ProgressBar({
        * split/unpack a virtually merged clip.
        */
       publishSplit(
-        splitClip(clips, displayClips, idx, mergeScope, minSplitPieceSec),
+        splitClip(clips, displayClips, idx, mergeScope, minClipLength),
       );
     },
     [
       clips,
       displayClips,
       mergeScope,
-      minSplitPieceSec,
+      minClipLength,
       publishSplit,
       requestClipPlayback,
     ],
@@ -394,22 +394,15 @@ export function ProgressBar({
   /*
    * Upward diagonal swipes split the merged clip from the end the swipe is
    * pointing at: up-right detaches the rightmost part, up-left the leftmost.
-   * The detached part is always at least `minSplitPieceSec`.
+   * The detached part is always at least `minClipLength`.
    */
   const handleClipSwipeSplitEnd = useCallback(
     (idx: number, side: 'left' | 'right') => {
       publishSplit(
-        splitClipEnd(
-          clips,
-          displayClips,
-          idx,
-          side,
-          mergeScope,
-          minSplitPieceSec,
-        ),
+        splitClipEnd(clips, displayClips, idx, side, mergeScope, minClipLength),
       );
     },
-    [clips, displayClips, mergeScope, minSplitPieceSec, publishSplit],
+    [clips, displayClips, mergeScope, minClipLength, publishSplit],
   );
 
   /*
@@ -526,7 +519,7 @@ export function ProgressBar({
               activeClip={activeClip}
               onActiveClipChange={handleActiveClipChange}
               onSwipeClip={handleClipSwipeGesture}
-              minSplitPieceSec={minSplitPieceSec}
+              minClipLength={minClipLength}
               onPinchMergeClip={handleClipPinchMerge}
               onPinchSplitClip={handleClipPinchSplit}
               getAnalyser={getAnalyser}
@@ -546,7 +539,7 @@ export function ProgressBar({
               activeClip={activeClip}
               repetitions={repetitions}
               onSwipeClip={handleClipSwipeGesture}
-              minSplitPieceSec={minSplitPieceSec}
+              minClipLength={minClipLength}
               onPinchMergeClip={handleClipPinchMerge}
               onPinchSplitClip={handleClipPinchSplit}
               onSeek={onSeek}

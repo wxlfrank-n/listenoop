@@ -41,3 +41,21 @@ describe('settings persistence', () => {
     expect(save).toHaveBeenCalledTimes(2);
   });
 });
+
+it('retires the old split-piece setting and preserves the single clip minimum', async () => {
+  vi.resetModules();
+  localStorage.setItem(
+    'Listeenoop_config',
+    JSON.stringify({
+      minClipLength: 0.7,
+      minSplitPieceSec: 0.4,
+      minSilenceSec: 0.2,
+    }),
+  );
+  const {default: reducer} = await import('./configSlice');
+  const config = reducer(undefined, {type: 'init'});
+  expect(config.minClipLength).toBe(0.7);
+  expect(config).not.toHaveProperty('minSplitPieceSec');
+  expect(config).not.toHaveProperty('minSilenceSec');
+  localStorage.clear();
+});

@@ -18,11 +18,7 @@
 
 import {memo, type ReactNode} from 'react';
 
-import {
-  MIN_SPLIT_PIECE_SEC,
-  splitClipAtLargestGap,
-  type Clip as InitClipData,
-} from '../utils/clips';
+import {splitClipAtLargestGap, type Clip as InitClipData} from '../utils/clips';
 import type {SwipeDirection, WaveWindow} from '../types';
 
 import {Clip} from './Clip';
@@ -48,9 +44,9 @@ interface ClipsProps {
 
   /**
    * Floor a split must leave on each side. Clips with no viable boundary are
-   * rendered as unsplittable. Defaults to the shared minimum.
+   * rendered as unsplittable. The player supplies its configured minimum.
    */
-  minSplitPieceSec?: number;
+  minClipLength?: number;
 
   /**
    * Maps a clip's local position in `clips` to its global
@@ -85,7 +81,7 @@ export const Clips = memo(
     activeClip,
     onActivate,
     onSwipe,
-    minSplitPieceSec = MIN_SPLIT_PIECE_SEC,
+    minClipLength = 0,
     getIdx,
     renderLabel,
   }: ClipsProps) => {
@@ -106,8 +102,7 @@ export const Clips = memo(
 
           const id = getIdx ? getIdx(clip, indexInArray) : indexInArray;
 
-          const canSplit =
-            splitClipAtLargestGap(clip, minSplitPieceSec) !== null;
+          const canSplit = splitClipAtLargestGap(clip, minClipLength) !== null;
 
           return (
             <Clip

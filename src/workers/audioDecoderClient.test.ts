@@ -27,7 +27,6 @@ describe('decoded audio eviction', () => {
       blockMs: 12,
       silenceRatio: 0.01,
       minClipLength: 0.3,
-      minSplitPieceSec: 0.1,
     };
     const first = decodeAudio('/track.mp3', options);
     const rejected = expect(first).rejects.toMatchObject({name: 'AbortError'});
@@ -50,7 +49,7 @@ describe('decoded audio eviction', () => {
       duration: 1,
       numberOfChannels: 1,
       byteLength: 8,
-      clips: {clips: [], gaps: [], minGap: 0},
+      clips: {clips: [], gaps: [], initGap: 0},
     };
     fake.handlers.get('message')!({data: {...response, id: firstId}});
     fake.handlers.get('message')!({data: {...response, id: secondId}});

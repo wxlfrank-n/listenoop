@@ -17,7 +17,7 @@ export interface AnalysisState {
   waveformStatus: WaveformStatus;
   clips: Clip[];
   gaps: number[];
-  minGap: number;
+  initGap: number;
 }
 
 const initialState: AnalysisState = {
@@ -25,7 +25,7 @@ const initialState: AnalysisState = {
   waveformStatus: 'idle',
   clips: [],
   gaps: [],
-  minGap: 0,
+  initGap: 0,
 };
 
 export const analysisSlice = createSlice({
@@ -40,11 +40,11 @@ export const analysisSlice = createSlice({
     },
     setClips(
       state,
-      action: PayloadAction<{clips: Clip[]; gaps: number[]; minGap: number}>,
+      action: PayloadAction<{clips: Clip[]; gaps: number[]; initGap: number}>,
     ) {
       state.clips = action.payload.clips;
       state.gaps = action.payload.gaps;
-      state.minGap = action.payload.minGap;
+      state.initGap = action.payload.initGap;
     },
   },
 });

@@ -22,12 +22,10 @@ export const selectShowAdvancedControls = (s: RootState) =>
 /** Whether a merge/split gesture applies to the whole track or one clip. */
 export const selectMergeScope = (s: RootState) => s.config.mergeScope ?? 'clip';
 /** Smallest piece a split may leave alone. */
-export const selectMinSplitPieceSec = (s: RootState) =>
-  s.config.minSplitPieceSec;
+export const selectMinClipLength = (s: RootState) => s.config.minClipLength;
 
 /**
- * Detection options bundle (blockMs / silenceRatio / minClipLength /
- * minSplitPieceSec) used by the worker's `decode` and `redetect` requests.
+ * Detection options bundle (blockMs / silenceRatio / minClipLength) used by the worker's `decode` and `redetect` requests.
  *
  * Memoized so consumers (`useAudioPlayer` reads this into a ref) don't get a
  * fresh object reference on every store update — without `createSelector`
@@ -42,7 +40,6 @@ export const selectDetectionOptions = createSelector(
     blockMs: config.blockMs,
     silenceRatio: config.silenceRatio,
     minClipLength: config.minClipLength,
-    minSplitPieceSec: config.minSplitPieceSec,
   }),
 );
 
@@ -71,7 +68,7 @@ export interface CurrentAudioInput {
   waveformStatus: RootState['analysis']['waveformStatus'];
   clips: RootState['analysis']['clips'];
   gaps: RootState['analysis']['gaps'];
-  minGap: RootState['analysis']['minGap'];
+  initGap: RootState['analysis']['initGap'];
   currentTime: RootState['player']['currentTime'];
 }
 
@@ -81,7 +78,7 @@ export function toCurrentAudio({
   waveformStatus,
   clips,
   gaps,
-  minGap,
+  initGap,
   currentTime,
 }: CurrentAudioInput): CurrentAudio {
   return {
@@ -91,7 +88,7 @@ export function toCurrentAudio({
     waveformStatus,
     clips,
     gaps,
-    minGap,
+    initGap,
     currentTime,
   };
 }
@@ -104,7 +101,7 @@ export function selectCurrentAudio(s: RootState): CurrentAudio {
     waveformStatus: s.analysis.waveformStatus,
     clips: s.analysis.clips,
     gaps: s.analysis.gaps,
-    minGap: s.analysis.minGap,
+    initGap: s.analysis.initGap,
     currentTime: s.player.currentTime,
   });
 }

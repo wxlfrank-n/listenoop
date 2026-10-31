@@ -66,7 +66,7 @@ export interface StackRowProps {
   onActivate: (idx: number) => void;
   onSwipeClip?: (idx: number, direction: SwipeDirection) => void;
   /** Minimum seconds a split must leave on each side; controls the affordance. */
-  minSplitPieceSec?: number;
+  minClipLength?: number;
   onPlayRange: (start: number, end: number, repetitions: number) => void;
   onSeek: (time: number) => void;
   getCurrentTime: () => number;
@@ -91,7 +91,7 @@ export const StackRow = memo(
     onStopPlayback,
     onActivate,
     onSwipeClip,
-    minSplitPieceSec,
+    minClipLength,
     onPlayRange,
     onSeek,
     getCurrentTime,
@@ -243,7 +243,7 @@ export const StackRow = memo(
             activeClip={activeClip}
             onActivate={onActivate}
             onSwipe={onSwipeClip}
-            minSplitPieceSec={minSplitPieceSec}
+            minClipLength={minClipLength}
             getIdx={getIdx}
             renderLabel={renderLabel}
           />

@@ -7,7 +7,7 @@ A browser-based music player for audio files that automatically breaks each trac
 ## Features
 
 - **Audio playback** (MP3, WAV, OGG, M4A, FLAC, WebM) with waveform visualization
-- **Automatic clip detection** — the player splits each track at silent gaps and highlights the resulting clips on the waveform
+- **Automatic clip detection** — adaptive RMS energy detection groups sound around sustained pauses, with automatic gap grouping and proportional playback padding
 - **Clip looping** — click any clip to play it, repeating it up to 20 times
 - **Merge control** — combine neighboring clips into one with a single slider
 - **Two waveform views** — a stacked multi-row overview or a single horizontally-scrollable row
@@ -147,9 +147,9 @@ Open the **Settings** panel with the gear button in the top-right. Every option 
 | ---------------------- | --------------------------- | ------- | ----------- |
 | **Waveform view**      | Stacked / Single row        | Single row | How clips and audio are displayed |
 | **Skip forward / back**| 5, 10, 15, 20, 30s (or 1–60s custom) | 10s | Interval used by the large skip buttons |
-| **Silence threshold**  | 0.005–0.02 | 0.01 | How quiet a block must be to count as silence. **Lower** values only treat very quiet parts as silence (capped at the detector ceiling) |
-| **Analysis detail**    | 4 / 8 / 12 / 24 (or 2–64ms) | 12ms | Audio chunk size used for detection. **Smaller** = more precise splits, **larger** = faster processing |
-| **Minimum clip length** | 0.2–1s | 0.3s | Detection tries to join shorter clips with a neighbor |
+| **Silence threshold**  | 0.005–0.02 | 0.01 | Sensitivity of the relative RMS and estimated noise-floor thresholds. **Lower** values retain more quiet sound |
+| **Analysis detail** | 6 / 12 / 24 / 48 (or 2–64ms) | 12ms | RMS window size. Smaller windows give finer timing; larger windows smooth brief changes |
+| **Minimum clip length** | 0.3–1s | 0.3s | Detection tries to join shorter clips with a neighbor |
 
 > Detection settings recompute clips for the current track automatically and reset manual clip grouping. Settings remain usable for the current session if browser storage is blocked or full.
 
@@ -176,3 +176,31 @@ Open the **Settings** panel with the gear button in the top-right. Every option 
 ## Support
 
 Report issues or give feedback at the project's issue tracker.
+
+
+### Adaptive silence detection (web preview)
+
+The web detector measures overlapping RMS windows, estimates a recording noise floor,
+uses separate start/stop thresholds, and rejects energy bursts shorter than about 25 ms.
+The sensitivity control affects both relative energy and noise-floor thresholds.
+This is an energy detector, not a speech recognition model: music, breath and changing
+background noise can still be classified as sound.
+
+Initial grouping uses `initGap`, the arithmetic average of the sorted, distinct
+positive values returned by `getClipGaps`, or zero when there are no gaps.
+With one detected gap, that gap is selected and the two intervals are initially
+grouped. Manual split/merge remains available.
+Playback padding extends each interval into 25% of the surrounding silent gaps.
+
+Existing settings migrate automatically. This preview changes web only; the mobile
+apps retain the previous detector until the web behavior has been evaluated.
+
+**Minimum clip length** is the single duration constraint. Settings defaults to
+0.3 seconds and offers a range of 0.3–1 seconds; the detector itself uses
+`options.minClipLength` directly without imposing a separate constant floor. Before `expandClips`, every shorter detected interval merges across
+its nearest gap. If the final isolated interval is still too short, no clip is
+returned for it; normal track playback remains available. The constraint uses
+`end - start`, including any internal pauses in a merged interval, and never
+counts playback padding. Manual splits must leave both resulting intervals at
+least this long. The former **Minimum split piece** setting and the post-expansion
+minimum-length merge-gap search have been removed.

@@ -50,13 +50,13 @@ export function useWaveform(url: string | null): {
     if (!currentUrl) {
       dispatch(setWaveform(null));
       dispatch(setWaveformStatus('idle'));
-      dispatch(setClips({clips: [], gaps: [], minGap: 0}));
+      dispatch(setClips({clips: [], gaps: [], initGap: 0}));
       return;
     }
     dispatch(setWaveformStatus('loading'));
     // Clear the previous track's clips so the UI doesn't briefly show
     // them overlaid on the loading waveform.
-    dispatch(setClips({clips: [], gaps: [], minGap: 0}));
+    dispatch(setClips({clips: [], gaps: [], initGap: 0}));
 
     // Abort the in-flight fetch when the user switches tracks mid-decode so
     // we don't keep downloading a long MP3 we no longer need. The worker's
@@ -73,7 +73,6 @@ export function useWaveform(url: string | null): {
             blockMs: configRef.current.blockMs,
             silenceRatio: configRef.current.silenceRatio,
             minClipLength: configRef.current.minClipLength,
-            minSplitPieceSec: configRef.current.minSplitPieceSec,
           },
           controller.signal,
         );
@@ -94,7 +93,7 @@ export function useWaveform(url: string | null): {
       } catch {
         if (cancelled) return;
         dispatch(setWaveform(null));
-        dispatch(setClips({clips: [], gaps: [], minGap: 0}));
+        dispatch(setClips({clips: [], gaps: [], initGap: 0}));
         dispatch(setWaveformStatus('error'));
       }
     }
@@ -102,7 +101,7 @@ export function useWaveform(url: string | null): {
     load().catch(() => {
       if (cancelled) return;
       dispatch(setWaveform(null));
-      dispatch(setClips({clips: [], gaps: [], minGap: 0}));
+      dispatch(setClips({clips: [], gaps: [], initGap: 0}));
       dispatch(setWaveformStatus('error'));
     });
 

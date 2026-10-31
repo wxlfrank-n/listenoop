@@ -6,7 +6,7 @@
  * URL using whatever config was current when the URL changed, then
  * publishes them to Redux alongside the waveform. This hook is the
  * follow-up: when the user fiddles with `blockMs`, `silenceRatio`,
- * `minClipLength`, or `minSplitPieceSec` (and the URL has finished
+ * `minClipLength` (and the URL has finished
  * decoding), it asks the worker to re-run `getInitClipData` against the
  * cached mono with the new options and publishes the updated clips.
  *
@@ -34,7 +34,7 @@ export function useClipDetection(
 
   useEffect(() => {
     if (!url) {
-      dispatch(setClips({clips: [], gaps: [], minGap: 0}));
+      dispatch(setClips({clips: [], gaps: [], initGap: 0}));
       return;
     }
     // The worker has no cached mono to operate on until the decode finishes.
@@ -63,7 +63,6 @@ export function useClipDetection(
     options.blockMs,
     options.silenceRatio,
     options.minClipLength,
-    options.minSplitPieceSec,
     status,
     dispatch,
   ]);

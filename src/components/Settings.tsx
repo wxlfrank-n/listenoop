@@ -3,14 +3,14 @@
  *
  * Settings are grouped into domain sections, switched with tabs (Appearance /
  * Playback / Clip detection). Every numeric option uses the same slider field:
- * value readout on the right, slider in the middle with min/max captions
- * underneath, and quick presets as subtle ghost chips below. Two-option
+ * minimum, slider with the value in its thumb, and maximum on one line, and quick presets as subtle ghost chips below. Two-option
  * choices (waveform view, merge scope) use the same segmented pill group, and
  * on/off options use the same switch. Ranges live in `CONFIG_RANGES`; values
  * are clamped to stay valid.
  */
 
 import {useCallback, useEffect, useRef, useState} from 'react';
+import {useAppSelector} from '../store/hooks';
 import {useConfig} from '../hooks/useConfig';
 import {useFocusTrap} from '../hooks/useFocusTrap';
 import {CONFIG_RANGES, DEFAULT_CONFIG} from '../store/configSlice';
@@ -60,6 +60,7 @@ interface SliderSettingProps {
   max: number;
   step: number;
   unit?: string;
+  disabled?: boolean;
   onChange: (v: number) => void;
 }
 
@@ -72,35 +73,88 @@ function SliderSetting({
   max,
   step,
   unit = '',
+  disabled = false,
   onChange,
 }: SliderSettingProps) {
   const display = clamp(value, min, max);
+  const [preview, setPreview] = useState(false);
+  const drag = useRef<{x: number; y: number; thumb: boolean} | null>(null);
+  const finishDrag = () => {
+    drag.current = null;
+    setPreview(false);
+  };
   return (
     <div className="settings-field">
-      <div className="settings-field-head">
-        <label className="settings-label">{label}</label>
-        <output className="settings-value">
-          {display}
-          {unit}
-        </output>
-      </div>
+      <label className="settings-label">{label}</label>
       {hint && <p className="settings-hint">{hint}</p>}
-      <input
-        type="range"
-        aria-label={label}
-        className="settings-slider"
-        min={min}
-        max={max}
-        step={step}
-        value={display}
-        onChange={e => onChange(parseFloat(e.target.value))}
-      />
-      <div className="settings-range-captions">
-        <span>
+      <div className="settings-range-row">
+        <span className="settings-range-bound">
           {min}
           {unit}
         </span>
-        <span>
+        <div className="settings-slider-wrap">
+          <input
+            type="range"
+            aria-label={label}
+            className="settings-slider"
+            min={min}
+            max={max}
+            step={step}
+            value={display}
+            disabled={disabled}
+            onPointerDown={event => {
+              if (disabled || !event.isPrimary || event.button !== 0) return;
+              const box = event.currentTarget.getBoundingClientRect();
+              const center =
+                box.left +
+                32 +
+                ((box.width - 64) * (display - min)) / (max - min);
+              drag.current = {
+                x: event.clientX,
+                y: event.clientY,
+                thumb: Math.abs(event.clientX - center) <= 32,
+              };
+              event.currentTarget.setPointerCapture(event.pointerId);
+            }}
+            onPointerMove={event => {
+              const start = drag.current;
+              if (!start || disabled || !start.thumb) return;
+              const dx = Math.abs(event.clientX - start.x),
+                dy = Math.abs(event.clientY - start.y);
+              if (dx >= 3 && dx > dy) setPreview(true);
+            }}
+            onPointerUp={finishDrag}
+            onPointerCancel={finishDrag}
+            onLostPointerCapture={finishDrag}
+            aria-valuetext={`${display}${unit}`}
+            onChange={e => {
+              onChange(parseFloat(e.target.value));
+            }}
+          />
+          {preview && !disabled && (
+            <span
+              className="settings-slider-preview"
+              aria-hidden="true"
+              style={{
+                left: `calc(${((display - min) / (max - min)) * 100}% + ${64 * (0.5 - (display - min) / (max - min))}px)`,
+              }}
+            >
+              {display}
+              {unit}
+            </span>
+          )}
+          <output
+            className="settings-slider-value"
+            aria-hidden="true"
+            style={{
+              left: `calc(${((display - min) / (max - min)) * 100}% + ${64 * (0.5 - (display - min) / (max - min))}px)`,
+            }}
+          >
+            {display}
+            {unit}
+          </output>
+        </div>
+        <span className="settings-range-bound">
           {max}
           {unit}
         </span>
@@ -109,8 +163,11 @@ function SliderSetting({
         {presets.map(val => (
           <button
             key={val}
+            disabled={disabled}
             className={`settings-chip settings-chip--preset ${display === val ? 'settings-chip--active' : ''}`}
-            onClick={() => onChange(val)}
+            onClick={() => {
+              onChange(val);
+            }}
           >
             {val}
             {unit}
@@ -246,11 +303,24 @@ function AppearanceTab() {
 }
 
 function PlaybackTab() {
+  const playing = useAppSelector(s => s.player?.isPlaying ?? false);
   const {config, updateConfig} = useConfig();
   const t = useT();
   const {skipSeconds, repetitions, loopPlaylist, showAdvancedControls} = config;
   return (
     <>
+      <SliderSetting
+        label={t('settings.playbackSpeed')}
+        disabled={playing}
+        hint={t('settings.playbackSpeedHint')}
+        presets={[0.5, 0.75, 1, 1.25, 1.5]}
+        value={config.playbackSpeed}
+        min={CONFIG_RANGES.playbackSpeed.min}
+        max={CONFIG_RANGES.playbackSpeed.max}
+        step={CONFIG_RANGES.playbackSpeed.step}
+        unit="×"
+        onChange={v => updateConfig({playbackSpeed: v})}
+      />
       <SliderSetting
         label={t('settings.skipBy')}
         presets={[5, 10, 15, 30]}

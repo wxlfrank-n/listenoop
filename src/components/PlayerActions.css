@@ -111,7 +111,7 @@
   border-radius: var(--radius-sm);
   font-size: 0.8rem;
   font-weight: 500;
-  color: #fff;
+  color: var(--on-accent);
   transition: background 0.12s;
   animation: player-actions-item 0.15s ease-out backwards;
 }
@@ -119,7 +119,7 @@
 /* Marks the entry whose panel is already open behind the menu. */
 .player-actions__item--active {
   background: rgba(var(--accent-rgb), 0.22);
-  color: var(--accent);
+  color: var(--on-accent);
 }
 
 .player-actions__item:nth-child(2) {

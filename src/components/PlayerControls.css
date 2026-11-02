@@ -1,25 +1,28 @@
 .player-controls {
   flex: none;
-  display: flex;
-  flex-wrap: nowrap;
+  display: grid;
+  grid-template-columns:
+    48px repeat(2, minmax(0, 1fr)) 52px repeat(2, minmax(0, 1fr))
+    48px;
+  justify-items: center;
   align-items: center;
   justify-content: center;
-  gap: 16px;
+  gap: 0;
   width: 100%;
   max-width: 480px;
 }
 .control-btn--play {
-  width: 60px;
-  height: 60px;
-  margin: 0 6px;
+  width: 52px;
+  height: 52px;
+  margin: 0;
   background: var(--accent-dim);
-  color: #fff;
+  color: var(--on-accent);
   box-shadow: 0 2px 12px rgba(var(--accent-dim-rgb), 0.45);
 }
 
 .control-btn--playing {
   background: var(--accent);
-  color: #fff;
+  color: var(--on-accent);
   box-shadow: 0 2px 8px rgba(var(--accent-rgb), 0.35);
   animation: control-pulse 1.6s ease-in-out infinite;
 }
@@ -75,10 +78,112 @@
   display: flex;
   align-items: center;
   justify-content: center;
-  font-size: 0.6rem;
+  font-size: 0.8125rem;
   font-weight: 700;
   pointer-events: none;
   /* The ring's bottom gap lifts its optical center, so the number rides 1px
      low to sit centered in the ring (mirrors the iOS y+1 label offset). */
   transform: translateY(1px);
+}
+
+.playback-speed {
+  position: relative;
+  display: flex;
+  flex: none;
+  align-items: center;
+  justify-content: center;
+  width: 100%;
+  max-width: 48px;
+  min-width: 0;
+  height: 48px;
+  color: var(--text-primary);
+  cursor: ns-resize;
+  touch-action: none;
+  user-select: none;
+  -webkit-user-select: none;
+}
+.playback-speed:focus-visible {
+  outline: 2px solid var(--accent);
+  outline-offset: 2px;
+  border-radius: 4px;
+}
+.playback-speed__window {
+  position: relative;
+  display: block;
+  overflow: hidden;
+  width: 48px;
+  height: 24px;
+  transition: height 120ms ease-out;
+}
+.playback-speed--dragging .playback-speed__window {
+  height: 56px;
+}
+.playback-speed__number {
+  position: absolute;
+  top: calc(50% - 10px);
+  left: 0;
+  width: 100%;
+  line-height: 20px;
+  text-align: center;
+  font-size: 1rem;
+  font-variant-numeric: tabular-nums;
+  transition:
+    transform 120ms ease-out,
+    opacity 120ms ease-out;
+}
+.playback-speed--dragging .playback-speed__number {
+  transition: opacity 80ms linear;
+}
+@media (prefers-reduced-motion: reduce) {
+  .playback-speed__window,
+  .playback-speed__number {
+    transition: none;
+  }
+}
+/* Each transport button fills its cell; the icon stays a separate visual size. */
+.player-controls > .control-btn:not(.control-btn--play) {
+  width: 100%;
+  height: 48px;
+  min-width: 0;
+  border-radius: 8px;
+}
+.player-controls > .control-btn:disabled:not(.control-btn--play) {
+  color: var(--text-secondary);
+  opacity: 0.4;
+}
+
+.playback-speed[aria-disabled='true'] {
+  opacity: 0.55;
+  cursor: default;
+}
+.playback-speed--dragging .playback-speed__window {
+  position: absolute;
+  right: calc(100% + 8px);
+  z-index: 50;
+  background: var(--bg-secondary);
+  border-radius: 4px;
+  box-shadow: 0 2px 10px #0005;
+}
+.playback-speed__rest {
+  font-size: 1rem;
+  font-variant-numeric: tabular-nums;
+}
+
+.playback-speed-spacer {
+  flex: none;
+  width: 100%;
+  max-width: 48px;
+  min-width: 0;
+  height: 48px;
+  pointer-events: none;
+}
+
+.player-controls > .control-btn {
+  max-width: 100%;
+}
+@media (max-width: 360px) {
+  .playback-speed__number,
+  .playback-speed__rest {
+    font-size: 0.875rem;
+  }
 }

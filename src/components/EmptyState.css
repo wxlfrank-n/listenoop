@@ -55,7 +55,7 @@
   border: none;
   border-radius: var(--radius-pill);
   background: var(--accent-dim);
-  color: #fff;
+  color: var(--on-accent);
   font-size: 0.9rem;
   font-weight: 600;
   transition:

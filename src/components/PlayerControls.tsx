@@ -14,6 +14,7 @@
 
 import {memo} from 'react';
 import {useAppSelector} from '../store/hooks';
+import {SpeedControl} from './SpeedControl';
 import {useT} from '../i18n';
 import {
   selectIsPlaying,
@@ -31,6 +32,7 @@ import PauseIcon from '../assets/icons/pause.svg?react';
 import './PlayerControls.css';
 
 interface PlayerControlsProps {
+  clipPlaying?: boolean;
   onTogglePlay: () => void;
   onNext: () => void;
   onPrev: () => void;
@@ -40,6 +42,7 @@ interface PlayerControlsProps {
 
 export const PlayerControls = memo(
   ({
+    clipPlaying = false,
     onTogglePlay,
     onNext,
     onPrev,
@@ -56,13 +59,14 @@ export const PlayerControls = memo(
     const atEnd = duration > 0 && currentTime >= duration;
     return (
       <div className="player-controls">
+        <span className="playback-speed-spacer" aria-hidden="true" />
         <button
           className="control-btn control-btn--skip"
           onClick={onSkipBackward}
-          disabled={!hasTrack || atStart}
+          disabled={!hasTrack || clipPlaying || atStart}
           aria-label={t('player.backSeconds', {seconds: skipSeconds})}
         >
-          <SkipBackIcon width={36} height={36} />
+          <SkipBackIcon width={32} height={32} />
           <span className="control-btn__label" aria-hidden="true">
             {skipSeconds}
           </span>
@@ -70,7 +74,7 @@ export const PlayerControls = memo(
         <button
           className="control-btn"
           onClick={onPrev}
-          disabled={!hasTrack}
+          disabled={!hasTrack || clipPlaying}
           aria-label={t('player.backToStart')}
         >
           <PrevIcon width={20} height={20} />
@@ -90,7 +94,7 @@ export const PlayerControls = memo(
         <button
           className="control-btn"
           onClick={onNext}
-          disabled={!hasTrack}
+          disabled={!hasTrack || clipPlaying}
           aria-label={t('player.skipToEnd')}
         >
           <NextIcon width={20} height={20} />
@@ -98,14 +102,15 @@ export const PlayerControls = memo(
         <button
           className="control-btn control-btn--skip"
           onClick={onSkipForward}
-          disabled={!hasTrack || atEnd}
+          disabled={!hasTrack || clipPlaying || atEnd}
           aria-label={t('player.forwardSeconds', {seconds: skipSeconds})}
         >
-          <SkipForwardIcon width={36} height={36} />
+          <SkipForwardIcon width={32} height={32} />
           <span className="control-btn__label" aria-hidden="true">
             {skipSeconds}
           </span>
         </button>
+        <SpeedControl disabled={isPlaying || clipPlaying} />
       </div>
     );
   },

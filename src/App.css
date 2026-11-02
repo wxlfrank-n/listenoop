@@ -36,6 +36,7 @@
   --bg-panel: #16191e;
   --text-primary: #e7eaee;
   --text-secondary: #9aa3ad;
+  --on-accent: #08111f;
   --accent: #58a6ff;
   --accent-dim: #388bfd;
   --accent-rgb: 88, 166, 255;
@@ -123,6 +124,7 @@ body {
 }
 
 .player-layout {
+  min-width: 0;
   display: flex;
   flex-direction: column;
   flex: 1;
@@ -144,6 +146,7 @@ body {
 }
 
 .player-card {
+  min-width: 0;
   display: flex;
   flex-direction: column;
   align-items: center;

@@ -42,6 +42,7 @@ function isMergeScope(value: unknown): value is MergeScope {
 }
 
 interface ConfigState {
+  playbackSpeed: number;
   skipSeconds: number;
   waveformView: WaveformView;
   blockMs: number;
@@ -57,6 +58,7 @@ interface ConfigState {
 }
 
 export const DEFAULT_CONFIG: ConfigState = {
+  playbackSpeed: 1,
   skipSeconds: 10,
   waveformView: 'horizontal',
   blockMs: 12,
@@ -73,6 +75,7 @@ export const DEFAULT_CONFIG: ConfigState = {
 
 /** Valid numeric ranges for each configurable value (drives the Settings UI). */
 export const CONFIG_RANGES = {
+  playbackSpeed: {min: 0.5, max: 1.5, step: 0.05},
   skipSeconds: {min: 1, max: 60},
   blockMs: {min: 2, max: 64},
   // Capped at the detector's own ceiling (`clips.ts` clamps to 0.02): higher
@@ -151,6 +154,11 @@ function loadConfig(): ConfigState {
         // Every remaining numeric field is clamped: a NaN or out-of-range
         // seed from a corrupted localStorage would otherwise propagate
         // into `audio.currentTime` arithmetic and freeze the playhead.
+        playbackSpeed: clampNumber(
+          parsed.playbackSpeed,
+          CONFIG_RANGES.playbackSpeed,
+          DEFAULT_CONFIG.playbackSpeed,
+        ),
         skipSeconds: clampNumber(
           parsed.skipSeconds,
           CONFIG_RANGES.skipSeconds,

@@ -80,3 +80,24 @@ it('migrates and bounds the expansion rate while preserving older settings', asy
   }
   localStorage.clear();
 });
+
+it('loads and bounds saved speed without dropping older settings', async () => {
+  for (const [stored, expected] of [
+    [{}, 1],
+    [{playbackSpeed: 0.75}, 0.75],
+    [{playbackSpeed: 0.1}, 0.5],
+    [{playbackSpeed: 5}, 1.5],
+    [{playbackSpeed: 'bad'}, 1],
+  ] as const) {
+    vi.resetModules();
+    localStorage.setItem(
+      'Listeenoop_config',
+      JSON.stringify({skipSeconds: 15, ...stored}),
+    );
+    const {default: reducer} = await import('./configSlice');
+    const config = reducer(undefined, {type: 'init'});
+    expect(config.playbackSpeed).toBe(expected);
+    expect(config.skipSeconds).toBe(15);
+  }
+  localStorage.clear();
+});

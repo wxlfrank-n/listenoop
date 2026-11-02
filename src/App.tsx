@@ -68,9 +68,10 @@ export default function App() {
     getAnalyser,
     getCurrentTime,
     playbackError,
+    isClipPlaying,
     retryPlayback,
     nextTrack,
-  } = useAudioPlayer(config.skipSeconds);
+  } = useAudioPlayer(config.skipSeconds, config.playbackSpeed);
 
   // UI state for overlays
   const [showPlaylist, setShowPlaylist] = useState(false);
@@ -173,6 +174,7 @@ export default function App() {
                 getCurrentTime={getCurrentTime}
               />
               <PlayerControls
+                clipPlaying={isClipPlaying}
                 onTogglePlay={togglePlay}
                 onNext={next}
                 onPrev={prev}

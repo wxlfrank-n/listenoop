@@ -17,7 +17,8 @@
 }
 
 .clip-merge__slider {
-  --thumb-w: 10px;
+  --thumb-w: 36px;
+  touch-action: none;
   position: relative;
   flex: 1;
   min-width: 0;
@@ -25,11 +26,11 @@
 
 .clip-merge__bubble {
   position: absolute;
-  bottom: -10px;
-  transform: translate(-50%, -100%);
-  font-size: 0.66rem;
+  top: 50%;
+  transform: translate(-50%, -50%);
+  font-size: 0.875rem;
   font-variant-numeric: tabular-nums;
-  color: var(--accent);
+  color: var(--clip-label-text);
   border: none;
   border-radius: 4px;
   padding: 1px 5px;
@@ -95,11 +96,11 @@
 
 .clip-merge input[type='range']::-webkit-slider-thumb {
   -webkit-appearance: none;
-  width: 10px;
-  height: 10px;
-  background: var(--accent);
-  border-radius: 50%;
-  margin-top: -3.5px;
+  width: var(--thumb-w);
+  height: 24px;
+  background: rgba(var(--accent-rgb), 0.32);
+  border-radius: 4px;
+  margin-top: -10.5px;
   border: none;
 }
 
@@ -110,10 +111,10 @@
 }
 
 .clip-merge input[type='range']::-moz-range-thumb {
-  width: 10px;
-  height: 10px;
-  background: var(--accent);
-  border-radius: 50%;
+  width: var(--thumb-w);
+  height: 24px;
+  background: rgba(var(--accent-rgb), 0.32);
+  border-radius: 4px;
   border: none;
 }
 
@@ -130,38 +131,26 @@
   }
 }
 
-/* Touch devices: make the merge slider thumb large enough to grab with a
-   finger. The clip toolbar itself stays hidden until the progress bar is
-   hovered, matching desktop behavior. */
-@media (hover: none) {
-  .clip-merge input[type='range'] {
-    height: 6px;
-  }
+.clip-merge__slider input:focus-visible {
+  outline: 2px solid var(--accent);
+  outline-offset: 12px;
+}
 
-  .clip-merge__slider {
-    --thumb-w: 22px;
-  }
-
-  .clip-merge__bubble {
-    top: -3px;
-  }
-
-  .clip-merge input[type='range']::-webkit-slider-runnable-track {
-    height: 6px;
-  }
-
-  .clip-merge input[type='range']::-webkit-slider-thumb {
-    width: 22px;
-    height: 22px;
-    margin-top: -8px;
-  }
-
-  .clip-merge input[type='range']::-moz-range-track {
-    height: 6px;
-  }
-
-  .clip-merge input[type='range']::-moz-range-thumb {
-    width: 22px;
-    height: 22px;
-  }
+.clip-merge__preview {
+  position: absolute;
+  bottom: 22px;
+  transform: translateX(-50%);
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  width: var(--thumb-w, 36px);
+  height: 24px;
+  background: rgba(var(--accent-rgb), 0.32);
+  color: var(--clip-label-text);
+  border: none;
+  border-radius: 4px;
+  font-size: 0.875rem;
+  font-variant-numeric: tabular-nums;
+  pointer-events: none;
+  z-index: 10;
 }

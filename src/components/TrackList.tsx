@@ -5,6 +5,7 @@
  */
 
 import type {Track} from '../types';
+import {sortedTrackIndices} from '../utils/trackOrder';
 import {useT} from '../i18n';
 import './TrackList.css';
 
@@ -31,15 +32,20 @@ export function TrackList({
     );
   }
 
+  const sortedTracks = sortedTrackIndices(tracks).map(index => ({
+    track: tracks[index],
+    index,
+  }));
+
   return (
     <div className="track-list">
-      {tracks.map((track, index) => (
+      {sortedTracks.map(({track, index}, position) => (
         <div
           key={track.id}
           className={`track-item ${index === currentTrackIndex ? 'track-item--active' : ''}`}
           role="button"
           tabIndex={0}
-          aria-label={`${index + 1}. ${track.title} — ${track.artist}`}
+          aria-label={`${position + 1}. ${track.title} — ${track.artist}`}
           aria-current={index === currentTrackIndex ? 'true' : undefined}
           onClick={() => onSelectTrack(index)}
           onKeyDown={e => {
@@ -50,7 +56,7 @@ export function TrackList({
           }}
         >
           <div className="track-item__info">
-            <span className="track-item__number">{index + 1}</span>
+            <span className="track-item__number">{position + 1}</span>
             <div className="track-item__text">
               <span className="track-item__title">{track.title}</span>
               <span className="track-item__artist">{track.artist}</span>

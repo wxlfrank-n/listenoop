@@ -65,6 +65,7 @@ export const en = {
   },
 
   reps: {
+    dragHint: 'Slide right for more repeats, left for fewer',
     title: 'Number of times a clip repeats when you click it',
     label: 'Repeats:',
     decrease: 'Decrease repeats',
@@ -109,6 +110,8 @@ export const en = {
     singleRowHint:
       'Show the waveform in one scrollable row that follows playback.',
 
+    playbackSpeed: 'Playback speed',
+    playbackSpeedHint: 'Change speed while preserving the original pitch.',
     skipBy: 'Skip forward or back by',
 
     repeatsPerClip: 'Repeats per clip',
@@ -237,6 +240,7 @@ export const no: Messages = {
   },
 
   reps: {
+    dragHint: 'Skyv til høyre for flere repetisjoner, til venstre for færre',
     title: 'Antall ganger et klipp repeteres n\u00e5r du klikker p\u00e5 det',
     label: 'Repetisjoner:',
     decrease: 'Reduser repetisjoner',
@@ -281,6 +285,8 @@ export const no: Messages = {
     singleRowHint:
       'Vis b\u00f8lgen i en scrollbar rad som f\u00f8lger avspilling.',
 
+    playbackSpeed: 'Avspillingshastighet',
+    playbackSpeedHint: 'Endre hastigheten uten å endre tonehøyden.',
     skipBy: 'Hopp frem eller tilbake med',
 
     repeatsPerClip: 'Repetisjoner per klipp',
@@ -410,6 +416,7 @@ export const zh: Messages = {
   },
 
   reps: {
+    dragHint: '向右滑动增加重复次数，向左滑动减少',
     title: '点击片段后重复播放的次数',
     label: '重复次数：',
     decrease: '减少重复次数',
@@ -453,6 +460,8 @@ export const zh: Messages = {
     stacked: '多行',
     singleRowHint: '在一行中显示完整波形，并在播放时自动跟随当前位置。',
 
+    playbackSpeed: '播放速度',
+    playbackSpeedHint: '调整播放速度并保持原始音高。',
     skipBy: '快进或后退',
 
     repeatsPerClip: '片段重复次数',

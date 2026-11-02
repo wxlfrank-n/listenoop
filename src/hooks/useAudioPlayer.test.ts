@@ -112,6 +112,9 @@ vi.mock('../workers/audioDecoderClient', () => ({
  */
 
 class FakeAudio extends EventTarget {
+  playbackRate = 1;
+  defaultPlaybackRate = 1;
+  preservesPitch = false;
   currentTime = 0;
 
   duration = 100;
@@ -247,6 +250,41 @@ describe('useAudioPlayer.playRange', () => {
    * Initial start
    * ----------------------------------------------------------
    */
+
+  it('changes speed during a clip without changing pitch or restarting playback', () => {
+    const {result, rerender} = renderHook(
+      ({speed}) => useAudioPlayer(5, speed),
+      {
+        initialProps: {speed: 0.75},
+      },
+    );
+    expect(audio.playbackRate).toBe(0.75);
+    expect(audio.defaultPlaybackRate).toBe(0.75);
+    expect(audio.preservesPitch).toBe(true);
+    act(() => result.current.playRange(10, 20, 3));
+    audio.currentTime = 12;
+    const plays = audio.play.mock.calls.length;
+    const loads = audio.load.mock.calls.length;
+    rerender({speed: 0.5});
+    expect(audio.playbackRate).toBe(0.5);
+    expect(audio.preservesPitch).toBe(true);
+    expect(audio.currentTime).toBe(12);
+    expect(audio.play.mock.calls.length).toBe(plays);
+    expect(audio.load.mock.calls.length).toBe(loads);
+    rerender({speed: 1});
+    expect(audio.playbackRate).toBe(1);
+  });
+
+  it('bounds speed and falls back safely for invalid values', () => {
+    const {rerender} = renderHook(({speed}) => useAudioPlayer(5, speed), {
+      initialProps: {speed: 0.1},
+    });
+    expect(audio.playbackRate).toBe(0.5);
+    rerender({speed: 10});
+    expect(audio.playbackRate).toBe(1.5);
+    rerender({speed: NaN});
+    expect(audio.playbackRate).toBe(1);
+  });
 
   it('starts at the requested range start', async () => {
     const {result} = renderHook(() => useAudioPlayer(5));

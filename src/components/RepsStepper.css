@@ -3,6 +3,7 @@
   align-items: center;
   gap: 8px;
   padding: 0 2px;
+  flex: none;
 }
 
 .clip-reps__label {
@@ -11,54 +12,87 @@
   white-space: nowrap;
 }
 
-.clip-reps__stepper {
-  display: flex;
-  align-items: center;
-  gap: 2px;
-}
-
-.clip-reps__stepper button {
-  width: 22px;
-  height: 22px;
+.clip-reps__dial {
+  position: relative;
   display: flex;
   align-items: center;
   justify-content: center;
-  font-size: 0.9rem;
-  line-height: 1;
-  color: var(--text-primary);
-  background: var(--bg-tertiary);
-  border: 1px solid var(--bg-tertiary);
+  width: 48px;
+  height: 30px;
+  padding: 0;
+  box-sizing: border-box;
+  color: var(--clip-label-text);
+  background: rgba(var(--accent-rgb), 0.32);
+  border: none;
   border-radius: 4px;
-  outline: none;
+  cursor: ew-resize;
+  touch-action: none;
+  user-select: none;
+  -webkit-user-select: none;
 }
 
-.clip-reps__stepper button:active:not(:disabled) {
-  animation: clip-reps-stepper-press 0.3s ease-out;
+.clip-reps__dial:focus-visible {
+  outline: 2px solid var(--accent);
+  outline-offset: 3px;
 }
 
-/*
- * Press flash (replaces the former :hover accent): flat at rest, the accent
- * look flashes while the button is held.
- */
-@keyframes clip-reps-stepper-press {
-  from {
-    border-color: var(--accent);
-    color: var(--accent);
-    background: var(--bg-hover);
-  }
+.clip-reps__dial:active:not([aria-disabled='true']) {
+  color: var(--accent);
 }
 
+.clip-reps__dial[aria-disabled='true'] {
+  opacity: 0.35;
+  cursor: default;
+}
+
+.clip-reps__icon {
+  position: absolute;
+  inset: 0;
+  width: 48px;
+  height: 30px;
+  pointer-events: none;
+}
+.clip-reps__window {
+  position: relative;
+  overflow: hidden;
+  height: 24px;
+  width: 24px;
+  transition: width 120ms ease-out;
+}
+.clip-reps__dial--dragging .clip-reps__window {
+  width: 44px;
+}
 .clip-reps__value {
-  min-width: 26px;
+  position: absolute;
+  left: calc(50% - 10px);
+  width: 20px;
+  line-height: 24px;
   text-align: center;
-  font-size: 0.8rem;
+  font-size: 0.875rem;
   font-variant-numeric: tabular-nums;
-  color: var(--text-primary);
+  transition:
+    transform 120ms ease-out,
+    opacity 120ms ease-out;
+}
+.clip-reps__dial--dragging .clip-reps__value {
+  transition: opacity 80ms linear;
+}
+@media (prefers-reduced-motion: reduce) {
+  .clip-reps__window,
+  .clip-reps__value {
+    transition: none;
+  }
 }
 
-@media (max-width: 767px) {
-  .clip-reps {
-    flex: none;
-    width: auto;
-  }
+.clip-reps__dial--dragging .clip-reps__window {
+  position: absolute;
+  bottom: calc(100% + 8px);
+  z-index: 50;
+  background: var(--bg-secondary);
+  border-radius: 4px;
+  box-shadow: 0 2px 10px #0005;
+}
+.clip-reps__rest {
+  font-size: 0.875rem;
+  font-variant-numeric: tabular-nums;
 }

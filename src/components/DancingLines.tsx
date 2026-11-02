@@ -142,7 +142,8 @@ export const DancingLines = memo(
               const v = Math.abs(samples[s]!);
               if (v > peak) peak = v;
             }
-            const v = Math.min(1, Math.pow(peak, 0.55) * 3);
+            // Soft compression keeps stronger passages moving instead of flattening at full height.
+            const v = 1 - Math.exp(-Math.pow(peak, 0.55) * 2);
             const prev145 = levels[i] ?? 0;
             levels[i] = prev145 + (v - prev145) * SMOOTHING;
           }
@@ -158,7 +159,8 @@ export const DancingLines = memo(
         ctx.fillStyle = getCssVar('--accent');
         const bw = cw / BAR_COUNT;
         const base = ch - 4;
-        const maxH = ch - 8;
+        // Reserve 10% of the strip even at the strongest level.
+        const maxH = Math.max(0, ch - 8) * 0.9;
         for (let i = 0; i < BAR_COUNT; i++) {
           const h = Math.max(MIN_BAR_HEIGHT_PX, levels[i]! * maxH);
           const x = i * bw + bw * 0.25;

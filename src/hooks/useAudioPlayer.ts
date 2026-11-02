@@ -1,5 +1,6 @@
 ﻿import {useRef, useCallback, useEffect} from 'react';
 import type {Track} from '../types';
+import {adjacentTrackIndex} from '../utils/trackOrder';
 import {useState} from 'react';
 import {decodeAudio, evictAudio} from '../workers/audioDecoderClient';
 import {initializeAudioContext} from '../utils/audio';
@@ -43,7 +44,8 @@ function snatchToStart(audio: HTMLAudioElement, time: number) {
   });
 }
 
-export function useAudioPlayer(skipSeconds: number) {
+export function useAudioPlayer(skipSeconds: number, playbackSpeed = 1) {
+  const [isClipPlaying, setIsClipPlaying] = useState(false);
   const [playbackError, setPlaybackError] = useState(false);
   const reportPlaybackError = useCallback((error: unknown) => {
     if (error instanceof DOMException && error.name === 'AbortError') return;
@@ -76,6 +78,16 @@ export function useAudioPlayer(skipSeconds: number) {
   });
 
   const audioRef = useRef<HTMLAudioElement>(new Audio());
+  useEffect(() => {
+    const audio = audioRef.current;
+    const speed = Number.isFinite(playbackSpeed)
+      ? Math.min(1.5, Math.max(0.5, playbackSpeed))
+      : 1;
+    // Keep pitch unchanged; defaultPlaybackRate also survives loading a new source.
+    audio.preservesPitch = true;
+    audio.defaultPlaybackRate = speed;
+    audio.playbackRate = speed;
+  }, [playbackSpeed]);
   const nextRef = useRef<() => void>(() => {});
   const expectedRawUrlRef = useRef<string | null>(null);
   const trackLoadIdRef = useRef(0);
@@ -295,7 +307,7 @@ export function useAudioPlayer(skipSeconds: number) {
     nextRef.current = () => {
       const s = getPlayer();
       if (s.tracks.length === 0) return;
-      const nextIndex = (s.currentTrackIndex + 1) % s.tracks.length;
+      const nextIndex = adjacentTrackIndex(s.tracks, s.currentTrackIndex, 1);
       const track = s.tracks[nextIndex];
       if (!track) return;
       startTrack(audioRef.current, track.url).catch(err => {
@@ -316,8 +328,7 @@ export function useAudioPlayer(skipSeconds: number) {
     (offset: -1 | 1, atEnd = false) => {
       const s = getPlayer();
       if (s.tracks.length === 0) return;
-      const index =
-        (s.currentTrackIndex + offset + s.tracks.length) % s.tracks.length;
+      const index = adjacentTrackIndex(s.tracks, s.currentTrackIndex, offset);
       const track = s.tracks[index];
       if (!track) return;
       startTrack(audioRef.current, track.url, {play: false, atEnd}).catch(
@@ -441,6 +452,7 @@ export function useAudioPlayer(skipSeconds: number) {
     rangeEndedStopRef.current?.();
     rangeEndedStopRef.current = null;
     audio.dataset.clipLoopActive = '0';
+    setIsClipPlaying(false);
     suppressRangePauseRef.current = false;
   }, []);
 
@@ -489,6 +501,7 @@ export function useAudioPlayer(skipSeconds: number) {
    *  - Already at the end: go to the start of the next track, paused.
    */
   const next = useCallback(() => {
+    if (audioRef.current.dataset.clipLoopActive === '1') return;
     const audio = audioRef.current;
     const duration = audio.duration;
     if (!Number.isFinite(duration) || duration <= 0) return;
@@ -518,6 +531,7 @@ export function useAudioPlayer(skipSeconds: number) {
    *  - Already at the start: go to the end of the previous track, paused.
    */
   const prev = useCallback(() => {
+    if (audioRef.current.dataset.clipLoopActive === '1') return;
     const audio = audioRef.current;
     holdAtEndRef.current = false;
 
@@ -656,6 +670,7 @@ export function useAudioPlayer(skipSeconds: number) {
   );
 
   const skipForward = useCallback(() => {
+    if (audioRef.current.dataset.clipLoopActive === '1') return;
     const audio = audioRef.current;
     holdAtEndRef.current = false;
     const newTime = Math.min(
@@ -667,6 +682,7 @@ export function useAudioPlayer(skipSeconds: number) {
   }, [dispatch, skipSeconds]);
 
   const skipBackward = useCallback(() => {
+    if (audioRef.current.dataset.clipLoopActive === '1') return;
     const audio = audioRef.current;
     holdAtEndRef.current = false;
     const newTime = Math.max(audio.currentTime - skipSeconds, 0);
@@ -704,6 +720,7 @@ export function useAudioPlayer(skipSeconds: number) {
       stopRangeMonitoring();
 
       audio.dataset.clipLoopActive = '1';
+      setIsClipPlaying(true);
 
       const runId = ++rangeRunIdRef.current;
 
@@ -750,6 +767,7 @@ export function useAudioPlayer(skipSeconds: number) {
         rangeEndedStopRef.current = null;
 
         audio.dataset.clipLoopActive = '0';
+        setIsClipPlaying(false);
       };
 
       const abortLoop = () => {
@@ -1101,6 +1119,7 @@ export function useAudioPlayer(skipSeconds: number) {
   return {
     state,
     playbackError,
+    isClipPlaying,
     retryPlayback: () => {
       const s = getPlayer();
       const track = s.tracks[s.currentTrackIndex];

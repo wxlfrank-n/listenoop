@@ -33,7 +33,8 @@ export function TrackList({
   }
 
   const sortedTracks = sortedTrackIndices(tracks).map(index => ({
-    track: tracks[index],
+    // Indices come from mapping over `tracks`, so the lookup always hits.
+    track: tracks[index]!,
     index,
   }));
 

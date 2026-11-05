@@ -14,7 +14,7 @@ describe('sorted playlist navigation', () => {
     expect(sortedTrackIndices(tracks)).toEqual([1, 2, 0]);
     expect(adjacentTrackIndex(tracks, 1, 1)).toBe(2);
     expect(adjacentTrackIndex(tracks, 2, -1)).toBe(1);
-    expect(tracks[0].title).toBe('Zulu');
+    expect(tracks[0]?.title).toBe('Zulu');
   });
   it('wraps at both ends in display order', () => {
     expect(adjacentTrackIndex(tracks, 0, 1)).toBe(1);

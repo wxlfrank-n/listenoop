@@ -6,7 +6,7 @@ function luminance(hex: string) {
     const value = parseInt(hex.slice(i, i + 2), 16) / 255;
     return value <= 0.04045 ? value / 12.92 : ((value + 0.055) / 1.055) ** 2.4;
   });
-  return rgb[0] * 0.2126 + rgb[1] * 0.7152 + rgb[2] * 0.0722;
+  return rgb[0]! * 0.2126 + rgb[1]! * 0.7152 + rgb[2]! * 0.0722;
 }
 function contrast(a: string, b: string) {
   const x = luminance(a),

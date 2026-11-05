@@ -2,12 +2,13 @@ import type {Track} from '../types';
 
 export function sortedTrackIndices(tracks: Track[]): number[] {
   return tracks
-    .map((_, index) => index)
+    .map((track, index) => ({track, index}))
     .sort((a, b) =>
-      tracks[a].title.localeCompare(tracks[b].title, undefined, {
+      a.track.title.localeCompare(b.track.title, undefined, {
         sensitivity: 'base',
       }),
-    );
+    )
+    .map(({index}) => index);
 }
 
 export function adjacentTrackIndex(
@@ -18,6 +19,7 @@ export function adjacentTrackIndex(
   const order = sortedTrackIndices(tracks);
   if (!order.length) return -1;
   const position = order.indexOf(current);
-  if (position < 0) return offset === 1 ? order[0] : order[order.length - 1];
-  return order[(position + offset + order.length) % order.length];
+  // `order` is non-empty here, so every access below is in range.
+  if (position < 0) return offset === 1 ? order[0]! : order[order.length - 1]!;
+  return order[(position + offset + order.length) % order.length]!;
 }

@@ -40,6 +40,41 @@ beforeAll(() => {
 });
 
 describe('Clips list', () => {
+  it('renders only the previous and next active clips when selection changes', () => {
+    const clips = [0, 1, 2, 3].map(i => ({
+      start: i * 2,
+      end: i * 2 + 1,
+      vStart: i * 2,
+      vEnd: i * 2 + 1,
+    }));
+    const renderLabel = vi.fn(
+      (id: number, _clip: InitClipData, _index: number, active: boolean) => (
+        <span>
+          {id}:{String(active)}
+        </span>
+      ),
+    );
+    const {rerender, props, container} = renderClips({
+      clips,
+      activeClip: 0,
+      renderLabel,
+    });
+    renderLabel.mockClear();
+    rerender(<Clips {...props} activeClip={2} />);
+    expect(renderLabel.mock.calls.map(([id]) => id)).toEqual([0, 2]);
+    expect(container.querySelectorAll('.waveform-clip--active')).toHaveLength(
+      1,
+    );
+    expect(
+      container
+        .querySelector('[data-clip-idx="2"]')
+        ?.getAttribute('aria-pressed'),
+    ).toBe('true');
+    renderLabel.mockClear();
+    rerender(<Clips {...props} activeClip={-1} />);
+    expect(renderLabel.mock.calls.map(([id]) => id)).toEqual([2]);
+  });
+
   it('renders only clips intersecting the window, preserving array indices', () => {
     const clips: InitClipData[] = [
       {start: 1, end: 3, vStart: 1, vEnd: 3},
@@ -61,7 +96,7 @@ describe('Clips list', () => {
     expect(getIdx).toHaveBeenCalledWith(clips[0], 0);
     expect(getIdx).toHaveBeenCalledWith(clips[2], 2);
     expect(getIdx).toHaveBeenCalledTimes(2);
-    expect(renderLabel).toHaveBeenCalledWith(42, clips[2], 2);
+    expect(renderLabel).toHaveBeenCalledWith(42, clips[2], 2, false);
     expect(container.querySelector('[data-label="42"]')).not.toBeNull();
   });
 

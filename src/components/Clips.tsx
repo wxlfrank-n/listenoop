@@ -18,7 +18,7 @@
 
 import {memo, type ReactNode} from 'react';
 
-import {splitClipAtLargestGap, type Clip as InitClipData} from '../utils/clips';
+import type {Clip as InitClipData} from '../utils/clips';
 import type {SwipeDirection, WaveWindow} from '../types';
 
 import {Clip} from './Clip';
@@ -67,6 +67,7 @@ interface ClipsProps {
     id: number,
     clip: InitClipData,
     indexInArray: number,
+    active: boolean,
   ) => ReactNode;
 }
 
@@ -102,8 +103,6 @@ export const Clips = memo(
 
           const id = getIdx ? getIdx(clip, indexInArray) : indexInArray;
 
-          const canSplit = splitClipAtLargestGap(clip, minClipLength) !== null;
-
           return (
             <Clip
               key={id}
@@ -111,8 +110,9 @@ export const Clips = memo(
               window={window}
               id={id}
               active={id === activeClip}
-              canSplit={canSplit}
-              label={renderLabel?.(id, clip, indexInArray)}
+              minClipLength={minClipLength}
+              renderLabel={renderLabel}
+              indexInArray={indexInArray}
               onPlayRange={onPlayRange}
               repetitions={repetitions}
               playing={playing}

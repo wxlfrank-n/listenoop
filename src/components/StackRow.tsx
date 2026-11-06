@@ -192,17 +192,17 @@ export const StackRow = memo(
     );
 
     const renderLabel = useCallback(
-      (id: number, clip: InitClipData) => (
+      (id: number, clip: InitClipData, _index: number, active: boolean) => (
         <ClipLabel
           key={`lbl-${id}`}
           {...clipLabelProps({
             id,
             clip,
-            activeClip,
+            activeClip: active ? id : -1,
           })}
         />
       ),
-      [activeClip],
+      [],
     );
 
     return (

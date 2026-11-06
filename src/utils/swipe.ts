@@ -79,14 +79,16 @@ function finishSplit(
   // is no longer merged.
   const mergeGap = Math.max(0, split.gap - 0.000001);
 
-  const nextClips = mergeClipsByGap(clips, mergeGap);
+  const adjustMergeGap = mergeGap === 0 ? mergeGap - 0.000001 : mergeGap;
+
+  const nextClips = mergeClipsByGap(clips, adjustMergeGap);
 
   const activeClip = groupContaining(nextClips, clip.children![0]!);
 
   return nextClips.length > 0
     ? {
         clips: nextClips,
-        mergeGap,
+        mergeGap: adjustMergeGap,
         activeClip: activeClip === -1 ? 0 : activeClip,
         pieces: split.pieces,
       }

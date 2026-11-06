@@ -21,8 +21,8 @@ const CLIP_PLAY_MARGIN = 0.1;
 /** Small screens retain the time window calculated for a 600px viewport. */
 export const SMALL_VIEWPORT_THRESHOLD_PX = 600;
 
-/** A minimum-length clip occupies 27px above the small-screen threshold. */
-const MIN_CLIP_WIDTH_PX = 27;
+/** A minimum-length clip occupies 45px above the small-screen threshold. */
+const MIN_CLIP_WIDTH_PX = 45;
 
 export function getBaseWindowSecs(width: number): number {
   if (width >= 1600) return 32;

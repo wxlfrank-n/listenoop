@@ -8,8 +8,7 @@ export function localBuildPaths(root, env) {
     throw new Error('Local builds require VITE_BASE_URL=/folder/ or /.');
   }
   const source = resolve(root, env.VITE_OUT_DIR || 'dist');
-  const deployRoot = resolve(root, '.local-deploy');
-  const destination = resolve(deployRoot, base.slice(1, -1));
+  const destination = resolve(root, base.slice(1, -1));
   const inside = (parent, child) => {
     const path = relative(parent, child);
     return (
@@ -21,15 +20,15 @@ export function localBuildPaths(root, env) {
   };
   if (
     !inside(root, source) ||
-    source === deployRoot ||
-    inside(source, deployRoot) ||
-    inside(deployRoot, source)
+    source === destination ||
+    inside(source, destination) ||
+    inside(destination, source)
   ) {
     throw new Error(
       'Build output must be inside the project and separate from .local-deploy.',
     );
   }
-  for (const path of [deployRoot, destination]) {
+  for (const path of [destination]) {
     if (existsSync(path) && lstatSync(path).isSymbolicLink()) {
       throw new Error('Local deployment folders must not be symbolic links.');
     }

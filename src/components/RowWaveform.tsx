@@ -17,6 +17,31 @@ import './RowWaveform.css';
 
 const PAD = 4;
 
+function renderRowClipLabel(
+  id: number,
+  clip: InitClipData,
+  _index: number,
+  active: boolean,
+) {
+  return (
+    <div
+      data-row-clip-label
+      data-clip-start={clip.start}
+      data-clip-end={clip.end}
+      style={{
+        position: 'absolute',
+        left: '50%',
+        top: '50%',
+        transform: 'translate(-50%, -50%)',
+      }}
+    >
+      <ClipLabel
+        {...clipLabelProps({id, clip, activeClip: active ? id : -1})}
+      />
+    </div>
+  );
+}
+
 export interface RowWaveformProps {
   waveform: WaveformData;
   displayClips: InitClipData[];
@@ -249,28 +274,7 @@ export const RowWaveform = memo(
                 onActivate={onActiveClipChange}
                 onSwipe={onSwipeClip}
                 minClipLength={minClipLength}
-                renderLabel={(id, c) => (
-                  <div
-                    key={`hlbl-${id}`}
-                    data-row-clip-label
-                    data-clip-start={c.start}
-                    data-clip-end={c.end}
-                    style={{
-                      position: 'absolute',
-                      left: '50%',
-                      top: '50%',
-                      transform: 'translate(-50%, -50%)',
-                    }}
-                  >
-                    <ClipLabel
-                      {...clipLabelProps({
-                        id,
-                        clip: c,
-                        activeClip,
-                      })}
-                    />
-                  </div>
-                )}
+                renderLabel={renderRowClipLabel}
               />
             </div>
             <WaveformCursor

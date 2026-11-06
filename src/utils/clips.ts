@@ -4,7 +4,6 @@
  * short onset hold to avoid transient clicks. Short pauses remain editable
  * boundaries; the average detected gap determines initial grouping.
  */
-
 /** A single detected audio segment, in seconds. */
 export interface Clip {
   start: number;
@@ -15,7 +14,6 @@ export interface Clip {
   children?: Clip[];
   expanded?: boolean;
 }
-
 /** User-supplied silence-split parameters (config-driven). */
 export interface SplitOptions {
   /** RMS window in milliseconds; frames overlap by at least half a window. */
@@ -26,24 +24,22 @@ export interface SplitOptions {
   minClipLength: number;
   /** Fraction of each surrounding silent gap included in playback (0.25–0.4). */
   expansionRate?: number;
+  /** Only clips longer than this many seconds are considered for valley splitting. Default: 1. */
+  longClipThreshold?: number;
 }
-
 export interface InitClipData {
   clips: Clip[];
   gaps: number[];
   initGap: number;
 }
-
 interface AnalysisWindow {
   windowSize: number;
   hopSize: number;
 }
-
 interface SoundThresholds {
   onsetThreshold: number;
   offsetThreshold: number;
 }
-
 /** Detect sound islands, enforce the minimum, then pad and choose initial grouping. */
 export function getInitClipData(
   data: Float32Array | null,
@@ -64,17 +60,16 @@ export function getInitClipData(
   const rms = calculateFrameRms(data, window);
   const thresholds = estimateSoundThresholds(rms, options.silenceRatio);
   const clips = detectSoundClips(rms, window, thresholds, sampleRate, duration);
+  const envelope = smoothLogEnergy(rms, window.hopSize / sampleRate);
   const expansionRate = Math.max(
     0.25,
     Math.min(0.4, finiteOr(options.expansionRate, 0.25)),
   );
-  return finalizeClips(clips, options.minClipLength, duration, expansionRate);
+  return finalizeClips(clips, options.minClipLength, duration, expansionRate, envelope, window.hopSize / sampleRate, finiteOr(options.longClipThreshold, 1));
 }
-
 function finiteOr(value: number | undefined, fallback: number): number {
   return value !== undefined && Number.isFinite(value) ? value : fallback;
 }
-
 /** Convert the analysis window and hop from time to integer sample counts. */
 function createAnalysisWindow(
   sampleRate: number,
@@ -88,7 +83,6 @@ function createAnalysisWindow(
   );
   return {windowSize, hopSize};
 }
-
 /** Measure the energy of each overlapping frame without rescanning samples. */
 function calculateFrameRms(
   data: Float32Array,
@@ -117,7 +111,6 @@ function calculateFrameRms(
   }
   return rms;
 }
-
 /** Estimate the recording's noise/signal levels and its start/stop thresholds. */
 function estimateSoundThresholds(
   rms: Float32Array,
@@ -158,7 +151,6 @@ function estimateSoundThresholds(
   const offsetThreshold = onsetThreshold / hysteresisRatio;
   return {onsetThreshold, offsetThreshold};
 }
-
 /** Apply onset hold and hysteresis to turn frame energy into sound intervals. */
 function detectSoundClips(
   rms: Float32Array,
@@ -208,20 +200,103 @@ function detectSoundClips(
   finish(frameCount);
   return clips;
 }
-
+/** Smooth log RMS over a 15 ms radius for the second-pass valley search. */
+function smoothLogEnergy(rms: Float32Array, hopSeconds: number): Float32Array {
+  const db = new Float32Array(rms.length);
+  for (let i = 0; i < rms.length; i++) db[i] = 20 * Math.log10(Math.max(rms[i]!, 1e-8));
+  const radius = Math.max(1, Math.round(0.015 / hopSeconds));
+  const prefix = new Float64Array(db.length + 1);
+  for (let i = 0; i < db.length; i++) prefix[i + 1] = prefix[i]! + db[i]!;
+  const smooth = new Float32Array(db.length);
+  for (let i = 0; i < db.length; i++) {
+    const from = Math.max(0, i - radius);
+    const to = Math.min(db.length, i + radius + 1);
+    smooth[i] = (prefix[to]! - prefix[from]!) / (to - from);
+  }
+  return smooth;
+}
+/** Split only originally long clips at as many valid local energy valleys as possible. */
+function splitLongClipsAtValleys(clips: Clip[], db: Float32Array, hopSeconds: number, minClipLength: number, longClipThreshold: number): Clip[] {
+  if (!Number.isFinite(longClipThreshold) || longClipThreshold <= 0 || !Number.isFinite(hopSeconds) || hopSeconds <= 0 || !db.length) return clips;
+  const minimum = Math.max(0, minClipLength);
+  const result: Clip[] = [];
+  for (const clip of clips) {
+    if (clip.end - clip.start <= longClipThreshold || clip.end - clip.start < 2 * minimum) {
+      result.push(clip);
+      continue;
+    }
+    const first = Math.max(1, Math.ceil((clip.start + minimum) / hopSeconds));
+    const last = Math.min(db.length - 2, Math.floor((clip.end - minimum) / hopSeconds));
+    const candidates: {time: number; depth: number}[] = [];
+    // Each flat-bottomed valley contributes one candidate, not one per frame.
+    for (let i = first; i <= last;) {
+      const plateauStart = i;
+      while (i < last && db[i + 1]! === db[plateauStart]!) i++;
+      const plateauEnd = i;
+      const level = db[plateauStart]!;
+      if (level < db[plateauStart - 1]! && level < db[plateauEnd + 1]!) {
+        const center = Math.floor((plateauStart + plateauEnd) / 2);
+        const time = center * hopSeconds;
+        if (time > clip.start && time < clip.end && time - clip.start + 1e-9 >= minimum && clip.end - time + 1e-9 >= minimum) {
+          const depth = Math.min(db[plateauStart - 1]!, db[plateauEnd + 1]!) - level;
+          candidates.push({time, depth});
+        }
+      }
+      i++;
+    }
+    if (!candidates.length) {
+      result.push(clip);
+      continue;
+    }
+    // Dynamic programming: maximize the number of valid clips; for equal counts,
+    // prefer stronger valleys. Every neighboring boundary must be >= minimum apart.
+    const counts = new Int32Array(candidates.length);
+    const scores = new Float64Array(candidates.length);
+    const previous = new Int32Array(candidates.length).fill(-1);
+    let eligible = -1;
+    let bestPrevious = -1;
+    const better = (a: number, b: number): boolean => a >= 0 && (b < 0 || counts[a]! > counts[b]! || (counts[a] === counts[b] && scores[a]! > scores[b]!));
+    for (let i = 0; i < candidates.length; i++) {
+      const candidate = candidates[i]!;
+      while (eligible + 1 < i && candidate.time - candidates[eligible + 1]!.time + 1e-9 >= minimum) {
+        eligible++;
+        if (better(eligible, bestPrevious)) bestPrevious = eligible;
+      }
+      previous[i] = bestPrevious;
+      counts[i] = (bestPrevious < 0 ? 1 : counts[bestPrevious]! + 1);
+      scores[i] = candidate.depth + (bestPrevious < 0 ? 0 : scores[bestPrevious]!);
+    }
+    let best = -1;
+    for (let i = 0; i < candidates.length; i++) if (better(i, best)) best = i;
+    const boundaries: number[] = [];
+    for (let i = best; i >= 0; i = previous[i]!) boundaries.push(candidates[i]!.time);
+    boundaries.reverse();
+    let start = clip.start;
+    for (const end of [...boundaries, clip.end]) {
+      result.push({start, end, vStart: start, vEnd: end});
+      start = end;
+    }
+  }
+  return result;
+}
 /** Enforce unpadded lengths before adding playback padding and the merge gap. */
 function finalizeClips(
   clips: Clip[],
   minClipLength: number,
   duration: number,
   expansionRate: number,
+  envelope: Float32Array,
+  hopSeconds: number,
+  longClipThreshold: number,
 ): InitClipData {
   // Overlapping windows may touch. Coalesce those without manufacturing a gap.
   clips = mergeClipsByGap(clips, 0);
+  clips = splitLongClipsAtValleys(clips, envelope, hopSeconds, minClipLength, longClipThreshold);
   clips = enforceMinClipLength(clips, minClipLength);
   if (!clips.length) return {clips: [], gaps: [], initGap: 0};
   expandClips(clips, duration, expansionRate);
   const gaps = getClipGaps(clips);
+  if(gaps.length > 0 && gaps[0] === 0) gaps[0] = -0.000001; // Avoid zero merge gap, which would prevent any merging.
   return {
     clips,
     gaps,
@@ -230,7 +305,6 @@ function finalizeClips(
       : 0,
   };
 }
-
 function expandClips(
   clips: Clip[],
   audioDuration: number,
@@ -250,7 +324,6 @@ function expandClips(
   prev.vEnd = prev.end + expansionRate * (audioDuration - prev.end);
   prev.expanded = true;
 }
-
 /**
  * Virtually merge consecutive clips whose intervening gap (in seconds) is at
  * most `mergeGap`. Each merged group becomes a parent clip spanning the first
@@ -258,10 +331,8 @@ function expandClips(
  */
 export function mergeClipsByGap(clips: Clip[], mergeGap: number): Clip[] {
   if (clips.length === 0) return [];
-
   const result: Clip[] = [];
   let group: Clip[] = [clips[0]!];
-
   const flush = () => {
     if (group.length === 1) {
       result.push(group[0]!);
@@ -278,7 +349,6 @@ export function mergeClipsByGap(clips: Clip[], mergeGap: number): Clip[] {
     }
     group = [];
   };
-
   for (let i = 1; i < clips.length; i++) {
     const next = clips[i]!;
     const gap = next.start - group[group.length - 1]!.end;
@@ -292,7 +362,6 @@ export function mergeClipsByGap(clips: Clip[], mergeGap: number): Clip[] {
   flush();
   return result;
 }
-
 /**
  * Distinct positive gaps between consecutive clips (seconds), ascending.
  * An optional minimum can be seeded for legacy UI compatibility.
@@ -301,19 +370,17 @@ export function getClipGaps(clips: Clip[]): number[] {
   const gaps: number[] = [];
   for (let i = 1; i < clips.length; i++) {
     const gap = clips[i]!.start - clips[i - 1]!.end;
-    if (Number.isFinite(gap) && gap > 0.01) gaps.push(gap);
+    if (Number.isFinite(gap)) gaps.push(gap);
   }
   return [...new Set(gaps)].sort((a, b) => a - b);
 }
-
 /**
  * Wrap `clips` as a single group, or return them as-is when there is only one.
- *
+ * 
  * A group of one would be unsplittable, so single clips stay single clips.
  */
 function asGroup(clips: Clip[]): Clip {
   const last = clips[clips.length - 1]!;
-
   return clips.length === 1
     ? clips[0]!
     : {
@@ -324,7 +391,6 @@ function asGroup(clips: Clip[]): Clip {
         children: clips,
       };
 }
-
 /** A split is valid only when both resulting interval spans meet the minimum. */
 const isSplittableBoundary = (
   children: Clip[],
@@ -335,13 +401,11 @@ const isSplittableBoundary = (
   const right = children[i]!;
   const first = children[0]!;
   const last = children[children.length - 1]!;
-
   return (
     left.end - first.start + 1e-9 >= minPieceSec &&
     last.end - right.start + 1e-9 >= minPieceSec
   );
 };
-
 export function splitClipAtLargestGap(
   clip: Clip,
   minPieceSec = 0,
@@ -352,28 +416,20 @@ export function splitClipAtLargestGap(
   // match the user's mental model of what's on screen, so the gesture is
   // rejected up-front and the UI hides the split affordance for it.
   if (clip.expanded) return null;
-
   const children = clip.children ?? [];
-
   if (children.length < 2) return null;
-
   let splitAt = -1;
   let largestGap = -Infinity;
-
   for (let i = 1; i < children.length; i++) {
     if (!isSplittableBoundary(children, i, minPieceSec)) continue;
-
     const gap = children[i]!.start - children[i - 1]!.end;
-
     // Strictly greater, so equal gaps split at the earliest boundary.
     if (gap > largestGap) {
       largestGap = gap;
       splitAt = i;
     }
   }
-
   if (splitAt === -1) return null;
-
   return {
     pieces: [
       asGroup(children.slice(0, splitAt)),
@@ -382,11 +438,10 @@ export function splitClipAtLargestGap(
     gap: largestGap,
   };
 }
-
 /**
  * Directional variant of `splitClipAtLargestGap`: pick the boundary closest to
  * the requested end of the group instead of the largest gap.
- *
+ * 
  * "right" scans from the last gap inward, "left" from the first. Either picks
  * the smallest valid piece on that side: a short child is absorbed into its
  * neighbours until the accumulated end-piece clears `minPieceSec`, so the
@@ -399,11 +454,8 @@ export function splitClipAtEnd(
 ): {pieces: Clip[]; gap: number} | null {
   const children = clip.children ?? [];
   const count = children.length;
-
   if (count < 2) return null;
-
   let splitAt = -1;
-
   if (side === 'right') {
     for (let i = count - 1; i >= 1; i--) {
       if (isSplittableBoundary(children, i, minPieceSec)) {
@@ -419,9 +471,7 @@ export function splitClipAtEnd(
       }
     }
   }
-
   if (splitAt === -1) return null;
-
   return {
     pieces: [
       asGroup(children.slice(0, splitAt)),
@@ -430,24 +480,23 @@ export function splitClipAtEnd(
     gap: children[splitAt]!.start - children[splitAt - 1]!.end,
   };
 }
-
 /**
  * Regroup `displayClips` so it is merged by `mergeGap` only inside `focus`,
  * leaving every other clip exactly as it is.
- *
+ * 
  * This is the per-clip counterpart of `mergeClipsByGap`: the gesture's gap
  * applies to the selected clip's own run of clips instead of to the whole track.
- *
+ * 
  * `displayClips` is the *current* grouping, not the raw detection result, so
  * grouping established elsewhere on the track survives the gesture instead of
  * being reverted to the detector's output.
- *
+ * 
  * The focused run is regrouped as currently displayed, so `mergeGap` only
  * creates merges between the run's existing groups. Already-merged groups are
  * treated as atomic units and never broken back apart. `focus` is matched by
  * containment, so passing either a displayed group or one of the clips inside
  * it selects the same region.
- *
+ * 
  * Returns `displayClips` unchanged when `focus` matches nothing or holds fewer
  * than two clips.
  */
@@ -457,7 +506,6 @@ export function mergeClipsByGapScoped(
   focus: Clip,
 ): Clip[] {
   const start = displayClips.findIndex(c => c.start >= focus.start);
-
   let lastIdx = -1;
   for (let i = displayClips.length - 1; i >= 0; i--) {
     if (displayClips[i]!.end <= focus.end) {
@@ -465,23 +513,17 @@ export function mergeClipsByGapScoped(
       break;
     }
   }
-
   if (start === -1 || lastIdx === -1) return displayClips;
-
   const run = displayClips.slice(start, lastIdx + 1);
-
   // Nothing to regroup: the run is already a single unmerged clip.
   if (run.length < 2) return displayClips;
-
   const merged = mergeClipsByGap(run, mergeGap);
-
   return [
     ...displayClips.slice(0, start),
     ...merged,
     ...displayClips.slice(lastIdx + 1),
   ];
 }
-
 /**
  * Enforce the detected interval length before playback expansion. Merge each
  * short island across its nearest gap (left wins ties), keeping other intervals
@@ -514,7 +556,6 @@ export function enforceMinClipLength(
   }
   return result;
 }
-
 /**
  * Merge two adjacent clips into one group. The two clips become the group's
  * direct children as-is, keeping their own children (and any expansion)
@@ -527,7 +568,6 @@ export function mergeClipPair(left: Clip, right: Clip): Clip {
     end: right.end,
     vStart: left.vStart,
     vEnd: right.vEnd,
-
     children: [left, right],
   };
 }

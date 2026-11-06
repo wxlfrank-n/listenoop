@@ -14,6 +14,7 @@ import {Clip} from './Clip';
 import {clipGestureLedger, clipPinchState} from './clipPinch';
 import type {WaveWindow} from '../types';
 import type {Clip as InitClipData} from '../utils/clips';
+import * as clipUtils from '../utils/clips';
 
 const windowConfig: WaveWindow = {
   windowStartSec: 0,
@@ -28,6 +29,10 @@ const clip: InitClipData = {
   end: 3,
   vStart: 1,
   vEnd: 3,
+  children: [
+    {start: 1, end: 1.8, vStart: 1, vEnd: 1.8},
+    {start: 2.2, end: 3, vStart: 2.2, vEnd: 3},
+  ],
 };
 
 const renderClip = (
@@ -76,6 +81,20 @@ afterEach(() => {
 });
 
 describe('Clip gestures', () => {
+  it('reuses split eligibility until the clip or minimum length changes', () => {
+    const split = vi.spyOn(clipUtils, 'splitClipAtLargestGap');
+    const {rerender, props} = renderClip({active: true});
+    expect(split).toHaveBeenCalledTimes(1);
+    rerender(<Clip {...props} active={false} />);
+    rerender(<Clip {...props} playing={true} />);
+    expect(split).toHaveBeenCalledTimes(1);
+    rerender(<Clip {...props} minClipLength={2} />);
+    expect(split).toHaveBeenCalledTimes(2);
+    rerender(<Clip {...props} minClipLength={2} clip={{...clip}} />);
+    expect(split).toHaveBeenCalledTimes(3);
+    split.mockRestore();
+  });
+
   it('plays on a tap without requiring a second click', () => {
     const {rect, props} = renderClip();
 
@@ -393,7 +412,7 @@ describe('Clip gestures', () => {
   });
 
   it('shows no split icon while dragging up on an unsplittable clip', () => {
-    const {rect} = renderClip({canSplit: false});
+    const {rect} = renderClip({clip: {...clip, children: undefined}});
 
     fireEvent.pointerDown(rect, {
       pointerId: 34,
@@ -415,7 +434,7 @@ describe('Clip gestures', () => {
   });
 
   it('still shows the merge icon while dragging down on an unsplittable clip', () => {
-    const {rect} = renderClip({canSplit: false});
+    const {rect} = renderClip({clip: {...clip, children: undefined}});
 
     fireEvent.pointerDown(rect, {
       pointerId: 35,
@@ -457,7 +476,7 @@ describe('Clip gestures', () => {
   });
 
   it('shows the split affordance on an active, splittable clip', () => {
-    const {rect} = renderClip({active: true, canSplit: true});
+    const {rect} = renderClip({active: true});
 
     const hint = rect.querySelector('.waveform-clip__split-hint');
 
@@ -466,7 +485,10 @@ describe('Clip gestures', () => {
   });
 
   it('shows no split affordance on an active, unsplittable clip', () => {
-    const {rect} = renderClip({active: true, canSplit: false});
+    const {rect} = renderClip({
+      active: true,
+      clip: {...clip, children: undefined},
+    });
 
     expect(rect.querySelector('.waveform-clip__split-hint')).toBeNull();
   });

@@ -28,14 +28,21 @@
  * navigation, so the waveform parent must keep observing the pointer too.
  */
 
-import {memo, useEffect, useRef, useState, type ReactNode} from 'react';
+import {
+  memo,
+  useEffect,
+  useMemo,
+  useRef,
+  useState,
+  type ReactNode,
+} from 'react';
 import {createPortal} from 'react-dom';
 import {useDrag} from '@use-gesture/react';
 import {useT} from '../i18n';
 
 import {clipGestureLedger} from './clipPinch';
 
-import type {Clip as InitClipData} from '../utils/clips';
+import {splitClipAtLargestGap, type Clip as InitClipData} from '../utils/clips';
 import type {SwipeDirection, WaveWindow} from '../types';
 
 import './Clip.css';
@@ -51,14 +58,22 @@ export interface ClipProps {
   active: boolean;
 
   /**
-   * Whether the clip can currently be split (it is a merged group with a
-   * boundary that cleaves off at least `minClipLength`). Drives the split
-   * affordance shown while the clip is active, and whether an up-swipe shows
-   * the floating split icon.
+   * Minimum span on each side of a split. Split eligibility is cached here
+   * until this clip or the minimum changes.
    */
-  canSplit?: boolean;
+  minClipLength?: number;
 
   label?: ReactNode;
+
+  /** Stable label renderer; invoked only when this clip renders. */
+  renderLabel?: (
+    id: number,
+    clip: InitClipData,
+    indexInArray: number,
+    active: boolean,
+  ) => ReactNode;
+
+  indexInArray?: number;
 
   onPlayRange: (start: number, end: number, repetitions: number) => void;
 
@@ -164,8 +179,10 @@ export const Clip = memo(
     window,
     id,
     active,
-    canSplit = true,
+    minClipLength = 0,
     label,
+    renderLabel,
+    indexInArray = id,
     onPlayRange,
     repetitions,
     playing,
@@ -175,6 +192,10 @@ export const Clip = memo(
   }: ClipProps) => {
     const {windowStartSec, windowLen, innerH, vbH} = window;
     const t = useT();
+    const canSplit = useMemo(
+      () => splitClipAtLargestGap(clip, minClipLength) !== null,
+      [clip, minClipLength],
+    );
 
     const suppressClickRef = useRef(false);
 
@@ -499,7 +520,7 @@ export const Clip = memo(
             document.body,
           )}
 
-        {label}
+        {renderLabel ? renderLabel(id, clip, indexInArray, active) : label}
       </div>
     );
   },

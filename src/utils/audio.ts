@@ -44,7 +44,7 @@ export function initializeAudioContext(): AudioContext {
       (window as unknown as {webkitAudioContext?: typeof AudioContext})
         .webkitAudioContext;
     if (!Ctor) throw new Error('AudioContext not supported');
-    sharedAudioContext = new Ctor();
+    sharedAudioContext = new Ctor({sampleRate: 48000});
   }
   return sharedAudioContext;
 }
@@ -106,7 +106,7 @@ export function decodeAudioBuffer(
           (window as unknown as {webkitAudioContext?: typeof AudioContext})
             .webkitAudioContext;
         if (!Ctor) throw new Error('AudioContext not supported');
-        audioContext = new Ctor();
+        audioContext = new Ctor({sampleRate: 48000});
         isTemporary = true;
       } catch (err) {
         // Can't create context - likely no user gesture or unsupported browser

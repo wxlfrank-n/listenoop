@@ -618,21 +618,62 @@ describe('mergeClipsByGapScoped', () => {
   });
 });
 
+describe('long-clip valley splitting', () => {
+  const sampleRate = 1000;
+  const samples = Float32Array.from(
+    {length: 4000},
+    (_, i) => 0.7 + 0.2 * Math.cos((2 * Math.PI * 3 * i) / sampleRate),
+  );
+  const options = {blockMs: 12, silenceRatio: 0.01, minClipLength: 0.2};
+
+  it('splits sustained sound at valleys without manufacturing silent gaps', () => {
+    const result = getInitClipData(samples, sampleRate, options);
+    expect(result.clips.length).toBeGreaterThan(1);
+    result.clips.forEach((clip, i) => {
+      expect(clip.end - clip.start).toBeGreaterThanOrEqual(0.2 - 1e-9);
+      if (i > 0) expect(clip.start).toBe(result.clips[i - 1]!.end);
+    });
+    expect(result.gaps).toEqual([-0.000001]);
+    expect(result.initGap).toBe(-0.000001);
+    expect(mergeClipsByGap(result.clips, result.initGap)).toHaveLength(
+      result.clips.length,
+    );
+    expect(mergeClipsByGap(result.clips, 0)).toHaveLength(1);
+  });
+
+  it('leaves short clips and disabled valley detection unchanged', () => {
+    for (const longClipThreshold of [0, -1, 5]) {
+      expect(
+        getInitClipData(samples, sampleRate, {...options, longClipThreshold})
+          .clips,
+      ).toHaveLength(1);
+    }
+    expect(
+      getInitClipData(samples, sampleRate, {...options, minClipLength: 2.1})
+        .clips,
+    ).toHaveLength(1);
+  });
+});
+
 describe('getClipGaps', () => {
   it('returns [] for a single clip', () => {
     expect(getClipGaps([mk(0, 1)])).toEqual([]);
   });
 
-  it('returns distinct positive gaps above 0.01, ascending', () => {
+  it('returns distinct finite gaps, ascending', () => {
     // gaps: 0.5, 0.5, 3 -> deduped and sorted
     const clips = [mk(0, 1), mk(1.5, 2), mk(2.5, 3), mk(6, 7)];
     expect(getClipGaps(clips)).toEqual([0.5, 3]);
   });
 
-  it('skips gaps of 0.01 or less but keeps larger ones', () => {
-    // first gap is 0.005 (skipped), second gap is 1 (kept)
+  it('keeps short gaps as editable boundaries', () => {
     const clips = [mk(0, 1), mk(1.005, 2), mk(3, 4)];
-    expect(getClipGaps(clips)).toEqual([1]);
+    expect(getClipGaps(clips)[0]).toBeCloseTo(0.005);
+    expect(getClipGaps(clips)[1]).toBe(1);
+  });
+
+  it('keeps zero gaps between touching clips', () => {
+    expect(getClipGaps([mk(0, 1), mk(1, 2), mk(2, 3)])).toEqual([0]);
   });
 });
 

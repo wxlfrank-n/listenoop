@@ -114,11 +114,9 @@ async function decodeArrayBuffer(
   if (!selfCtor) {
     throw new Error('OfflineAudioContext not supported in worker');
   }
-  // The constructor params (channels / length / sampleRate) are only used to
-  // size the resulting AudioBuffer for rendering; `decodeAudioData` ignores
-  // them and returns an AudioBuffer matching the encoded file. Dummy values
-  // are fine here.
-  const ctx = new selfCtor(1, 1, 44100);
+  // decodeAudioData resamples to the context's rate. Keep analysis at 48 kHz
+  // across the worker, main-thread fallback, and native apps.
+  const ctx = new selfCtor(1, 1, 48000);
   return ctx.decodeAudioData(arrayBuffer);
 }
 

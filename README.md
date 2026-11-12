@@ -9,12 +9,15 @@ A browser-based music player for audio files that automatically breaks each trac
 - **Audio playback** (MP3, WAV, OGG, M4A, FLAC, WebM) with waveform visualization
 - **Automatic clip detection** — adaptive RMS energy detection groups sound around sustained pauses, with automatic gap grouping and proportional playback padding
 - **Clip looping** — click any clip to play it, repeating it up to 20 times
+- **Track loop modes** — no loop, repeat the current track, repeat the whole tracklist, or play the tracklist randomly (Settings → Playback)
 - **Merge control** — combine neighboring clips into one with a single slider
 - **Two waveform views** — a stacked multi-row overview or a single horizontally-scrollable row
 - **Configurable skip** — jump forward/back by 5–60 seconds
 - **File picker** — load multiple audio files at once
 - **Live frequency visualizer** ("dancing lines")
 - **Settings persist** automatically in your browser's local storage
+- **Seasonal themes** — Spring, Summer, golden-yellow Autumn, and Winter, alongside Solarized Dark, Gruvbox Dark, and Tokyo Night palettes
+- **Listenoop Night (default)** — the first theme in the picker, with dark navy surfaces, turquoise controls, cyan details, and a green played waveform drawn from the app icon
 
 ---
 
@@ -132,7 +135,8 @@ Suppose two neighboring clips are really one phrase. Use the **merge slider**:
 
 On the **active clip**, two arrows may appear above the label:
 
-- **Swipe up** — split a merged clip back into its individual sub-clips (available when the active clip contains multiple children).
+- **Swipe up anywhere on a clip** - split at the valid gap nearest where the swipe starts. Scissors mark each valid gap on the active clip.
+- A split is available only when both resulting pieces meet the configured minimum clip length. Equal-distance gaps use the earlier boundary.
 - **Swipe down** — merge the active clip with its neighbor (available when there is a neighbor).
 
 Swiping updates the merge threshold automatically and keeps the active clip in view.
@@ -152,6 +156,8 @@ Open the **Settings** panel with the gear button in the top-right. Every option 
 | **Minimum clip length** | 0.3–1s | 0.3s | Detection tries to join shorter clips with a neighbor |
 
 > Detection settings recompute clips for the current track automatically and reset manual clip grouping. Settings remain usable for the current session if browser storage is blocked or full.
+
+Expansion into surrounding silence is capped at half the minimum clip length on each side. For example, a minimum clip length of 0.3s allows at most 0.15s of expansion before and after a clip.
 
 ---
 

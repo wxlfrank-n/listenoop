@@ -63,6 +63,44 @@ async function splitAnyClip(
   throw new Error('no clip could be split');
 }
 
+test('repeated whole-track splits and merges keep a resulting clip active', async ({
+  page,
+}) => {
+  await seedConfig(page, {waveformView: 'stacked', mergeScope: 'global'});
+  await page.goto('/');
+  await waitForClips(page);
+  const active = page.locator('.waveform-clip--active');
+  const bounds = async () => ({
+    start: Number(await active.getAttribute('data-clip-start-sec')),
+    end: Number(await active.getAttribute('data-clip-end-sec')),
+  });
+
+  await splitAnyClip(page);
+  for (let round = 0; round < 3; round++) {
+    await expect(active).toHaveCount(1);
+    const beforeMerge = await bounds();
+    const index = Number(await active.getAttribute('data-clip-idx'));
+    await swipeClip(page, index, 'down');
+    await expect
+      .poll(async () => (await bounds()).end - (await bounds()).start)
+      .toBeGreaterThan(beforeMerge.end - beforeMerge.start);
+    const merged = await bounds();
+    expect(merged.start).toBeLessThanOrEqual(beforeMerge.start);
+    expect(merged.end).toBeGreaterThanOrEqual(beforeMerge.end);
+    await stopPlayback(page);
+
+    const mergedIndex = Number(await active.getAttribute('data-clip-idx'));
+    await swipeClip(page, mergedIndex, 'up');
+    await expect
+      .poll(async () => (await bounds()).end - (await bounds()).start)
+      .toBeLessThan(merged.end - merged.start);
+    const split = await bounds();
+    expect(split.start).toBeCloseTo(merged.start, 8);
+    expect(split.end).toBeLessThanOrEqual(merged.end);
+    await stopPlayback(page);
+  }
+});
+
 test.describe('merging clips', () => {
   test('merging a clip with its neighbour drops one clip', async ({page}) => {
     await gotoStacked(page);
@@ -88,11 +126,14 @@ test.describe('merging clips', () => {
 
     await expect(page.locator('.clip-merge')).toHaveCount(1);
 
-    const before = await clipCount(page);
+    // The row view renders only a buffered viewport; use the whole-track count.
+    const count = async () =>
+      Number(await page.locator('.clip-merge__bubble').textContent());
+    const before = await count();
 
     await page.getByRole('button', {name: 'Merge more clips'}).click();
 
-    await expect.poll(() => clipCount(page)).toBe(before - 1);
+    await expect.poll(count).toBeLessThan(before);
   });
 
   test('the merge slider splits groups back apart', async ({page}) => {
@@ -100,11 +141,18 @@ test.describe('merging clips', () => {
     await page.goto('/');
     await waitForClips(page);
 
-    const before = await clipCount(page);
+    const count = async () =>
+      Number(await page.locator('.clip-merge__bubble').textContent());
+    // The initial threshold is an average between gap boundaries. First merge
+    // at a real boundary, then step below it to split those groups again.
+    const initial = await count();
+    await page.getByRole('button', {name: 'Merge more clips'}).click();
+    await expect.poll(count).toBeLessThan(initial);
+    const before = await count();
 
     await page.getByRole('button', {name: 'Merge fewer clips'}).click();
 
-    await expect.poll(() => clipCount(page)).toBeGreaterThan(before);
+    await expect.poll(count).toBeGreaterThan(before);
   });
 });
 

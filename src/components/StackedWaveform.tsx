@@ -55,7 +55,11 @@ interface StackedWaveformProps {
 
   onStopPlayback?: () => void;
 
-  onSwipeClip?: (idx: number, direction: SwipeDirection) => void;
+  onSwipeClip?: (
+    idx: number,
+    direction: SwipeDirection,
+    targetSec?: number,
+  ) => void;
 
   /** Minimum seconds a split must leave on each side; controls the affordance. */
   minClipLength?: number;

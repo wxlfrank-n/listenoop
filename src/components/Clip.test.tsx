@@ -82,7 +82,7 @@ afterEach(() => {
 
 describe('Clip gestures', () => {
   it('reuses split eligibility until the clip or minimum length changes', () => {
-    const split = vi.spyOn(clipUtils, 'splitClipAtLargestGap');
+    const split = vi.spyOn(clipUtils, 'getClipSplitBoundaries');
     const {rerender, props} = renderClip({active: true});
     expect(split).toHaveBeenCalledTimes(1);
     rerender(<Clip {...props} active={false} />);
@@ -491,6 +491,45 @@ describe('Clip gestures', () => {
     });
 
     expect(rect.querySelector('.waveform-clip__split-hint')).toBeNull();
+  });
+
+  it('marks each valid gap and uses the start of an upward swipe to target it', () => {
+    const children = [
+      {start: 1, end: 1.5, vStart: 1, vEnd: 1.5},
+      {start: 2, end: 3, vStart: 2, vEnd: 3},
+      {start: 4, end: 5, vStart: 4, vEnd: 5},
+      {start: 6, end: 7, vStart: 6, vEnd: 7},
+    ];
+    const onSwipe = vi.fn();
+    const {rect} = renderClip({
+      active: true,
+      clip: {start: 1, end: 7, vStart: 0.5, vEnd: 7.5, children},
+      minClipLength: 1,
+      onSwipe,
+    });
+    vi.spyOn(rect, 'getBoundingClientRect').mockReturnValue(
+      new DOMRect(100, 0, 700, 100),
+    );
+    const hints = rect.querySelectorAll<HTMLElement>(
+      '.waveform-clip__split-hint',
+    );
+    expect(hints).toHaveLength(2);
+    expect(parseFloat(hints[0]!.style.left)).toBeCloseTo((3 / 7) * 100);
+    expect(parseFloat(hints[1]!.style.left)).toBeCloseTo((5 / 7) * 100);
+
+    fireEvent.pointerDown(rect, {
+      pointerId: 40,
+      pointerType: 'touch',
+      clientX: 450,
+      clientY: 90,
+    });
+    fireEvent.pointerUp(window, {
+      pointerId: 40,
+      pointerType: 'touch',
+      clientX: 610,
+      clientY: 30,
+    });
+    expect(onSwipe).toHaveBeenCalledWith(0, 'up-right', 4);
   });
 
   it('hides the split affordance when the clip is not active', () => {

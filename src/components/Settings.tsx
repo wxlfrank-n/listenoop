@@ -36,7 +36,7 @@ const TAB_LABEL_KEYS: Record<SettingsTabId, TranslationKey> = {
 };
 
 const THEME_LABEL_KEYS: Record<ThemeId, TranslationKey> = {
-  system: 'themes.system',
+  listenoop: 'themes.listenoop',
   dark: 'themes.dark',
   light: 'themes.light',
   midnight: 'themes.midnight',
@@ -46,6 +46,8 @@ const THEME_LABEL_KEYS: Record<ThemeId, TranslationKey> = {
   qinghua: 'themes.qinghua',
   yingluo: 'themes.yingluo',
   norge: 'themes.norge',
+  autumn: 'themes.autumn',
+  winter: 'themes.winter',
 };
 
 const clamp = (v: number, min: number, max: number) =>
@@ -217,27 +219,6 @@ function SegmentedSetting<T extends string>({
 }
 
 function ThemeCardPreview({theme, label}: {theme: ThemeId; label: string}) {
-  if (theme === 'system') {
-    // No static palette of its own: preview both backing halves, mirroring
-    // the native system swatch (Slate left, Mist right).
-    return (
-      <>
-        <span
-          className="theme-card__swatch"
-          style={{
-            background: `linear-gradient(to right, ${THEMES.dark.bgPrimary} 50%, ${THEMES.light.bgPrimary} 50%)`,
-          }}
-          aria-hidden="true"
-        >
-          <span
-            className="theme-card__dot"
-            style={{background: THEMES.dark.accent}}
-          />
-        </span>
-        <span className="theme-card__label">{label}</span>
-      </>
-    );
-  }
   const t = THEMES[theme];
   return (
     <>
@@ -306,7 +287,7 @@ function PlaybackTab() {
   const playing = useAppSelector(s => s.player?.isPlaying ?? false);
   const {config, updateConfig} = useConfig();
   const t = useT();
-  const {skipSeconds, repetitions, loopPlaylist, showAdvancedControls} = config;
+  const {skipSeconds, repetitions, loopMode, showAdvancedControls} = config;
   return (
     <>
       <SliderSetting
@@ -342,20 +323,23 @@ function PlaybackTab() {
         onChange={v => updateConfig({repetitions: v})}
       />
       <div className="settings-field">
-        <label className="settings-switch">
-          <input
-            type="checkbox"
-            checked={loopPlaylist}
-            onChange={e => updateConfig({loopPlaylist: e.target.checked})}
-          />
-          <span className="settings-switch__track" aria-hidden="true">
-            <span className="settings-switch__knob" />
-          </span>
-          <span className="settings-switch__label">
-            {t('settings.loopPlaylist')}
-            <small>{t('settings.loopPlaylistHint')}</small>
-          </span>
+        <label className="settings-label" htmlFor="playback-loop-mode">
+          {t('settings.loopMode')}
         </label>
+        <p className="settings-hint">{t('settings.loopModeHint')}</p>
+        <select
+          id="playback-loop-mode"
+          className="settings-select"
+          value={loopMode}
+          onChange={e =>
+            updateConfig({loopMode: e.target.value as typeof loopMode})
+          }
+        >
+          <option value="off">{t('settings.loopModeOff')}</option>
+          <option value="track">{t('settings.loopModeTrack')}</option>
+          <option value="playlist">{t('settings.loopModePlaylist')}</option>
+          <option value="shuffle">{t('settings.loopModeShuffle')}</option>
+        </select>
       </div>
       <div className="settings-field">
         <label className="settings-switch">

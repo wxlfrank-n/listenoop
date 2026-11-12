@@ -203,9 +203,9 @@ describe('RowWaveform clip play follow', () => {
           .querySelector('[data-window-length]')
           ?.getAttribute('data-window-length'),
       );
-    expect(bufferSeconds()).toBeCloseTo(20, 6);
+    expect(bufferSeconds()).toBeCloseTo(12, 6);
     rerender({minClipLength: 0.6});
-    expect(bufferSeconds()).toBeCloseTo(40, 6);
+    expect(bufferSeconds()).toBeCloseTo(24, 6);
   });
 
   it('does not yank the window back to the playing clip after the user pans away', () => {

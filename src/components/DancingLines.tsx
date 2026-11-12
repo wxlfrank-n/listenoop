@@ -156,7 +156,9 @@ export const DancingLines = memo(
         }
 
         ctx.globalAlpha = 0.8;
-        ctx.fillStyle = getCssVar('--accent');
+        ctx.fillStyle = getCssVar(
+          theme === 'listenoop' ? '--waveform-bar-played' : '--accent',
+        );
         const bw = cw / BAR_COUNT;
         const base = ch - 4;
         // Reserve 10% of the strip even at the strongest level.

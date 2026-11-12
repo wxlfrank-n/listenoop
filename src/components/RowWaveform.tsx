@@ -57,7 +57,11 @@ export interface RowWaveformProps {
   onStopPlayback?: () => void;
   activeClip: number;
   onActiveClipChange: (idx: number) => void;
-  onSwipeClip?: (idx: number, direction: SwipeDirection) => void;
+  onSwipeClip?: (
+    idx: number,
+    direction: SwipeDirection,
+    targetSec?: number,
+  ) => void;
   /** Minimum seconds a split must leave on each side; controls the affordance. */
   minClipLength?: number;
   /** Pinching two clips together merges the clip range between them. */

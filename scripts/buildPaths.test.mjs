@@ -4,16 +4,17 @@ import {localBuildPaths} from './buildPaths.mjs';
 
 describe('local deployment paths', () => {
   const root = resolve('build-path-test');
-  it('uses configured build output and a dedicated deployment folder', () => {
+  it('uses configured build output and deploys under the project root', () => {
     expect(
       localBuildPaths(root, {VITE_BASE_URL: '/music/', VITE_OUT_DIR: 'docs'}),
     ).toEqual({
       source: resolve(root, 'docs'),
-      destination: resolve(root, '.local-deploy/music'),
+      destination: resolve(root, 'music'),
     });
-    expect(localBuildPaths(root, {VITE_BASE_URL: '/src/'}).destination).toBe(
-      resolve(root, '.local-deploy/src'),
-    );
+    expect(localBuildPaths(root, {VITE_BASE_URL: '/audio/'})).toEqual({
+      source: resolve(root, 'dist'),
+      destination: resolve(root, 'audio'),
+    });
     expect(localBuildPaths(root, {})).toBeNull();
   });
   it.each(['/../', '/./', '/a/b/', '/%2e%2e/', '/C:/', 'https://example.com/'])(
@@ -22,7 +23,7 @@ describe('local deployment paths', () => {
       expect(() => localBuildPaths(root, {VITE_BASE_URL: base})).toThrow();
     },
   );
-  it.each(['..', '.', '.local-deploy', '.local-deploy/music'])(
+  it.each(['..', '.', 'music', 'music/assets'])(
     'rejects overlapping output %s',
     out => {
       expect(() =>

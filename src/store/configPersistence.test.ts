@@ -7,6 +7,26 @@ import {setCurrentTime} from './playerSlice';
 
 afterEach(() => vi.restoreAllMocks());
 
+it('defaults to Listenoop Night, migrates System, and preserves chosen palettes', async () => {
+  for (const [stored, expected] of [
+    [{}, 'listenoop'],
+    [{theme: 'system'}, 'listenoop'],
+    [{theme: 'unknown'}, 'listenoop'],
+    [{theme: 'midnight'}, 'midnight'],
+  ] as const) {
+    vi.resetModules();
+    localStorage.setItem(
+      'Listeenoop_config',
+      JSON.stringify({skipSeconds: 15, ...stored}),
+    );
+    const {default: reducer} = await import('./configSlice');
+    const config = reducer(undefined, {type: 'init'});
+    expect(config.theme).toBe(expected);
+    expect(config.skipSeconds).toBe(15);
+  }
+  localStorage.clear();
+});
+
 describe('settings persistence', () => {
   it('keeps reducers independent of browser storage', () => {
     const save = vi.spyOn(Storage.prototype, 'setItem');

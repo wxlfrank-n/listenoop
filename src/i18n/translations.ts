@@ -117,9 +117,12 @@ export const en = {
     repeatsPerClip: 'Repeats per clip',
     repeatsHint: 'Choose how many times a clip repeats when you click it.',
 
-    loopPlaylist: 'Loop playback',
-    loopPlaylistHint:
-      'When a track ends, continue with the next track in the playlist. Turn off to stop at the end of the track.',
+    loopMode: 'Loop mode',
+    loopModeHint: 'Choose what happens when a track ends.',
+    loopModeOff: 'No loop',
+    loopModeTrack: 'Current track',
+    loopModePlaylist: 'Whole tracklist',
+    loopModeShuffle: 'Random tracklist',
 
     showAdvanced: 'Show advanced controls',
     showAdvancedHint:
@@ -155,12 +158,14 @@ export const en = {
   },
 
   themes: {
-    system: 'System',
-    dark: 'Slate',
-    light: 'Mist',
-    midnight: 'Midnight',
-    paper: 'Sky',
-    nova: 'Nova',
+    listenoop: 'Listenoop Night',
+    dark: 'Solarized Dark',
+    light: 'Spring',
+    midnight: 'Gruvbox Dark',
+    paper: 'Summer',
+    autumn: 'Autumn',
+    winter: 'Winter',
+    nova: 'Tokyo Night',
     rose: 'Lilac',
     qinghua: 'Qinghua',
     yingluo: 'Yingluo',
@@ -293,9 +298,12 @@ export const no: Messages = {
     repeatsHint:
       'Velg hvor mange ganger et klipp repeteres n\u00e5r du klikker p\u00e5 det.',
 
-    loopPlaylist: 'Gjenta avspilling',
-    loopPlaylistHint:
-      'N\u00e5r et spor er ferdig, fortsett med neste spor i spillelisten. Sl\u00e5 av for \u00e5 stoppe p\u00e5 slutten av sporet.',
+    loopMode: 'Gjentakelsesmodus',
+    loopModeHint: 'Velg hva som skjer når et spor er ferdig.',
+    loopModeOff: 'Ingen gjentakelse',
+    loopModeTrack: 'Gjenta sporet',
+    loopModePlaylist: 'Gjenta spillelisten',
+    loopModeShuffle: 'Tilfeldig spilleliste',
 
     showAdvanced: 'Vis avanserte kontroller',
     showAdvancedHint:
@@ -332,12 +340,14 @@ export const no: Messages = {
   },
 
   themes: {
-    system: 'System',
-    dark: 'Skifer',
-    light: 'T\u00e5ke',
-    midnight: 'Midnatt',
-    paper: 'Himmel',
-    nova: 'Nova',
+    listenoop: 'Listenoop Night',
+    dark: 'Solarized Dark',
+    light: 'Vår',
+    midnight: 'Gruvbox Dark',
+    paper: 'Sommer',
+    autumn: 'Høst',
+    winter: 'Vinter',
+    nova: 'Tokyo Night',
     rose: 'Lysrosa',
     qinghua: 'Qinghua',
     yingluo: 'Yingluo',
@@ -467,9 +477,12 @@ export const zh: Messages = {
     repeatsPerClip: '片段重复次数',
     repeatsHint: '设置点击片段后自动重复播放的次数。',
 
-    loopPlaylist: '循环播放',
-    loopPlaylistHint:
-      '一首结束后自动播放列表中的下一首；关闭后将在曲目结尾停止。',
+    loopMode: '循环模式',
+    loopModeHint: '选择曲目结束后的播放方式。',
+    loopModeOff: '不循环',
+    loopModeTrack: '单曲循环',
+    loopModePlaylist: '列表循环',
+    loopModeShuffle: '随机循环',
 
     showAdvanced: '显示高级控制',
     showAdvancedHint: '在波形下方显示片段合并和重复次数的快捷控制。',
@@ -500,12 +513,14 @@ export const zh: Messages = {
   },
 
   themes: {
-    system: '系统',
-    dark: '岩灰',
-    light: '薄雾',
-    midnight: '午夜',
-    paper: '晴空',
-    nova: '星辉',
+    listenoop: 'Listenoop Night',
+    dark: 'Solarized Dark',
+    light: '春日',
+    midnight: 'Gruvbox Dark',
+    paper: '盛夏',
+    autumn: '金秋',
+    winter: '冬雪',
+    nova: 'Tokyo Night',
     rose: '丁香',
     qinghua: '青花瓷',
     yingluo: '璎珞',

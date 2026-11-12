@@ -1,13 +1,11 @@
-.stacked-waveform__cursor, .row-waveform__cursor {
+.stacked-waveform__cursor,
+.row-waveform__cursor {
   position: absolute;
   top: 0;
   bottom: 0;
   width: 2px;
   z-index: 1;
-  background: var(--accent);
-  box-shadow:
-    0 0 4px var(--accent),
-    0 0 10px var(--accent-dim);
+  background: var(--accent-ink);
   pointer-events: none;
 }
 .row-waveform__time,

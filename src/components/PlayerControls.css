@@ -17,14 +17,13 @@
   margin: 0;
   background: var(--accent-dim);
   color: var(--on-accent);
-  box-shadow: 0 2px 12px rgba(var(--accent-dim-rgb), 0.45);
+  box-shadow: none;
 }
 
 .control-btn--playing {
   background: var(--accent);
   color: var(--on-accent);
-  box-shadow: 0 2px 8px rgba(var(--accent-rgb), 0.35);
-  animation: control-pulse 1.6s ease-in-out infinite;
+  box-shadow: none;
 }
 
 @keyframes control-pulse {
@@ -46,9 +45,7 @@
 @keyframes control-btn-press {
   from {
     transform: scale(1.05);
-    box-shadow:
-      0 0 20px rgba(var(--accent-rgb), 0.9),
-      0 0 50px rgba(var(--accent-rgb), 0.5);
+    box-shadow: none;
   }
 }
 
@@ -103,7 +100,7 @@
   -webkit-user-select: none;
 }
 .playback-speed:focus-visible {
-  outline: 2px solid var(--accent);
+  outline: 2px solid var(--accent-ink);
   outline-offset: 2px;
   border-radius: 4px;
 }

@@ -55,7 +55,7 @@
 }
 
 .track-item--active .track-item__title {
-  color: var(--accent);
+  color: var(--accent-ink);
 }
 
 .track-item__info {

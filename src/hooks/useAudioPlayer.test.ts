@@ -48,7 +48,7 @@ const playerState = vi.hoisted(() => ({
 
 /* The playlist loop is off by default (`configSlice.DEFAULT_CONFIG`). */
 const configState = vi.hoisted(() => ({
-  loopPlaylist: false,
+  loopMode: 'off',
 }));
 
 vi.mock('../store/store', () => ({
@@ -205,7 +205,7 @@ describe('useAudioPlayer.playRange', () => {
 
     dispatch.mockClear();
 
-    configState.loopPlaylist = false;
+    configState.loopMode = 'off';
 
     audio = new FakeAudio();
 
@@ -671,18 +671,51 @@ describe('useAudioPlayer.playRange', () => {
       expect(dispatch).toHaveBeenCalledWith(setCurrentTime(100));
     });
 
-    it('still advances when playback reaches the end on its own', () => {
-      configState.loopPlaylist = true;
+    it('restarts a one-track playlist when playback reaches its end', async () => {
+      configState.loopMode = 'playlist';
 
       renderHook(() => useAudioPlayer(5));
 
       audio.currentTime = 100;
 
-      act(() => {
+      await act(async () => {
         audio.dispatchEvent(new Event('ended'));
       });
 
-      expect(dispatch).toHaveBeenCalledWith(setCurrentTrackIndex(0));
+      expect(audio.currentTime).toBe(0);
+      expect(audio.play).toHaveBeenCalled();
+    });
+
+    it('repeats the current track without selecting or reloading it', async () => {
+      configState.loopMode = 'track';
+      playerState.tracks = [track, {...track, id: 't2', title: 'Other'}];
+      renderHook(() => useAudioPlayer(5));
+      audio.currentTime = 100;
+      await act(async () => audio.dispatchEvent(new Event('ended')));
+      expect(audio.currentTime).toBe(0);
+      expect(audio.play).toHaveBeenCalled();
+      expect(dispatch).not.toHaveBeenCalledWith(setCurrentTrackIndex(0));
+      expect(dispatch).not.toHaveBeenCalledWith(setCurrentTrackIndex(1));
+    });
+
+    it('wraps to the first track in visible sorted order', async () => {
+      configState.loopMode = 'playlist';
+      playerState.tracks = [
+        {...track, title: 'Zebra'},
+        {...track, id: 't2', title: 'Alpha', url: 'blob:alpha'},
+      ];
+      renderHook(() => useAudioPlayer(5));
+      await act(async () => audio.dispatchEvent(new Event('ended')));
+      expect(dispatch).toHaveBeenCalledWith(setCurrentTrackIndex(1));
+      expect(dispatch).toHaveBeenCalledWith(setCurrentTime(0));
+    });
+
+    it('chooses a different track in random mode', async () => {
+      configState.loopMode = 'shuffle';
+      playerState.tracks = [track, {...track, id: 't2', url: 'blob:other'}];
+      renderHook(() => useAudioPlayer(5));
+      await act(async () => audio.dispatchEvent(new Event('ended')));
+      expect(dispatch).toHaveBeenCalledWith(setCurrentTrackIndex(1));
     });
   });
 

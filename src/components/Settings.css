@@ -148,12 +148,12 @@
 
 .settings-tab:focus-visible {
   border-radius: 6px;
-  outline: 2px solid var(--accent);
+  outline: 2px solid var(--accent-ink);
   outline-offset: -2px;
 }
 
 .settings-tab--active {
-  color: var(--accent);
+  color: var(--accent-ink);
 }
 
 .settings-tab--active::after {
@@ -287,7 +287,7 @@
   border: none;
 }
 .settings-slider:focus-visible {
-  outline: 2px solid var(--accent);
+  outline: 2px solid var(--accent-ink);
   outline-offset: 2px;
   border-radius: 4px;
 }
@@ -311,7 +311,7 @@
 }
 
 .settings-checkbox input {
-  accent-color: var(--accent);
+  accent-color: var(--accent-ink);
   width: 16px;
   height: 16px;
   margin: 1px 0 0;
@@ -361,7 +361,7 @@
 }
 
 .settings-switch input:focus-visible + .settings-switch__track {
-  outline: 2px solid var(--accent);
+  outline: 2px solid var(--accent-ink);
   outline-offset: 2px;
 }
 
@@ -400,6 +400,17 @@
  * Two-option pill group, mirroring the native segmented row: both choices
  * visible side by side in a rounded container, the active one filled.
  */
+.settings-select {
+  width: 100%;
+  min-height: 44px;
+  padding: 8px 12px;
+  border: 1px solid var(--border);
+  border-radius: 8px;
+  background: var(--bg-tertiary);
+  color: var(--text-primary);
+  font: inherit;
+}
+
 .settings-segmented {
   display: flex;
   gap: 4px;
@@ -430,7 +441,7 @@
 }
 
 .settings-segmented__option:focus-visible {
-  outline: 2px solid var(--accent);
+  outline: 2px solid var(--accent-ink);
   outline-offset: -2px;
 }
 
@@ -495,7 +506,7 @@
 }
 
 .theme-card--active .theme-card__label {
-  color: var(--accent);
+  color: var(--accent-ink);
 }
 
 /*

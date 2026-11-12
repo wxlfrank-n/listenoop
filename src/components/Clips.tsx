@@ -40,7 +40,11 @@ interface ClipsProps {
 
   onActivate: (idx: number) => void;
 
-  onSwipe?: (idx: number, direction: SwipeDirection) => void;
+  onSwipe?: (
+    idx: number,
+    direction: SwipeDirection,
+    targetSec?: number,
+  ) => void;
 
   /**
    * Floor a split must leave on each side. Clips with no viable boundary are
@@ -105,7 +109,7 @@ export const Clips = memo(
 
           return (
             <Clip
-              key={id}
+              key={`${clip.start}:${clip.end}`}
               clip={clip}
               window={window}
               id={id}

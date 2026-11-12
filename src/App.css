@@ -29,29 +29,30 @@
 }
 
 :root {
-  --bg-primary: #121417;
-  --bg-secondary: #1a1d22;
-  --bg-tertiary: #22262c;
-  --bg-hover: #2b3038;
-  --bg-panel: #16191e;
-  --text-primary: #e7eaee;
-  --text-secondary: #9aa3ad;
-  --on-accent: #08111f;
-  --accent: #58a6ff;
-  --accent-dim: #388bfd;
-  --accent-rgb: 88, 166, 255;
-  --accent-dim-rgb: 56, 139, 253;
-  --clip-swipe: #58a6ff;
-  --danger: #ef5350;
-  --text-tertiary: #6a7480;
-  --waveform-bg-top: #23272e;
-  --waveform-bg-mid: #1c2026;
-  --waveform-bar: #8f96a0;
-  --waveform-bar-silent: #434a53;
-  --clip-label-bg: rgba(22, 25, 30, 0.72);
-  --clip-label-text: #e7eaee;
-  --clip-label-border: rgba(255, 255, 255, 0.16);
-  --border: #2b3038;
+  --bg-primary: #060a24;
+  --bg-secondary: #0c1445;
+  --bg-tertiary: #172054;
+  --bg-hover: #202c68;
+  --bg-panel: #0c1445;
+  --text-primary: #dff7ff;
+  --text-secondary: #b3ccd9;
+  --on-accent: #060a24;
+  --accent: #00e8c0;
+  --accent-ink: #40ffff;
+  --accent-dim: #00d4af;
+  --accent-rgb: 0, 232, 192;
+  --accent-dim-rgb: 0, 212, 175;
+  --clip-swipe: #40ffff;
+  --danger: #ff8494;
+  --text-tertiary: #b3ccd9;
+  --waveform-bg-top: #0c1445;
+  --waveform-bg-mid: #0c1445;
+  --waveform-bar: #278a7a;
+  --waveform-bar-silent: #18574e;
+  --clip-label-bg: #0c1445;
+  --clip-label-text: #dff7ff;
+  --clip-label-border: #344276;
+  --border: #344276;
   --radius: 8px;
   --radius-sm: 6px;
   --radius-md: 8px;
@@ -73,7 +74,7 @@
 }
 
 :focus-visible {
-  outline: 2px solid var(--accent);
+  outline: 2px solid var(--accent-ink);
   outline-offset: 2px;
 }
 
@@ -188,10 +189,8 @@ body {
 @keyframes control-btn-press {
   from {
     background: var(--bg-hover);
-    color: var(--accent);
-    box-shadow:
-      0 0 12px rgba(var(--accent-rgb), 0.55),
-      0 0 30px rgba(var(--accent-rgb), 0.3);
+    color: var(--accent-ink);
+    box-shadow: none;
   }
 }
 
@@ -232,7 +231,7 @@ body {
 .app-notice--info {
   background: rgba(var(--accent-dim-rgb), 0.15);
   border: 1px solid rgba(var(--accent-rgb), 0.5);
-  color: var(--accent);
+  color: var(--accent-ink);
 }
 
 .app-notice--error {

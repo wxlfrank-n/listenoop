@@ -41,7 +41,6 @@ import './ProgressBar.css';
 
 import {
   splitClip,
-  splitClipEnd,
   mergeClips,
   mergeClipRange,
   type ClipSplitResult,
@@ -289,7 +288,7 @@ export function ProgressBar({
   );
 
   const handleClipSwipe = useCallback(
-    (idx: number, direction: SwipeDirection) => {
+    (idx: number, direction: SwipeDirection, targetSec?: number) => {
       /*
        * Swipe down:
        * merge this clip with an adjacent clip.
@@ -328,7 +327,14 @@ export function ProgressBar({
        * split/unpack a virtually merged clip.
        */
       publishSplit(
-        splitClip(clips, displayClips, idx, mergeScope, minClipLength),
+        splitClip(
+          clips,
+          displayClips,
+          idx,
+          mergeScope,
+          minClipLength,
+          targetSec,
+        ),
       );
     },
     [
@@ -392,20 +398,6 @@ export function ProgressBar({
   );
 
   /*
-   * Upward diagonal swipes split the merged clip from the end the swipe is
-   * pointing at: up-right detaches the rightmost part, up-left the leftmost.
-   * The detached part is always at least `minClipLength`.
-   */
-  const handleClipSwipeSplitEnd = useCallback(
-    (idx: number, side: 'left' | 'right') => {
-      publishSplit(
-        splitClipEnd(clips, displayClips, idx, side, mergeScope, minClipLength),
-      );
-    },
-    [clips, displayClips, mergeScope, minClipLength, publishSplit],
-  );
-
-  /*
    * Two clips pinched together fuse the whole range between them, mirroring the
    * swipe-down merge but across many clips at once. "clip" scope replaces just
    * that range; "global" scope sets the threshold to the largest silence inside
@@ -428,7 +420,7 @@ export function ProgressBar({
   );
 
   const handleClipSwipeGesture = useCallback(
-    (idx: number, direction: SwipeDirection) => {
+    (idx: number, direction: SwipeDirection, targetSec?: number) => {
       if (direction === 'down-right' || direction === 'down-left') {
         handleClipSwipeDiagonalMerge(
           idx,
@@ -437,17 +429,9 @@ export function ProgressBar({
         return;
       }
 
-      if (direction === 'up-right' || direction === 'up-left') {
-        handleClipSwipeSplitEnd(
-          idx,
-          direction === 'up-right' ? 'right' : 'left',
-        );
-        return;
-      }
-
-      handleClipSwipe(idx, direction);
+      handleClipSwipe(idx, direction, targetSec);
     },
-    [handleClipSwipe, handleClipSwipeDiagonalMerge, handleClipSwipeSplitEnd],
+    [handleClipSwipe, handleClipSwipeDiagonalMerge],
   );
 
   /*

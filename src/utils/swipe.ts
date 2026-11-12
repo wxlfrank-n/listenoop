@@ -1,8 +1,9 @@
 import {
   mergeClipPair,
   mergeClipsByGap,
-  splitClipAtEnd,
-  splitClipAtLargestGap,
+  splitClipAtThird,
+  splitClipAtMiddle,
+  splitClipAtPosition,
   type Clip,
 } from './clips';
 import type {MergeScope} from '../types';
@@ -47,7 +48,7 @@ export interface ClipSplitResult {
 }
 
 /**
- * Shared post-split bookkeeping for the largest-gap and directional splits.
+ * Shared post-split bookkeeping for midpoint and one-third/two-thirds splits.
  *
  * "clip" scope replaces exactly the selected group with its two pieces and
  * leaves every other group alone. "global" scope instead sets the merge gap
@@ -96,13 +97,13 @@ function finishSplit(
 }
 
 /**
- * Swipe up (unpack): split a virtually merged clip at its largest child gap.
+ * Split at the valid gap nearest the requested time, defaulting to midpoint.
  *
  * "clip" scope cuts the selected group in two and leaves every other group
  * exactly as it is. "global" scope instead sets the merge gap just below that
  * same gap and regroups the whole track, so other groups can break up too.
  *
- * Either way the chosen boundary is the largest gap between children, so both
+ * Either way the chosen boundary is the valid gap nearest the target, so both
  * scopes agree on where to cut. Both scopes skip gaps that would leave either
  * side shorter than the configured `minPieceSec` floor, and the gesture fails
  * when none are left.
@@ -113,11 +114,15 @@ export function splitClip(
   idx: number,
   scope: MergeScope = 'clip',
   minPieceSec: number = 0,
+  targetSec?: number,
 ): ClipSplitResult | null {
   const clip = displayClips[idx];
   if (!clip) return null;
 
-  const split = splitClipAtLargestGap(clip, minPieceSec);
+  const split =
+    targetSec === undefined
+      ? splitClipAtMiddle(clip, minPieceSec)
+      : splitClipAtPosition(clip, targetSec, minPieceSec);
 
   if (!split) return null;
 
@@ -127,11 +132,9 @@ export function splitClip(
 /**
  * Directional split: break the piece off one end of a merged clip.
  *
- * Swipe up-right splits the rightmost part, up-left splits the leftmost part.
- * Each end's piece is the smallest valid one there, so a child shorter than
- * `minPieceSec` is absorbed into its neighbours until the accumulated piece
- * clears the floor. Both scopes behave like `splitClip`, cutting that single
- * boundary.
+ * Swipe up-right targets two-thirds; up-left targets one-third of the clip.
+ * Invalid boundaries are skipped until the nearest gap leaving both pieces
+ * at least `minPieceSec` long is found. Both scopes use the same target gap.
  */
 export function splitClipEnd(
   clips: Clip[],
@@ -144,7 +147,7 @@ export function splitClipEnd(
   const clip = displayClips[idx];
   if (!clip) return null;
 
-  const split = splitClipAtEnd(clip, side, minPieceSec);
+  const split = splitClipAtThird(clip, side, minPieceSec);
 
   if (!split) return null;
 

@@ -12,13 +12,13 @@
  *   isolated interval below the minimum is omitted.
  * - expansionRate: Fraction of surrounding gaps included in playback (0.25–0.4).
  * - repetitions: How many times a clicked clip is repeated (default: 3).
- * - loopPlaylist: Whether reaching the end of a track rolls on to the next
- *   track in the playlist; when off playback stops at the end (default: false).
+ * - loopMode: Stop, repeat the current track, repeat the tracklist, or play
+ *   random tracks when a track ends (default: off).
  * - showAdvancedControls: Whether the clip toolbar (merge gap + repeat
  *   controls) is shown below the waveform (default: false).
  * - mergeScope: Whether a merge/split gesture applies to every clip in the
  *   track ("global") or only the selected clip ("clip") (default: "clip").
- * - theme: Appearance palette (system/dark/light/midnight/paper/nova/rose/
+ * - theme: Appearance palette (listenoop/dark/light/midnight/paper/nova/
  *   qinghua/yingluo/norge). Each theme carries its own accent color, so there is no
  *   is no separate accent setting.
  * - language: UI locale ("en" | "zh" | "no", default: "no").
@@ -27,6 +27,7 @@
  */
 
 import {createSlice} from '@reduxjs/toolkit';
+import {restoreLoopMode, type LoopMode} from '../utils/loopMode';
 import type {PayloadAction} from '@reduxjs/toolkit';
 import type {MergeScope, WaveformView} from '../types';
 import type {ThemeId} from '../themes';
@@ -50,7 +51,7 @@ interface ConfigState {
   minClipLength: number;
   expansionRate: number;
   repetitions: number;
-  loopPlaylist: boolean;
+  loopMode: LoopMode;
   showAdvancedControls: boolean;
   mergeScope: MergeScope;
   theme: ThemeId;
@@ -66,7 +67,7 @@ export const DEFAULT_CONFIG: ConfigState = {
   minClipLength: 0.3,
   expansionRate: 0.25,
   repetitions: 3,
-  loopPlaylist: false,
+  loopMode: 'off',
   showAdvancedControls: false,
   mergeScope: 'clip',
   theme: DEFAULT_THEME,
@@ -114,6 +115,8 @@ function loadConfig(): ConfigState {
     const raw = localStorage.getItem(STORAGE_KEY);
     if (raw) {
       const parsed = JSON.parse(raw);
+      const loopMode = restoreLoopMode(parsed.loopMode, parsed.loopPlaylist);
+      delete parsed.loopPlaylist;
       // Retired controls must not return through the stored-field spread.
       delete parsed.minSplitPieceSec;
       delete parsed.minSilenceSec;
@@ -134,10 +137,7 @@ function loadConfig(): ConfigState {
           typeof parsed.showAdvancedControls === 'boolean'
             ? parsed.showAdvancedControls
             : DEFAULT_CONFIG.showAdvancedControls,
-        loopPlaylist:
-          typeof parsed.loopPlaylist === 'boolean'
-            ? parsed.loopPlaylist
-            : DEFAULT_CONFIG.loopPlaylist,
+        loopMode,
         language: isLocale(parsed.language)
           ? parsed.language
           : DEFAULT_CONFIG.language,

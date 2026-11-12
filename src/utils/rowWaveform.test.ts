@@ -27,11 +27,11 @@ describe('getBaseWindowSecs', () => {
 });
 
 describe('getWindowSecs', () => {
-  it('renders a minimum-length clip at 27px above the small-screen threshold', () => {
+  it('renders a minimum-length clip at 45px above the small-screen threshold', () => {
     for (const width of [600, 900, 1200, 1600]) {
       for (const minimum of [0.3, 0.5, 1]) {
         const seconds = getWindowSecs(width, minimum);
-        expect((width * minimum) / seconds).toBeCloseTo(27, 8);
+        expect((width * minimum) / seconds).toBeCloseTo(45, 8);
       }
     }
   });
@@ -46,8 +46,8 @@ describe('getWindowSecs', () => {
   });
 
   it('responds proportionally when the configured minimum changes', () => {
-    expect(getWindowSecs(600, 0.3)).toBeCloseTo(6.66666667, 7);
-    expect(getWindowSecs(1200, 0.3)).toBeCloseTo(13.33333333, 7);
+    expect(getWindowSecs(600, 0.3)).toBeCloseTo(4, 7);
+    expect(getWindowSecs(1200, 0.3)).toBeCloseTo(8, 7);
     expect(getWindowSecs(1200, 0.6)).toBeCloseTo(
       getWindowSecs(1200, 0.3) * 2,
       8,
@@ -58,7 +58,7 @@ describe('getWindowSecs', () => {
     expect(SMALL_VIEWPORT_THRESHOLD_PX).toBe(600);
     const at = getWindowSecs(600, 0.3);
     expect(getWindowSecs(599, 0.3)).toBe(at);
-    expect(getWindowSecs(601, 0.3)).toBeCloseTo(at + 0.3 / 27, 8);
+    expect(getWindowSecs(601, 0.3)).toBeCloseTo(at + 0.3 / 45, 8);
   });
 });
 

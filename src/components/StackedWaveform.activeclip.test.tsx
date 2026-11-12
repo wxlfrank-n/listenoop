@@ -51,8 +51,9 @@ function clipsOf(count: number, length: number): InitClipData[] {
  * Both lists cover the same 36s track; only the clip lengths differ, which
  * re-packs the rows.
  *
- * 3s clips: two per row, so page 1 covers 0-12s.
- * 1.5s clips: four per row, so page 1 covers 0-12s.
+ * With 45px minimum clips the row window is ~5.33s.
+ * 3s clips: one per row, so page 1 covers 0-6s.
+ * 1.5s clips: three per row, so page 1 covers 0-9s.
  */
 const longClips = clipsOf(12, 3);
 const shortClips = clipsOf(24, 1.5);
@@ -116,7 +117,7 @@ function setup() {
 beforeEach(() => {
   (globalThis as unknown as {ResizeObserver: unknown}).ResizeObserver =
     FakeResizeObserver;
-  // jsdom reports zero sizes. A 800x200 scroller gives a ~6.67s window and
+  // jsdom reports zero sizes. An 800x200 scroller gives a ~5.33s window and
   // two rows per page.
   Object.defineProperty(HTMLElement.prototype, 'clientWidth', {
     configurable: true,
@@ -142,9 +143,9 @@ describe('stacked waveform active-clip follow', () => {
   it('follows a split or merge that re-packs the edited clip onto another page', async () => {
     const {scrollTo, rerender, pageNumber} = setup();
 
-    // Page 1 shows 0-12s; the edited clip at 16.5s lands on page 2 after the
+    // Page 1 shows 0-6s; the edited clip at 16.5s lands on page 2 after the
     // re-pack, so page to it.
-    expect(pageNumber()).toBe('1 / 3');
+    expect(pageNumber()).toBe('1 / 6');
 
     scrollTo.mockClear();
 
@@ -155,7 +156,7 @@ describe('stacked waveform active-clip follow', () => {
       await vi.advanceTimersByTimeAsync(0);
     });
 
-    expect(pageNumber()).toBe('2 / 3');
+    expect(pageNumber()).toBe('2 / 4');
     // The active-clip follow effect's first run after mount uses
     // `behavior: 'auto'` (instant) so scroll-snap-type: x mandatory
     // doesn't interrupt a smooth animation between pages. Mount started
@@ -173,13 +174,13 @@ describe('stacked waveform active-clip follow', () => {
 
     scrollTo.mockClear();
 
-    // 4.5s is on page 1 (0-12s).
+    // The selected 3-6s clip is on page 1.
     rerender({displayClips: longClips, activeClip: 1});
     await act(async () => {
       await vi.advanceTimersByTimeAsync(0);
     });
 
-    expect(pageNumber()).toBe('1 / 3');
+    expect(pageNumber()).toBe('1 / 6');
     expect(scrollTo).not.toHaveBeenCalled();
   });
 
@@ -194,10 +195,10 @@ describe('stacked waveform active-clip follow', () => {
       await vi.advanceTimersByTimeAsync(0);
     });
 
-    expect(pageNumber()).toBe('3 / 3');
+    expect(pageNumber()).toBe('4 / 4');
     // First run of the active-clip follow effect after mount: instant
     // (`behavior: 'auto'`) scroll, not smooth, for the snap-settling reason
     // noted above.
-    expect(scrollTo).toHaveBeenCalledWith({left: 1600, behavior: 'auto'});
+    expect(scrollTo).toHaveBeenCalledWith({left: 2400, behavior: 'auto'});
   });
 });

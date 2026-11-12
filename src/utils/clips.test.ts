@@ -6,8 +6,8 @@ import {
   mergeClipsByGapScoped,
   getInitClipData,
   mergeClipPair,
-  splitClipAtLargestGap,
-  splitClipAtEnd,
+  splitClipAtMiddle,
+  splitClipAtThird,
   type Clip,
 } from './clips';
 
@@ -110,7 +110,7 @@ describe('getInitClipData — adaptive RMS', () => {
     expect(result.clips).toHaveLength(2);
     const groups = mergeClipsByGap(result.clips, result.initGap);
     expect(groups).toHaveLength(1);
-    expect(splitClipAtLargestGap(groups[0]!, 0.01)?.pieces).toHaveLength(2);
+    expect(splitClipAtMiddle(groups[0]!, 0.01)?.pieces).toHaveLength(2);
   });
 
   it('uses the arithmetic average of detected gaps for initial grouping', () => {
@@ -203,18 +203,40 @@ describe('getInitClipData — adaptive RMS', () => {
     expect(clips[0]!.end).toBeGreaterThanOrEqual(0.89);
   });
 
-  it('expands by 25% of surrounding silence without fixed time caps', () => {
+  it('caps leading and trailing expansion at half the minimum clip length', () => {
     const {clips} = detect([
       [3, 0],
       [0.5, 0.1],
       [4, 0],
     ]);
     const clip = clips[0]!;
-    expect(clip.start - clip.vStart).toBeCloseTo(clip.start * 0.25, 5);
-    expect(clip.vEnd - clip.end).toBeCloseTo((7.5 - clip.end) * 0.25, 5);
+    expect(clip.start - clip.vStart).toBeCloseTo(opts.minClipLength / 2, 8);
+    expect(clip.vEnd - clip.end).toBeCloseTo(opts.minClipLength / 2, 8);
     expect(clip.vStart).toBeGreaterThanOrEqual(0);
     expect(clip.vEnd).toBeLessThanOrEqual(7.5);
     expect(clip.expanded).toBe(true);
+  });
+
+  it('caps both sides of shared gaps using the configured minimum', () => {
+    for (const minClipLength of [0.2, 0.3, 0.8]) {
+      for (const expansionRate of [0.25, 0.4]) {
+        const result = detect(
+          [
+            [3, 0],
+            [1, 0.1],
+            [4, 0],
+            [1, 0.1],
+            [3, 0],
+          ],
+          {minClipLength, expansionRate},
+        );
+        expect(result.clips).toHaveLength(2);
+        for (const clip of result.clips) {
+          expect(clip.start - clip.vStart).toBeCloseTo(minClipLength / 2, 8);
+          expect(clip.vEnd - clip.end).toBeCloseTo(minClipLength / 2, 8);
+        }
+      }
+    }
   });
 
   it('expands both sides of each shared gap consistently and marks every clip expanded', () => {
@@ -267,7 +289,10 @@ describe('getInitClipData — adaptive RMS', () => {
     expect(expanded.initGap).toBe(baseline.initGap);
     const [left, right] = expanded.clips;
     const gap = right!.start - left!.end;
-    expect(left!.vStart).toBeCloseTo(left!.start * 0.6, 8);
+    expect(left!.vStart).toBeCloseTo(
+      left!.start - Math.min(opts.minClipLength / 2, left!.start * 0.4),
+      8,
+    );
     expect(left!.vEnd).toBeCloseTo(left!.end + gap * 0.4, 8);
     expect(right!.vStart).toBeCloseTo(right!.start - gap * 0.4, 8);
     expect(left!.vEnd).toBeLessThan(right!.vStart);
@@ -275,9 +300,9 @@ describe('getInitClipData — adaptive RMS', () => {
 
   it('clamps expansion to 0.25–0.4 and falls back to 0.25 for nonfinite values', () => {
     const parts: [number, number][] = [
-      [1, 0],
+      [0.2, 0],
       [0.5, 0.1],
-      [1, 0],
+      [0.2, 0],
     ];
     const baseline = detect(parts, {expansionRate: 0.25});
     for (const expansionRate of [0, 0.1, NaN, Infinity]) {
@@ -448,22 +473,82 @@ describe('mergeClipsByGap', () => {
   });
 });
 
-describe('splitClipAtLargestGap', () => {
+describe('position-based splits', () => {
+  const children = Array.from({length: 10}, (_, i) =>
+    mk(i, i === 9 ? 10 : i + 0.8),
+  );
+  const parent = {...mk(0, 10), children};
+
+  it('selects distinct valid gaps nearest the three target positions', () => {
+    expect(splitClipAtMiddle(parent, 0.3)?.pieces[0].end).toBe(4.8);
+    expect(splitClipAtThird(parent, 'left', 0.3)?.pieces[0].end).toBe(2.8);
+    expect(splitClipAtThird(parent, 'right', 0.3)?.pieces[0].end).toBe(6.8);
+  });
+
+  it('skips the nearest gap if it leaves either resulting piece too short', () => {
+    expect(splitClipAtThird(parent, 'left', 3.5)?.pieces[0].end).toBe(3.8);
+    expect(splitClipAtThird(parent, 'right', 3.5)?.pieces[0].end).toBe(5.8);
+    expect(splitClipAtMiddle(parent, 6)).toBeNull();
+    expect(splitClipAtThird(parent, 'left', 6)).toBeNull();
+    expect(splitClipAtThird(parent, 'right', 6)).toBeNull();
+  });
+
+  it('targets the interval itself, not its absolute time or playback padding', () => {
+    const shifted = children.map(child => ({
+      ...child,
+      start: child.start + 100,
+      end: child.end + 100,
+      vStart: child.start + 99,
+      vEnd: child.end + 101,
+    }));
+    const group = {
+      start: 100,
+      end: 110,
+      vStart: 90,
+      vEnd: 120,
+      children: shifted,
+    };
+    expect(splitClipAtMiddle(group)?.pieces[0].end).toBe(104.8);
+    expect(splitClipAtThird(group, 'left')?.pieces[0].end).toBe(102.8);
+    expect(splitClipAtThird(group, 'right')?.pieces[0].end).toBe(106.8);
+  });
+
+  it('uses the nearest gap instead of the largest gap', () => {
+    const group = {
+      ...mk(0, 10),
+      children: [mk(0, 1), mk(4, 5), mk(5.2, 6), mk(6.2, 10)],
+    };
+    expect(splitClipAtMiddle(group)?.pieces[0].end).toBe(5);
+    expect(splitClipAtMiddle(group)?.gap).toBeCloseTo(0.2);
+  });
+
+  it('keeps zero gaps valid and picks the earlier equidistant gap', () => {
+    const group = {...mk(0, 3), children: [mk(0, 1), mk(1, 2), mk(2, 3)]};
+    expect(splitClipAtMiddle(group, 1)?.pieces[0]).toEqual(mk(0, 1));
+    expect(splitClipAtMiddle(group, 1)?.gap).toBe(0);
+  });
+
+  it('treats expanded clips as unsplittable for every direction', () => {
+    expect(splitClipAtMiddle({...parent, expanded: true})).toBeNull();
+    expect(splitClipAtThird({...parent, expanded: true}, 'left')).toBeNull();
+    expect(splitClipAtThird({...parent, expanded: true}, 'right')).toBeNull();
+  });
+});
+
+describe('splitClipAtMiddle', () => {
   it('returns null for a clip without children', () => {
-    expect(splitClipAtLargestGap(mk(0, 1))).toBeNull();
+    expect(splitClipAtMiddle(mk(0, 1))).toBeNull();
   });
 
   it('returns null for a group with fewer than two children', () => {
-    expect(
-      splitClipAtLargestGap({...mk(0, 1), children: [mk(0, 1)]}),
-    ).toBeNull();
+    expect(splitClipAtMiddle({...mk(0, 1), children: [mk(0, 1)]})).toBeNull();
   });
 
-  it('cuts a group at its largest child gap into two pieces', () => {
+  it('cuts at the earlier of two gaps equally close to the midpoint', () => {
     const a = mk(0, 1);
     const b = mk(2, 3);
     const c = mk(4, 5);
-    const result = splitClipAtLargestGap({...mk(0, 5), children: [a, b, c]});
+    const result = splitClipAtMiddle({...mk(0, 5), children: [a, b, c]});
     expect(result?.gap).toBe(1);
     expect(result?.pieces).toHaveLength(2);
     expect(result?.pieces[0]!.children).toBeUndefined();
@@ -491,7 +576,7 @@ describe('splitClipAtLargestGap', () => {
     };
     const parent = {...mk(0, 2), children: [a, bc]};
 
-    const result = splitClipAtLargestGap(parent);
+    const result = splitClipAtMiddle(parent);
 
     expect(result?.gap).toBe(0);
     expect(result?.pieces).toEqual([a, bc]);
@@ -504,7 +589,7 @@ describe('splitClipAtLargestGap', () => {
    * Expanded clips: an `expanded` clip (its vStart/vEnd pushed out into
    * the surrounding silence by `expandClip`) is treated as a single
    * visual unit and never split. The guard at the top of
-   * `splitClipAtLargestGap` short-circuits to null so the UI hides the
+   * `splitClipAtMiddle` short-circuits to null so the UI hides the
    * split affordance for any clip whose `expanded` flag is set, even if
    * it has multiple children that would otherwise be valid split targets.
    */
@@ -524,9 +609,9 @@ describe('splitClipAtLargestGap', () => {
         children: [a, b, c],
       };
 
-      expect(splitClipAtLargestGap(parent)).toBeNull();
+      expect(splitClipAtMiddle(parent)).toBeNull();
       // The min-piece floor is irrelevant once the guard fires.
-      expect(splitClipAtLargestGap(parent, 0.1)).toBeNull();
+      expect(splitClipAtMiddle(parent, 0.1)).toBeNull();
     });
 
     it('returns null for an expanded clip regardless of minPieceSec', () => {
@@ -541,7 +626,7 @@ describe('splitClipAtLargestGap', () => {
         children: [a, b],
       };
 
-      expect(splitClipAtLargestGap(parent, 0)).toBeNull();
+      expect(splitClipAtMiddle(parent, 0)).toBeNull();
     });
 
     it('still splits an unexpanded parent that has expanded children', () => {
@@ -549,7 +634,7 @@ describe('splitClipAtLargestGap', () => {
       // An unexpanded parent whose children happen to be expanded leaves
       // (the normal case after `expandClips` runs on detected leaves and
       // `mergeClipPair` builds a fresh unexpanded parent around them) is
-      // still split at the largest gap as usual.
+      // still split at the valid gap nearest its midpoint.
       const a = {...mk(0, 1), vStart: 0, vEnd: 1.2, expanded: true};
       const b = {...mk(2, 3), vStart: 1.9, vEnd: 3.1, expanded: true};
       const parent = {
@@ -560,7 +645,7 @@ describe('splitClipAtLargestGap', () => {
         children: [a, b],
       };
 
-      const result = splitClipAtLargestGap(parent);
+      const result = splitClipAtMiddle(parent);
 
       expect(result).not.toBeNull();
       expect(result?.gap).toBe(1);
@@ -653,6 +738,40 @@ describe('long-clip valley splitting', () => {
         .clips,
     ).toHaveLength(1);
   });
+
+  it.each([
+    [1450, 0.8, 0.8],
+    [1900, 0.8, 1.2],
+    [1700, 0.8, 0.8],
+    [1700, 1.6, 1.2],
+  ])(
+    'weighs peak spacing (%i ms) and the clip-wide peak (%f)',
+    (lastPeak, initialLevel, expected) => {
+      const points = [
+        [0, initialLevel],
+        [350, 0.8],
+        [550, 1],
+        [800, 0.3],
+        [1000, 1],
+        [1200, 0.5],
+        [lastPeak, 1],
+        [2000, 0.8],
+      ] as const;
+      let segment = 0;
+      const audio = Float32Array.from({length: 2000}, (_, i) => {
+        if (i > points[segment + 1]![0]) segment++;
+        const [start, from] = points[segment]!;
+        const [end, to] = points[segment + 1]!;
+        return from + ((i - start) / (end - start)) * (to - from);
+      });
+      const {clips} = getInitClipData(audio, sampleRate, {
+        ...options,
+        minClipLength: 0.6,
+      });
+      expect(clips).toHaveLength(2);
+      expect(Math.abs(clips[0]!.end - expected)).toBeLessThan(0.02);
+    },
+  );
 });
 
 describe('getClipGaps', () => {
@@ -740,26 +859,26 @@ describe('configured split minimum', () => {
   it('rejects a split that would strand a clip below the supplied minimum', () => {
     const clip = group([mk(0, 0.2), mk(0.5, 1)]);
     for (const minimum of [0.3, 0.5, 0.7]) {
-      expect(splitClipAtLargestGap(clip, minimum)).toBeNull();
-      expect(splitClipAtEnd(clip, 'left', minimum)).toBeNull();
-      expect(splitClipAtEnd(clip, 'right', minimum)).toBeNull();
+      expect(splitClipAtMiddle(clip, minimum)).toBeNull();
+      expect(splitClipAtThird(clip, 'left', minimum)).toBeNull();
+      expect(splitClipAtThird(clip, 'right', minimum)).toBeNull();
     }
   });
 
   it('allows pieces of exactly 0.3 seconds without counting playback padding', () => {
     const clip = group([mk(0, 0.3), mk(0.5, 0.8)]);
-    expect(splitClipAtLargestGap(clip, 0.3)?.pieces).toHaveLength(2);
-    expect(splitClipAtEnd(clip, 'left', 0.3)?.pieces).toHaveLength(2);
+    expect(splitClipAtMiddle(clip, 0.3)?.pieces).toHaveLength(2);
+    expect(splitClipAtThird(clip, 'left', 0.3)?.pieces).toHaveLength(2);
     const short = group([{...mk(0, 0.2), vStart: 0, vEnd: 0.4}, mk(0.5, 1)]);
-    expect(splitClipAtLargestGap(short, 0.3)).toBeNull();
+    expect(splitClipAtMiddle(short, 0.3)).toBeNull();
   });
 
   it('skips a larger invalid gap and finds a split with two long enough pieces', () => {
     const clip = group([mk(0, 0.2), mk(1, 1.4), mk(1.6, 2)]);
     for (const result of [
-      splitClipAtLargestGap(clip, 0.3),
-      splitClipAtEnd(clip, 'left', 0.3),
-      splitClipAtEnd(clip, 'right', 0.3),
+      splitClipAtMiddle(clip, 0.3),
+      splitClipAtThird(clip, 'left', 0.3),
+      splitClipAtThird(clip, 'right', 0.3),
     ]) {
       expect(result?.pieces).toHaveLength(2);
       expect(
@@ -807,8 +926,8 @@ describe('shared minimum clip length', () => {
     expect(result.clips).toHaveLength(2);
     expect(result.clips.every(clip => clip.end - clip.start >= 0.7)).toBe(true);
     const group = {...mk(0, 1.4), children: [mk(0, 0.4), mk(0.6, 1.4)]};
-    expect(splitClipAtLargestGap(group, 0.7)).toBeNull();
-    expect(splitClipAtEnd(group, 'right', 0.7)).toBeNull();
+    expect(splitClipAtMiddle(group, 0.7)).toBeNull();
+    expect(splitClipAtThird(group, 'right', 0.7)).toBeNull();
   });
 
   it('omits a lone short fragment rather than using surrounding silence to meet the minimum', () => {
@@ -838,6 +957,6 @@ it('uses options.minClipLength without imposing a separate 0.3-second floor', ()
   ).toHaveLength(0);
   const children = [mk(0, 0.15), mk(0.3, 0.5)];
   const group = {...mk(0, 0.5), children};
-  expect(splitClipAtLargestGap(group, 0.1)?.pieces).toHaveLength(2);
-  expect(splitClipAtLargestGap(group, 0.3)).toBeNull();
+  expect(splitClipAtMiddle(group, 0.1)?.pieces).toHaveLength(2);
+  expect(splitClipAtMiddle(group, 0.3)).toBeNull();
 });

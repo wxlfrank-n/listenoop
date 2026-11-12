@@ -22,7 +22,7 @@ export interface SplitOptions {
   silenceRatio: number;
   /** Minimum detected and manually split clip span in seconds, before padding. */
   minClipLength: number;
-  /** Fraction of each surrounding silent gap included in playback (0.25–0.4). */
+  /** Fraction of surrounding silence included in playback (0.25–0.4), capped at half minClipLength per side. */
   expansionRate?: number;
   /** Only clips longer than this many seconds are considered for valley splitting. Default: 1. */
   longClipThreshold?: number;
@@ -60,12 +60,19 @@ export function getInitClipData(
   const rms = calculateFrameRms(data, window);
   const thresholds = estimateSoundThresholds(rms, options.silenceRatio);
   const clips = detectSoundClips(rms, window, thresholds, sampleRate, duration);
-  const envelope = smoothLogEnergy(rms, window.hopSize / sampleRate);
   const expansionRate = Math.max(
     0.25,
     Math.min(0.4, finiteOr(options.expansionRate, 0.25)),
   );
-  return finalizeClips(clips, options.minClipLength, duration, expansionRate, envelope, window.hopSize / sampleRate, finiteOr(options.longClipThreshold, 1));
+  return finalizeClips(
+    clips,
+    options.minClipLength,
+    duration,
+    expansionRate,
+    rms,
+    window.hopSize / sampleRate,
+    finiteOr(options.longClipThreshold, 1),
+  );
 }
 function finiteOr(value: number | undefined, fallback: number): number {
   return value !== undefined && Number.isFinite(value) ? value : fallback;
@@ -203,7 +210,8 @@ function detectSoundClips(
 /** Smooth log RMS over a 15 ms radius for the second-pass valley search. */
 function smoothLogEnergy(rms: Float32Array, hopSeconds: number): Float32Array {
   const db = new Float32Array(rms.length);
-  for (let i = 0; i < rms.length; i++) db[i] = 20 * Math.log10(Math.max(rms[i]!, 1e-8));
+  for (let i = 0; i < rms.length; i++)
+    db[i] = 20 * Math.log10(Math.max(rms[i]!, 1e-8));
   const radius = Math.max(1, Math.round(0.015 / hopSeconds));
   const prefix = new Float64Array(db.length + 1);
   for (let i = 0; i < db.length; i++) prefix[i + 1] = prefix[i]! + db[i]!;
@@ -216,68 +224,119 @@ function smoothLogEnergy(rms: Float32Array, hopSeconds: number): Float32Array {
   return smooth;
 }
 /** Split only originally long clips at as many valid local energy valleys as possible. */
-function splitLongClipsAtValleys(clips: Clip[], db: Float32Array, hopSeconds: number, minClipLength: number, longClipThreshold: number): Clip[] {
-  if (!Number.isFinite(longClipThreshold) || longClipThreshold <= 0 || !Number.isFinite(hopSeconds) || hopSeconds <= 0 || !db.length) return clips;
+function splitLongClipsAtValleys(
+  clips: Clip[],
+  rms: Float32Array,
+  hopSeconds: number,
+  minClipLength: number,
+  longClipThreshold: number,
+): Clip[] {
+  if (
+    !Number.isFinite(longClipThreshold) ||
+    longClipThreshold <= 0 ||
+    !Number.isFinite(hopSeconds) ||
+    hopSeconds <= 0 ||
+    !rms.length
+  )
+    return clips;
   const minimum = Math.max(0, minClipLength);
+  return clips.flatMap(clip => {
+    const duration = clip.end - clip.start;
+    if (duration <= longClipThreshold || duration < 2 * minimum) return [clip];
+    return splitClipAtValleys(clip, rms, hopSeconds, minimum);
+  });
+}
+
+/** Build one clip's envelope and select valid split boundaries. */
+function splitClipAtValleys(
+  clip: Clip,
+  rms: Float32Array,
+  hopSeconds: number,
+  minimum: number,
+): Clip[] {
+  // Detected clip starts lie on the original RMS frame grid.
+  const startFrame = Math.round(clip.start / hopSeconds);
+  const endFrame = Math.ceil(clip.end / hopSeconds - 1e-9);
+  const db = smoothLogEnergy(rms.subarray(startFrame, endFrame), hopSeconds);
+  let highestTop = -Infinity;
+  for (const level of db) highestTop = Math.max(highestTop, level);
+  const candidates: {time: number; score: number}[] = [];
+  // Each flat-bottomed valley contributes one candidate, not one per frame.
+  for (let i = 1; i < db.length - 1;) {
+    const plateauStart = i;
+    while (i < db.length - 2 && db[i + 1]! === db[plateauStart]!) i++;
+    const plateauEnd = i;
+    const level = db[plateauStart]!;
+    if (level < db[plateauStart - 1]! && level < db[plateauEnd + 1]!) {
+      const center = Math.floor((plateauStart + plateauEnd) / 2);
+      const time = (startFrame + center) * hopSeconds;
+      if (
+        time > clip.start &&
+        time < clip.end &&
+        time - clip.start + 1e-9 >= minimum &&
+        clip.end - time + 1e-9 >= minimum
+      ) {
+        const leftTop = findValleyTop(db, plateauStart - 1, -1);
+        const rightTop = findValleyTop(db, plateauEnd + 1, 1);
+        const depth = highestTop - level;
+        const width = (rightTop - leftTop) * hopSeconds;
+        candidates.push({time, score: depth * width});
+      }
+    }
+    i++;
+  }
+  if (!candidates.length) return [clip];
+  // Maximize total valley score with at least minimum seconds between splits.
+  const scores = new Float64Array(candidates.length);
+  const previous = new Int32Array(candidates.length).fill(-1);
+  let eligible = -1;
+  let bestPrevious = -1;
+  const better = (a: number, b: number): boolean =>
+    a >= 0 && (b < 0 || scores[a]! > scores[b]!);
+  for (let i = 0; i < candidates.length; i++) {
+    const candidate = candidates[i]!;
+    while (
+      eligible + 1 < i &&
+      candidate.time - candidates[eligible + 1]!.time + 1e-9 >= minimum
+    ) {
+      eligible++;
+      if (better(eligible, bestPrevious)) bestPrevious = eligible;
+    }
+    previous[i] = bestPrevious;
+    scores[i] =
+      candidate.score + (bestPrevious < 0 ? 0 : scores[bestPrevious]!);
+  }
+  let best = -1;
+  for (let i = 0; i < candidates.length; i++) if (better(i, best)) best = i;
+  const boundaries: number[] = [];
+  for (let i = best; i >= 0; i = previous[i]!)
+    boundaries.push(candidates[i]!.time);
+  boundaries.reverse();
   const result: Clip[] = [];
-  for (const clip of clips) {
-    if (clip.end - clip.start <= longClipThreshold || clip.end - clip.start < 2 * minimum) {
-      result.push(clip);
-      continue;
-    }
-    const first = Math.max(1, Math.ceil((clip.start + minimum) / hopSeconds));
-    const last = Math.min(db.length - 2, Math.floor((clip.end - minimum) / hopSeconds));
-    const candidates: {time: number; depth: number}[] = [];
-    // Each flat-bottomed valley contributes one candidate, not one per frame.
-    for (let i = first; i <= last;) {
-      const plateauStart = i;
-      while (i < last && db[i + 1]! === db[plateauStart]!) i++;
-      const plateauEnd = i;
-      const level = db[plateauStart]!;
-      if (level < db[plateauStart - 1]! && level < db[plateauEnd + 1]!) {
-        const center = Math.floor((plateauStart + plateauEnd) / 2);
-        const time = center * hopSeconds;
-        if (time > clip.start && time < clip.end && time - clip.start + 1e-9 >= minimum && clip.end - time + 1e-9 >= minimum) {
-          const depth = Math.min(db[plateauStart - 1]!, db[plateauEnd + 1]!) - level;
-          candidates.push({time, depth});
-        }
-      }
-      i++;
-    }
-    if (!candidates.length) {
-      result.push(clip);
-      continue;
-    }
-    // Dynamic programming: maximize the number of valid clips; for equal counts,
-    // prefer stronger valleys. Every neighboring boundary must be >= minimum apart.
-    const counts = new Int32Array(candidates.length);
-    const scores = new Float64Array(candidates.length);
-    const previous = new Int32Array(candidates.length).fill(-1);
-    let eligible = -1;
-    let bestPrevious = -1;
-    const better = (a: number, b: number): boolean => a >= 0 && (b < 0 || counts[a]! > counts[b]! || (counts[a] === counts[b] && scores[a]! > scores[b]!));
-    for (let i = 0; i < candidates.length; i++) {
-      const candidate = candidates[i]!;
-      while (eligible + 1 < i && candidate.time - candidates[eligible + 1]!.time + 1e-9 >= minimum) {
-        eligible++;
-        if (better(eligible, bestPrevious)) bestPrevious = eligible;
-      }
-      previous[i] = bestPrevious;
-      counts[i] = (bestPrevious < 0 ? 1 : counts[bestPrevious]! + 1);
-      scores[i] = candidate.depth + (bestPrevious < 0 ? 0 : scores[bestPrevious]!);
-    }
-    let best = -1;
-    for (let i = 0; i < candidates.length; i++) if (better(i, best)) best = i;
-    const boundaries: number[] = [];
-    for (let i = best; i >= 0; i = previous[i]!) boundaries.push(candidates[i]!.time);
-    boundaries.reverse();
-    let start = clip.start;
-    for (const end of [...boundaries, clip.end]) {
-      result.push({start, end, vStart: start, vEnd: end});
-      start = end;
-    }
+  let start = clip.start;
+  for (const end of [...boundaries, clip.end]) {
+    result.push({start, end, vStart: start, vEnd: end});
+    start = end;
   }
   return result;
+}
+
+/** Follow a valley's slope to its neighboring peak, centering flat tops. */
+function findValleyTop(
+  db: Float32Array,
+  frame: number,
+  direction: -1 | 1,
+): number {
+  let topStart = frame;
+  for (
+    let next = frame + direction;
+    next >= 0 && next < db.length && db[next]! >= db[frame]!;
+    next += direction
+  ) {
+    if (db[next]! > db[frame]!) topStart = next;
+    frame = next;
+  }
+  return (topStart + frame) / 2;
 }
 /** Enforce unpadded lengths before adding playback padding and the merge gap. */
 function finalizeClips(
@@ -285,18 +344,24 @@ function finalizeClips(
   minClipLength: number,
   duration: number,
   expansionRate: number,
-  envelope: Float32Array,
+  rms: Float32Array,
   hopSeconds: number,
   longClipThreshold: number,
 ): InitClipData {
   // Overlapping windows may touch. Coalesce those without manufacturing a gap.
   clips = mergeClipsByGap(clips, 0);
-  clips = splitLongClipsAtValleys(clips, envelope, hopSeconds, minClipLength, longClipThreshold);
+  clips = splitLongClipsAtValleys(
+    clips,
+    rms,
+    hopSeconds,
+    minClipLength,
+    longClipThreshold,
+  );
   clips = enforceMinClipLength(clips, minClipLength);
   if (!clips.length) return {clips: [], gaps: [], initGap: 0};
-  expandClips(clips, duration, expansionRate);
+  expandClips(clips, duration, expansionRate, minClipLength / 2);
   const gaps = getClipGaps(clips);
-  if(gaps.length > 0 && gaps[0] === 0) gaps[0] = -0.000001; // Avoid zero merge gap, which would prevent any merging.
+  if (gaps.length > 0 && gaps[0] === 0) gaps[0] = -0.000001; // Avoid zero merge gap, which would prevent any merging.
   return {
     clips,
     gaps,
@@ -309,19 +374,25 @@ function expandClips(
   clips: Clip[],
   audioDuration: number,
   expansionRate: number,
+  maxExpansion: number,
 ) {
   if (clips.length === 0) return;
   let prev = clips[0]!;
-  prev.vStart = prev.start - expansionRate * prev.start;
+  prev.vStart = prev.start - Math.min(maxExpansion, expansionRate * prev.start);
   for (let i = 1; i < clips.length; i++) {
     const next = clips[i]!;
-    const expansion = (next.start - prev.end) * expansionRate;
+    const expansion = Math.min(
+      maxExpansion,
+      (next.start - prev.end) * expansionRate,
+    );
     prev.vEnd = prev.end + expansion;
     prev.expanded = true;
     next.vStart = next.start - expansion;
     prev = next;
   }
-  prev.vEnd = prev.end + expansionRate * (audioDuration - prev.end);
+  prev.vEnd =
+    prev.end +
+    Math.min(maxExpansion, expansionRate * (audioDuration - prev.end));
   prev.expanded = true;
 }
 /**
@@ -376,7 +447,7 @@ export function getClipGaps(clips: Clip[]): number[] {
 }
 /**
  * Wrap `clips` as a single group, or return them as-is when there is only one.
- * 
+ *
  * A group of one would be unsplittable, so single clips stay single clips.
  */
 function asGroup(clips: Clip[]): Clip {
@@ -406,69 +477,37 @@ const isSplittableBoundary = (
     last.end - right.start + 1e-9 >= minPieceSec
   );
 };
-export function splitClipAtLargestGap(
-  clip: Clip,
-  minPieceSec = 0,
-): {pieces: Clip[]; gap: number} | null {
-  // An expanded clip (its vStart/vEnd pushed out into surrounding silence
-  // by `expandClip`) is treated as a single visual unit and never split.
-  // Splitting it would create pieces whose visual boundaries no longer
-  // match the user's mental model of what's on screen, so the gesture is
-  // rejected up-front and the UI hides the split affordance for it.
-  if (clip.expanded) return null;
+/** List the midpoints and child indices of gaps that can split this clip. */
+export function getClipSplitBoundaries(clip: Clip, minPieceSec = 0) {
+  const boundaries: {time: number; index: number}[] = [];
+  if (clip.expanded) return boundaries;
   const children = clip.children ?? [];
-  if (children.length < 2) return null;
-  let splitAt = -1;
-  let largestGap = -Infinity;
   for (let i = 1; i < children.length; i++) {
-    if (!isSplittableBoundary(children, i, minPieceSec)) continue;
-    const gap = children[i]!.start - children[i - 1]!.end;
-    // Strictly greater, so equal gaps split at the earliest boundary.
-    if (gap > largestGap) {
-      largestGap = gap;
-      splitAt = i;
+    if (isSplittableBoundary(children, i, minPieceSec)) {
+      boundaries.push({
+        time: (children[i - 1]!.end + children[i]!.start) / 2,
+        index: i,
+      });
     }
   }
-  if (splitAt === -1) return null;
-  return {
-    pieces: [
-      asGroup(children.slice(0, splitAt)),
-      asGroup(children.slice(splitAt)),
-    ],
-    gap: largestGap,
-  };
+  return boundaries;
 }
-/**
- * Directional variant of `splitClipAtLargestGap`: pick the boundary closest to
- * the requested end of the group instead of the largest gap.
- * 
- * "right" scans from the last gap inward, "left" from the first. Either picks
- * the smallest valid piece on that side: a short child is absorbed into its
- * neighbours until the accumulated end-piece clears `minPieceSec`, so the
- * detached part is always "longer than the minimum".
- */
-export function splitClipAtEnd(
+
+/** Pick the valid gap whose midpoint is nearest to the requested time. */
+export function splitClipAtPosition(
   clip: Clip,
-  side: 'left' | 'right',
+  target: number,
   minPieceSec = 0,
-): {pieces: Clip[]; gap: number} | null {
+): {pieces: [Clip, Clip]; gap: number} | null {
   const children = clip.children ?? [];
-  const count = children.length;
-  if (count < 2) return null;
   let splitAt = -1;
-  if (side === 'right') {
-    for (let i = count - 1; i >= 1; i--) {
-      if (isSplittableBoundary(children, i, minPieceSec)) {
-        splitAt = i;
-        break;
-      }
-    }
-  } else {
-    for (let i = 1; i < count; i++) {
-      if (isSplittableBoundary(children, i, minPieceSec)) {
-        splitAt = i;
-        break;
-      }
+  let nearestDistance = Infinity;
+  for (const {time, index} of getClipSplitBoundaries(clip, minPieceSec)) {
+    const distance = Math.abs(time - target);
+    // Stable across platforms: ties within floating-point tolerance go left.
+    if (distance < nearestDistance - 1e-9) {
+      nearestDistance = distance;
+      splitAt = index;
     }
   }
   if (splitAt === -1) return null;
@@ -480,23 +519,41 @@ export function splitClipAtEnd(
     gap: children[splitAt]!.start - children[splitAt - 1]!.end,
   };
 }
+
+/** Split nearest to the halfway point. */
+export function splitClipAtMiddle(clip: Clip, minPieceSec = 0) {
+  return splitClipAtPosition(clip, (clip.start + clip.end) / 2, minPieceSec);
+}
+
+/** Left/right-angle swipe: split nearest to one-third/two-thirds, respectively. */
+export function splitClipAtThird(
+  clip: Clip,
+  side: 'left' | 'right',
+  minPieceSec = 0,
+) {
+  return splitClipAtPosition(
+    clip,
+    clip.start + (clip.end - clip.start) * (side === 'left' ? 1 / 3 : 2 / 3),
+    minPieceSec,
+  );
+}
 /**
  * Regroup `displayClips` so it is merged by `mergeGap` only inside `focus`,
  * leaving every other clip exactly as it is.
- * 
+ *
  * This is the per-clip counterpart of `mergeClipsByGap`: the gesture's gap
  * applies to the selected clip's own run of clips instead of to the whole track.
- * 
+ *
  * `displayClips` is the *current* grouping, not the raw detection result, so
  * grouping established elsewhere on the track survives the gesture instead of
  * being reverted to the detector's output.
- * 
+ *
  * The focused run is regrouped as currently displayed, so `mergeGap` only
  * creates merges between the run's existing groups. Already-merged groups are
  * treated as atomic units and never broken back apart. `focus` is matched by
  * containment, so passing either a displayed group or one of the clips inside
  * it selects the same region.
- * 
+ *
  * Returns `displayClips` unchanged when `focus` matches nothing or holds fewer
  * than two clips.
  */

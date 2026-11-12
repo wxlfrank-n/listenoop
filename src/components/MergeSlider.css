@@ -79,8 +79,8 @@
  */
 @keyframes clip-merge-stepper-press {
   from {
-    border-color: var(--accent);
-    color: var(--accent);
+    border-color: var(--accent-ink);
+    color: var(--accent-ink);
     background: var(--bg-hover);
   }
 }
@@ -132,7 +132,7 @@
 }
 
 .clip-merge__slider input:focus-visible {
-  outline: 2px solid var(--accent);
+  outline: 2px solid var(--accent-ink);
   outline-offset: 12px;
 }
 

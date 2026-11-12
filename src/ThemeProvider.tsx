@@ -13,12 +13,6 @@ export function ThemeProvider({children}: {children: ReactNode}) {
 
   useEffect(() => {
     applyThemeVars(config.theme);
-    // A `system` theme must track OS appearance changes live.
-    if (config.theme !== 'system' || !window.matchMedia) return;
-    const query = window.matchMedia('(prefers-color-scheme: dark)');
-    const onChange = () => applyThemeVars('system');
-    query.addEventListener('change', onChange);
-    return () => query.removeEventListener('change', onChange);
   }, [config.theme]);
 
   return <>{children}</>;

@@ -40,6 +40,28 @@ beforeAll(() => {
 });
 
 describe('Clips list', () => {
+  it('does not reuse a gesture target for a different resulting clip at the same index', () => {
+    const original = {start: 1, end: 5, vStart: 1, vEnd: 5};
+    const {rerender, props, container} = renderClips({
+      clips: [original],
+      activeClip: 0,
+    });
+    const oldTarget = container.querySelector('[data-clip-idx="0"]');
+    const pieces = [
+      {start: 1, end: 2, vStart: 1, vEnd: 2},
+      {start: 3, end: 5, vStart: 3, vEnd: 5},
+    ];
+    rerender(<Clips {...props} clips={pieces} />);
+    const newTarget = container.querySelector('[data-clip-idx="0"]');
+    expect(newTarget).not.toBe(oldTarget);
+    expect(newTarget?.getAttribute('aria-pressed')).toBe('true');
+    const onPlayRange = vi.fn();
+    rerender(<Clips {...props} clips={pieces} onPlayRange={onPlayRange} />);
+    expect(container.querySelector('[data-clip-idx="0"]')).toBe(newTarget);
+    fireEvent.click(newTarget!);
+    expect(onPlayRange).toHaveBeenCalledWith(1, 2, 3);
+  });
+
   it('renders only the previous and next active clips when selection changes', () => {
     const clips = [0, 1, 2, 3].map(i => ({
       start: i * 2,

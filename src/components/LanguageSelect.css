@@ -36,7 +36,7 @@
 }
 
 .language-select__button:focus-visible {
-  outline: 2px solid var(--accent);
+  outline: 2px solid var(--accent-ink);
   outline-offset: 1px;
 }
 
@@ -86,11 +86,11 @@
 }
 
 .language-select__option--selected {
-  color: var(--accent);
+  color: var(--accent-ink);
   font-weight: 500;
 }
 
 .language-select__check {
   flex: 0 0 auto;
-  color: var(--accent);
+  color: var(--accent-ink);
 }

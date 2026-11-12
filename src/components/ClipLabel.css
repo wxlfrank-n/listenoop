@@ -31,6 +31,6 @@
 
 .stacked-clip-label--active {
   background: var(--accent);
-  border-color: var(--accent);
+  border-color: var(--accent-ink);
   color: var(--on-accent);
 }

@@ -57,19 +57,24 @@ describe('Settings footer', () => {
 });
 
 describe('Settings playback loop', () => {
-  it('is off by default and can be turned on', () => {
+  it('offers all four modes and switches between them', () => {
     renderSettings();
 
     fireEvent.click(screen.getByRole('tab', {name: 'Playback'}));
 
-    const toggle = screen.getByRole('checkbox', {
-      name: /Loop playback/,
-    }) as HTMLInputElement;
-
-    expect(toggle.checked).toBe(false);
-
-    fireEvent.click(toggle);
-
-    expect(toggle.checked).toBe(true);
+    const select = screen.getByRole('combobox', {
+      name: 'Loop mode',
+    }) as HTMLSelectElement;
+    expect(select.value).toBe('off');
+    expect(Array.from(select.options).map(option => option.text)).toEqual([
+      'No loop',
+      'Current track',
+      'Whole tracklist',
+      'Random tracklist',
+    ]);
+    for (const value of ['track', 'playlist', 'shuffle', 'off']) {
+      fireEvent.change(select, {target: {value}});
+      expect(select.value).toBe(value);
+    }
   });
 });

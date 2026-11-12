@@ -32,12 +32,12 @@
 }
 
 .clip-reps__dial:focus-visible {
-  outline: 2px solid var(--accent);
+  outline: 2px solid var(--accent-ink);
   outline-offset: 3px;
 }
 
 .clip-reps__dial:active:not([aria-disabled='true']) {
-  color: var(--accent);
+  color: var(--accent-ink);
 }
 
 .clip-reps__dial[aria-disabled='true'] {

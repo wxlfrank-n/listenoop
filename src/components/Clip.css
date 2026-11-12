@@ -1,6 +1,6 @@
 .waveform-clip {
   position: absolute;
-  background: rgba(var(--accent-rgb), 0.32);
+  background: rgba(var(--accent-rgb), 0.12);
   border-radius: 4px;
   /* JS owns every clip gesture: vertical/diagonal swipes split/merge, and the
      waveform container observes horizontal moves itself. If the browser is
@@ -17,10 +17,8 @@
   /* Lift the active clip (and its split affordance + label) above the other
      clips so it is unambiguously the front-most one. */
   z-index: 20;
-  background: rgba(var(--accent-rgb), 0.65);
-  box-shadow:
-    0 0 6px rgba(var(--accent-rgb), 0.7),
-    0 0 16px rgba(var(--accent-rgb), 0.4);
+  background: rgba(var(--accent-rgb), 0.24);
+  box-shadow: inset 0 0 0 2px var(--accent-ink);
 }
 
 /*
@@ -30,9 +28,7 @@
 @keyframes clip-press {
   from {
     background: rgba(var(--accent-rgb), 0.5);
-    box-shadow:
-      0 0 6px rgba(var(--accent-rgb), 0.65),
-      0 0 14px rgba(var(--accent-rgb), 0.35);
+    box-shadow: inset 0 0 0 1px var(--accent-ink);
   }
 }
 
@@ -100,7 +96,6 @@
   composes: waveform-clip__action-chip;
   position: absolute;
   top: 0;
-  left: 50%;
   transform: translate(-50%, -50%);
   z-index: 100;
   animation: clip-split-hint 0.15s ease-out;

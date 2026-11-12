@@ -9,7 +9,6 @@
  */
 
 export type ThemeId =
-  | 'system'
   | 'dark'
   | 'light'
   | 'midnight'
@@ -18,10 +17,13 @@ export type ThemeId =
   | 'nova'
   | 'qinghua'
   | 'yingluo'
-  | 'norge';
+  | 'norge'
+  | 'autumn'
+  | 'winter'
+  | 'listenoop';
 
-/** Theme ids with a static palette (`system` follows the OS instead). */
-export type StaticThemeId = Exclude<ThemeId, 'system'>;
+/** Every selectable theme has a fixed palette. */
+export type StaticThemeId = ThemeId;
 
 export interface Theme {
   label: string;
@@ -52,6 +54,8 @@ export interface Theme {
   clipLabelBorder: string;
   /** Accent color tuned for this theme. */
   accent: string;
+  /** Readable accent for text and icons on app surfaces. */
+  accentInk: string;
   /** Foreground shared by solid accent and accentDim controls. */
   onAccent: string;
   /** Slightly deeper/muted accent for borders and pressed states. */
@@ -67,145 +71,238 @@ export interface Theme {
 }
 
 export const THEMES: Record<StaticThemeId, Theme> = {
-  dark: {
-    label: 'Slate',
+  // Navy, white, green, and cyan sampled from public/favicon.svg.
+  listenoop: {
+    label: 'Listenoop Night',
     colorScheme: 'dark',
-    onAccent: '#08111f',
-    bgPrimary: '#121417',
-    bgSecondary: '#1a1d22',
-    bgTertiary: '#22262c',
-    bgHover: '#2b3038',
-    bgPanel: '#16191e',
-    textPrimary: '#e7eaee',
-    textSecondary: '#9aa3ad',
-    textTertiary: '#929daa',
-    border: '#2b3038',
-    danger: '#ef5350',
-    waveformBgTop: '#23272e',
-    waveformBgMid: '#1c2026',
-    waveformBar: '#5a6b8a',
-    waveformBarSilent: '#434a53',
-    waveformBarPlayed: '#58a6ff',
-    clipLabelBg: 'rgba(22, 25, 30, 0.72)',
-    clipLabelText: '#e7eaee',
-    clipLabelBorder: 'rgba(255, 255, 255, 0.16)',
-    accent: '#58a6ff',
-    accentDim: '#388bfd',
-    accentRgb: '88, 166, 255',
-    accentDimRgb: '56, 139, 253',
-    clipSwipe: '#58a6ff',
+    bgPrimary: '#060A24',
+    bgSecondary: '#0C1445',
+    bgTertiary: '#172054',
+    bgHover: '#202C68',
+    bgPanel: '#0C1445',
+    textPrimary: '#DFF7FF',
+    textSecondary: '#B3CCD9',
+    textTertiary: '#B3CCD9',
+    border: '#344276',
+    danger: '#FF8494',
+    waveformBgTop: '#0C1445',
+    waveformBgMid: '#0C1445',
+    waveformBar: '#278A7A',
+    waveformBarSilent: '#18574E',
+    waveformBarPlayed: '#00E8C0',
+    clipLabelBg: '#0C1445',
+    clipLabelText: '#DFF7FF',
+    clipLabelBorder: '#344276',
+    clipSwipe: '#40FFFF',
+    accent: '#00E8C0',
+    accentInk: '#40FFFF',
+    accentDim: '#00D4AF',
+    accentRgb: '0, 232, 192',
+    accentDimRgb: '0, 212, 175',
+    onAccent: '#060A24',
   },
-  light: {
-    label: 'Mist',
-    colorScheme: 'light',
-    onAccent: '#ffffff',
-    bgPrimary: '#f3f5f7',
-    bgSecondary: '#ffffff',
-    bgTertiary: '#ebedf0',
-    bgHover: '#e0e3e8',
-    bgPanel: '#f8f9fa',
-    textPrimary: '#171c21',
-    textSecondary: '#5a6370',
-    textTertiary: '#606c7c',
-    border: '#d6dbe2',
-    danger: '#d64545',
-    waveformBgTop: '#e7eaee',
-    waveformBgMid: '#dbe0e6',
-    waveformBar: '#8a94b8',
-    waveformBarSilent: '#b2bac2',
-    waveformBarPlayed: '#246bd1',
-    clipLabelBg: 'rgba(255, 255, 255, 0.72)',
-    clipLabelText: '#171c21',
-    clipLabelBorder: 'rgba(0, 0, 0, 0.10)',
-    accent: '#246bd1',
-    accentDim: '#1c64d6',
-    accentRgb: '36, 107, 209',
-    accentDimRgb: '28, 100, 214',
-    clipSwipe: '#1c64d6',
+  dark: {
+    label: 'Solarized Dark',
+    colorScheme: 'dark',
+    onAccent: '#002B36',
+    bgPrimary: '#002B36',
+    bgSecondary: '#073642',
+    bgTertiary: '#073642',
+    bgHover: '#154651',
+    bgPanel: '#073642',
+    textPrimary: '#FDF6E3',
+    textSecondary: '#93A1A1',
+    textTertiary: '#93A1A1',
+    border: '#586E75',
+    danger: '#DC322F',
+    waveformBgTop: '#073642',
+    waveformBgMid: '#073642',
+    waveformBar: '#839496',
+    waveformBarSilent: '#586E75',
+    waveformBarPlayed: '#2AA198',
+    clipLabelBg: '#073642',
+    clipLabelText: '#FDF6E3',
+    clipLabelBorder: '#586E75',
+    accent: '#2AA198',
+    accentInk: '#52BDB3',
+    accentDim: '#2AA198',
+    accentRgb: '42, 161, 152',
+    accentDimRgb: '42, 161, 152',
+    clipSwipe: '#52BDB3',
   },
   midnight: {
-    label: 'Midnight',
+    label: 'Gruvbox Dark',
     colorScheme: 'dark',
-    onAccent: '#08111f',
-    bgPrimary: '#101b2d',
-    bgSecondary: '#16243a',
-    bgTertiary: '#1d2e47',
-    bgHover: '#263b58',
-    bgPanel: '#132036',
-    textPrimary: '#e6edf7',
-    textSecondary: '#b1c0d5',
-    textTertiary: '#95a7c0',
-    border: '#30435e',
-    danger: '#ff6b6b',
-    waveformBgTop: '#1b2d46',
-    waveformBgMid: '#16253b',
-    waveformBar: '#6f89ad',
-    waveformBarSilent: '#3d526f',
-    waveformBarPlayed: '#7dd3dd',
-    clipLabelBg: 'rgba(19, 32, 54, 0.88)',
-    clipLabelText: '#e6edf7',
-    clipLabelBorder: 'rgba(255, 255, 255, 0.18)',
-    accent: '#7dd3dd',
-    accentDim: '#48b4c2',
-    accentRgb: '125, 211, 221',
-    accentDimRgb: '72, 180, 194',
-    clipSwipe: '#7dd3dd',
-  },
-  paper: {
-    label: 'Sky',
-    colorScheme: 'light',
-    onAccent: '#ffffff',
-    bgPrimary: '#eaf2fc',
-    bgSecondary: '#f7faff',
-    bgTertiary: '#dce8f7',
-    bgHover: '#cfdef0',
-    bgPanel: '#f0f5fc',
-    textPrimary: '#0b2a66',
-    textSecondary: '#2b54a8',
-    textTertiary: '#4c6893',
-    border: '#b9cce6',
-    danger: '#c1293e',
-    waveformBgTop: '#e2ecfa',
-    waveformBgMid: '#dce8f7',
-    waveformBar: '#6a9bd8',
-    waveformBarSilent: '#8fb3ec',
-    waveformBarPlayed: '#1d5bb5',
-    clipLabelBg: 'rgba(235, 244, 255, 0.72)',
-    clipLabelText: '#0b2a66',
-    clipLabelBorder: 'rgba(0, 0, 0, 0.08)',
-    accent: '#1d5bb5',
-    accentDim: '#1a5cb8',
-    accentRgb: '29, 91, 181',
-    accentDimRgb: '26, 92, 184',
-    clipSwipe: '#1a5cb8',
+    onAccent: '#1D2021',
+    bgPrimary: '#1D2021',
+    bgSecondary: '#282828',
+    bgTertiary: '#3C3836',
+    bgHover: '#504945',
+    bgPanel: '#282828',
+    textPrimary: '#FBF1C7',
+    textSecondary: '#BDAE93',
+    textTertiary: '#BDAE93',
+    border: '#504945',
+    danger: '#FB4934',
+    waveformBgTop: '#282828',
+    waveformBgMid: '#282828',
+    waveformBar: '#BDAE93',
+    waveformBarSilent: '#7C6F64',
+    waveformBarPlayed: '#FABD2F',
+    clipLabelBg: '#282828',
+    clipLabelText: '#FBF1C7',
+    clipLabelBorder: '#504945',
+    accent: '#FABD2F',
+    accentInk: '#FABD2F',
+    accentDim: '#FABD2F',
+    accentRgb: '250, 189, 47',
+    accentDimRgb: '250, 189, 47',
+    clipSwipe: '#FABD2F',
   },
   nova: {
-    label: 'Nova',
+    label: 'Tokyo Night',
     colorScheme: 'dark',
-    onAccent: '#08111f',
-    bgPrimary: '#211b30',
-    bgSecondary: '#2c233e',
-    bgTertiary: '#372c4b',
-    bgHover: '#44365c',
-    bgPanel: '#261f36',
-    textPrimary: '#f0e8ff',
-    textSecondary: '#d0b9ff',
-    textTertiary: '#a88adf',
-    border: '#554367',
-    danger: '#ff5c7a',
-    waveformBgTop: '#332943',
-    waveformBgMid: '#2a223a',
-    waveformBar: '#8a7bd8',
-    waveformBarSilent: '#5a4390',
-    waveformBarPlayed: '#b18cff',
-    clipLabelBg: 'rgba(38, 31, 54, 0.88)',
-    clipLabelText: '#f0e8ff',
-    clipLabelBorder: 'rgba(255, 255, 255, 0.18)',
-    accent: '#b18cff',
-    accentDim: '#9366f2',
-    accentRgb: '177, 140, 255',
-    accentDimRgb: '147, 102, 242',
-    clipSwipe: '#b18cff',
+    onAccent: '#16161E',
+    bgPrimary: '#1A1B26',
+    bgSecondary: '#292E42',
+    bgTertiary: '#283457',
+    bgHover: '#414868',
+    bgPanel: '#292E42',
+    textPrimary: '#C0CAF5',
+    textSecondary: '#A9B1D6',
+    textTertiary: '#A9B1D6',
+    border: '#414868',
+    danger: '#F7768E',
+    waveformBgTop: '#292E42',
+    waveformBgMid: '#292E42',
+    waveformBar: '#A9B1D6',
+    waveformBarSilent: '#545C7E',
+    waveformBarPlayed: '#7AA2F7',
+    clipLabelBg: '#292E42',
+    clipLabelText: '#C0CAF5',
+    clipLabelBorder: '#414868',
+    accent: '#7AA2F7',
+    accentInk: '#7AA2F7',
+    accentDim: '#7AA2F7',
+    accentRgb: '122, 162, 247',
+    accentDimRgb: '122, 162, 247',
+    clipSwipe: '#7AA2F7',
+  },
+  light: {
+    label: 'Spring',
+    colorScheme: 'light',
+    onAccent: '#FFFFFF',
+    bgPrimary: '#E1F1CF',
+    bgSecondary: '#F3FAE9',
+    bgTertiary: '#C7E4A6',
+    bgHover: '#B4D78E',
+    bgPanel: '#ECF7DF',
+    textPrimary: '#21371C',
+    textSecondary: '#3E5C30',
+    textTertiary: '#3E5C30',
+    border: '#A0C57C',
+    danger: '#B42D3E',
+    waveformBgTop: '#F3FAE9',
+    waveformBgMid: '#F3FAE9',
+    waveformBar: '#77A94C',
+    waveformBarSilent: '#B1CD96',
+    waveformBarPlayed: '#386D1E',
+    clipLabelBg: '#F3FAE9',
+    clipLabelText: '#21371C',
+    clipLabelBorder: '#A0C57C',
+    accent: '#3D7B22',
+    accentInk: '#2B5519',
+    accentDim: '#32651B',
+    accentRgb: '61, 123, 34',
+    accentDimRgb: '50, 101, 27',
+    clipSwipe: '#2B5519',
+  },
+  paper: {
+    label: 'Summer',
+    colorScheme: 'light',
+    onAccent: '#F5FBFF',
+    bgPrimary: '#E5F4FF',
+    bgSecondary: '#F5FBFF',
+    bgTertiary: '#DDF0FD',
+    bgHover: '#C4E5FA',
+    bgPanel: '#F5FBFF',
+    textPrimary: '#143D50',
+    textSecondary: '#28566A',
+    textTertiary: '#28566A',
+    border: '#A1C8DF',
+    danger: '#B42D3E',
+    waveformBgTop: '#F5FBFF',
+    waveformBgMid: '#F5FBFF',
+    waveformBar: '#75BDEA',
+    waveformBarSilent: '#B5DCF5',
+    waveformBarPlayed: '#008FE8',
+    clipLabelBg: '#F5FBFF',
+    clipLabelText: '#143D50',
+    clipLabelBorder: '#A1C8DF',
+    accent: '#008FE8',
+    accentInk: '#17649B',
+    accentDim: '#008FE8',
+    accentRgb: '0, 143, 232',
+    accentDimRgb: '0, 143, 232',
+    clipSwipe: '#17649B',
+  },
+  autumn: {
+    label: 'Autumn',
+    colorScheme: 'light',
+    onAccent: '#FFFBE2',
+    bgPrimary: '#FFF4B8',
+    bgSecondary: '#FFFBE2',
+    bgTertiary: '#FFF4CB',
+    bgHover: '#FFECB5',
+    bgPanel: '#FFFBE2',
+    textPrimary: '#352800',
+    textSecondary: '#5E4700',
+    textTertiary: '#5E4700',
+    border: '#D1B451',
+    danger: '#B42D3E',
+    waveformBgTop: '#FFFBE2',
+    waveformBgMid: '#FFFBE2',
+    waveformBar: '#FFB000',
+    waveformBarSilent: '#FFD671',
+    waveformBarPlayed: '#E68A00',
+    clipLabelBg: '#FFFBE2',
+    clipLabelText: '#352800',
+    clipLabelBorder: '#D1B451',
+    accent: '#FFB000',
+    accentInk: '#8C5300',
+    accentDim: '#FFB000',
+    accentRgb: '255, 176, 0',
+    accentDimRgb: '255, 176, 0',
+    clipSwipe: '#8C5300',
+  },
+  winter: {
+    label: 'Winter',
+    colorScheme: 'light',
+    onAccent: '#F6FBFF',
+    bgPrimary: '#E9F4FC',
+    bgSecondary: '#F6FBFF',
+    bgTertiary: '#E1F1FB',
+    bgHover: '#CBE7F6',
+    bgPanel: '#F6FBFF',
+    textPrimary: '#173C5C',
+    textSecondary: '#47657E',
+    textTertiary: '#47657E',
+    border: '#A6C9E3',
+    danger: '#B42D3E',
+    waveformBgTop: '#F6FBFF',
+    waveformBgMid: '#F6FBFF',
+    waveformBar: '#8DBBD9',
+    waveformBarSilent: '#C2DBEC',
+    waveformBarPlayed: '#137CB5',
+    clipLabelBg: '#F6FBFF',
+    clipLabelText: '#173C5C',
+    clipLabelBorder: '#A6C9E3',
+    accent: '#2196D2',
+    accentInk: '#1B6492',
+    accentDim: '#2196D2',
+    accentRgb: '33, 150, 210',
+    accentDimRgb: '33, 150, 210',
+    clipSwipe: '#1B6492',
   },
   rose: {
     label: 'Lilac',
@@ -234,8 +331,8 @@ export const THEMES: Record<StaticThemeId, Theme> = {
     accentRgb: '109, 70, 184',
     accentDimRgb: '95, 60, 191',
     clipSwipe: '#5f3cbf',
+    accentInk: '#6d46b8',
   },
-
   qinghua: {
     label: 'Qinghua',
     colorScheme: 'light',
@@ -263,8 +360,8 @@ export const THEMES: Record<StaticThemeId, Theme> = {
     accentRgb: '0, 56, 168',
     accentDimRgb: '0, 40, 120',
     clipSwipe: '#0038a8',
+    accentInk: '#0038a8',
   },
-
   yingluo: {
     label: 'Yingluo',
     colorScheme: 'light',
@@ -292,8 +389,8 @@ export const THEMES: Record<StaticThemeId, Theme> = {
     accentRgb: '199, 21, 133',
     accentDimRgb: '160, 16, 104',
     clipSwipe: '#c71585',
+    accentInk: '#c71585',
   },
-
   norge: {
     label: 'Norge',
     colorScheme: 'light',
@@ -310,7 +407,6 @@ export const THEMES: Record<StaticThemeId, Theme> = {
     danger: '#ba0c2f',
     waveformBgTop: '#f0f4f8',
     waveformBgMid: '#e0e8f0',
-    // Flag split: unplayed bars in vivid flag blue, played in flag red.
     waveformBar: '#0057b8',
     waveformBarSilent: '#4a94e0',
     waveformBarPlayed: '#ba0c2f',
@@ -322,38 +418,20 @@ export const THEMES: Record<StaticThemeId, Theme> = {
     accentRgb: '186, 12, 47',
     accentDimRgb: '150, 9, 37',
     clipSwipe: '#ba0c2f',
+    accentInk: '#ba0c2f',
   },
 };
 
-export const THEME_IDS: ThemeId[] = [
-  'system',
-  ...(Object.keys(THEMES) as StaticThemeId[]),
-];
+export const THEME_IDS = Object.keys(THEMES) as ThemeId[];
 
-export const DEFAULT_THEME: ThemeId = 'midnight';
-
-/** Palette backing `system`: Slate in dark mode, Mist in light mode. */
-export const SYSTEM_DARK_THEME: StaticThemeId = 'dark';
-export const SYSTEM_LIGHT_THEME: StaticThemeId = 'light';
-
-/** Whether the OS currently prefers a dark appearance. */
-export function isSystemDark(): boolean {
-  if (typeof window === 'undefined' || !window.matchMedia) return false;
-  return window.matchMedia('(prefers-color-scheme: dark)').matches;
-}
-
-/** Resolves `system` to its current static palette; others pass through. */
-export function resolveThemeId(theme: ThemeId): StaticThemeId {
-  if (theme !== 'system') return theme;
-  return isSystemDark() ? SYSTEM_DARK_THEME : SYSTEM_LIGHT_THEME;
-}
+export const DEFAULT_THEME: ThemeId = 'listenoop';
 
 /**
  * Applies the given theme to the document root as inline CSS custom
  * properties, overriding the static `:root` fallbacks in App.css.
  */
 export function applyThemeVars(theme: ThemeId): void {
-  const t = THEMES[resolveThemeId(theme)];
+  const t = THEMES[theme];
   if (!t) return;
 
   const root = document.documentElement;
@@ -378,6 +456,7 @@ export function applyThemeVars(theme: ThemeId): void {
     ['--clip-label-text', t.clipLabelText],
     ['--clip-label-border', t.clipLabelBorder],
     ['--accent', t.accent],
+    ['--accent-ink', t.accentInk],
     ['--on-accent', t.onAccent],
     ['--accent-dim', t.accentDim],
     ['--accent-rgb', t.accentRgb],

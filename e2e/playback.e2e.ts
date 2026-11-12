@@ -123,6 +123,25 @@ test.describe('playing audio', () => {
     expect(atEnd).toBeGreaterThanOrEqual(duration! - 0.1);
   });
 
+  test('skip to end stays at the end after playing and pausing first', async ({
+    page,
+  }) => {
+    await page.goto('/');
+    await waitForClips(page);
+    await playAndAdvance(page);
+    await playButton(page).click();
+    await expect(playButton(page)).toHaveAttribute('aria-label', 'Play');
+    const duration = await mediaDuration(page);
+    await page.getByRole('button', {name: 'Go to end'}).click();
+    await expect
+      .poll(() => mediaTime(page))
+      .toBeGreaterThanOrEqual(duration! - 0.1);
+    await expect(playButton(page)).toHaveAttribute('aria-label', 'Play');
+    // The paused position must survive subsequent media events and UI updates.
+    await page.waitForTimeout(300);
+    expect(await mediaTime(page)).toBeGreaterThanOrEqual(duration! - 0.1);
+  });
+
   test('skip to start jumps to the start and pauses', async ({page}) => {
     await page.goto('/');
     await waitForClips(page);

@@ -13,8 +13,7 @@
  * diagonal swipe (15-75 deg)
  *   -> down-right: merge with the clip to the right
  *   -> down-left: merge with the clip to the left
- *   -> up-right: split the rightmost part of the merged clip
- *   -> up-left: split the leftmost part of the merged clip
+ *   -> upward: split at the valid gap nearest the swipe start
  *
  * horizontal drag
  *   -> NOT handled here
@@ -42,7 +41,10 @@ import {useT} from '../i18n';
 
 import {clipGestureLedger} from './clipPinch';
 
-import {splitClipAtLargestGap, type Clip as InitClipData} from '../utils/clips';
+import {
+  getClipSplitBoundaries,
+  type Clip as InitClipData,
+} from '../utils/clips';
 import type {SwipeDirection, WaveWindow} from '../types';
 
 import './Clip.css';
@@ -85,7 +87,11 @@ export interface ClipProps {
 
   onActivate: (idx: number) => void;
 
-  onSwipe?: (idx: number, direction: SwipeDirection) => void;
+  onSwipe?: (
+    idx: number,
+    direction: SwipeDirection,
+    targetSec?: number,
+  ) => void;
 }
 
 const SWIPE_THRESHOLD_PX = 10;
@@ -125,8 +131,7 @@ const classifyClipSwipe = (dx: number, dy: number): SwipeDirection | null => {
    *
    *   down-right -> merge with the clip to the right
    *   down-left  -> merge with the clip to the left
-   *   up-right   -> split the rightmost part of the merged clip
-   *   up-left    -> split the leftmost part of the merged clip
+   *   upward    -> split nearest the swipe start
    *
    * Clip owns these gestures, like the vertical swipe. Checked before the
    * vertical band so the 15-75 deg slice never falls through to one of the
@@ -192,11 +197,14 @@ export const Clip = memo(
   }: ClipProps) => {
     const {windowStartSec, windowLen, innerH, vbH} = window;
     const t = useT();
-    const canSplit = useMemo(
-      () => splitClipAtLargestGap(clip, minClipLength) !== null,
+    const splitBoundaries = useMemo(
+      () => getClipSplitBoundaries(clip, minClipLength),
       [clip, minClipLength],
     );
+    const canSplit = splitBoundaries.length > 0;
 
+    const clipRef = useRef<HTMLDivElement>(null);
+    const swipeStartSec = useRef<number | undefined>(undefined);
     const suppressClickRef = useRef(false);
 
     /*
@@ -253,6 +261,7 @@ export const Clip = memo(
       0.2,
       ((clip.vEnd - clip.vStart) / windowLen) * 100,
     );
+    const renderedDuration = (widthPct / 100) * windowLen;
 
     const activateClip = () => {
       if (playing && active) {
@@ -281,6 +290,13 @@ export const Clip = memo(
       ({first, last, event, initial, target, currentTarget}) => {
         if (first) {
           suppressClickRef.current = false;
+          const bounds = canSplit
+            ? clipRef.current?.getBoundingClientRect()
+            : undefined;
+          swipeStartSec.current = bounds?.width
+            ? clip.vStart +
+              ((initial[0] - bounds.left) / bounds.width) * renderedDuration
+            : undefined;
 
           setSwipeDir(null);
           setHintPos(null);
@@ -381,7 +397,14 @@ export const Clip = memo(
         if (direction) {
           suppressClickRef.current = true;
 
-          onSwipe?.(id, direction);
+          if (
+            direction.startsWith('up') &&
+            swipeStartSec.current !== undefined
+          ) {
+            onSwipe?.(id, direction, swipeStartSec.current);
+          } else {
+            onSwipe?.(id, direction);
+          }
 
           return;
         }
@@ -470,10 +493,13 @@ export const Clip = memo(
 
     return (
       <div
+        ref={clipRef}
         className={`waveform-clip ${active ? 'waveform-clip--active' : ''} ${
           swipeAction ? 'waveform-clip--swiping' : ''
         }`}
         data-clip-idx={id}
+        data-clip-start-sec={clip.start}
+        data-clip-end-sec={clip.end}
         role="button"
         tabIndex={0}
         aria-label={
@@ -497,15 +523,20 @@ export const Clip = memo(
         }}
         {...bindClip()}
       >
-        {active && canSplit && !swipeAction && (
-          <span
-            className="waveform-clip__split-hint waveform-clip__action-chip"
-            role="img"
-            aria-label={t('waveform.splittable')}
-          >
-            ✂️
-          </span>
-        )}
+        {active &&
+          splitBoundaries.map(({time, index}) => (
+            <span
+              key={index}
+              className="waveform-clip__split-hint waveform-clip__action-chip"
+              style={{
+                left: `${((time - clip.vStart) / renderedDuration) * 100}%`,
+              }}
+              role="img"
+              aria-label={t('waveform.splittable')}
+            >
+              ✂️
+            </span>
+          ))}
 
         {swipeAction &&
           hintPos &&

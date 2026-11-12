@@ -1,6 +1,7 @@
 ﻿import {useRef, useCallback, useEffect} from 'react';
 import type {Track} from '../types';
-import {adjacentTrackIndex} from '../utils/trackOrder';
+import {adjacentTrackIndex, sortedTrackIndices} from '../utils/trackOrder';
+import {nextLoopTrackIndex} from '../utils/loopMode';
 import {useState} from 'react';
 import {decodeAudio, evictAudio} from '../workers/audioDecoderClient';
 import {initializeAudioContext} from '../utils/audio';
@@ -372,15 +373,32 @@ export function useAudioPlayer(skipSeconds: number, playbackSpeed = 1) {
         holdAtEndRef.current = false;
         return;
       }
-      // Without the playlist loop the track just stops at its end. The next
-      // press of play restarts it (the media element rewinds a finished
-      // track on `play()`).
-      if (!store.getState().config.loopPlaylist) {
+      const {player, config} = store.getState();
+      const nextIndex = nextLoopTrackIndex(
+        sortedTrackIndices(player.tracks),
+        player.currentTrackIndex,
+        config.loopMode,
+      );
+      if (nextIndex === null) {
         dispatch(setCurrentTime(audioRef.current.currentTime));
         dispatch(setIsPlaying(false));
         return;
       }
-      nextRef.current();
+      if (nextIndex === player.currentTrackIndex) {
+        audio.currentTime = 0;
+        dispatch(setCurrentTime(0));
+        audio
+          .play()
+          .then(() => dispatch(setIsPlaying(true)))
+          .catch(reportPlaybackError);
+      } else {
+        const track = player.tracks[nextIndex];
+        if (!track) return;
+        void startTrack(audio, track.url);
+        dispatch(setCurrentTrackIndex(nextIndex));
+        dispatch(setCurrentTime(0));
+        dispatch(setDuration(0));
+      }
     };
     const onError = () => {
       setPlaybackError(true);
@@ -396,7 +414,7 @@ export function useAudioPlayer(skipSeconds: number, playbackSpeed = 1) {
       ['ended', onEnded],
       ['error', onError],
     ]);
-  }, [dispatch]);
+  }, [dispatch, startTrack, reportPlaybackError]);
 
   useEffect(() => {
     const audio = audioRef.current;

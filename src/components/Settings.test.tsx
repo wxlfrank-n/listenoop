@@ -57,7 +57,7 @@ describe('Settings footer', () => {
 });
 
 describe('Settings playback loop', () => {
-  it('offers all four modes and switches between them', () => {
+  it('offers all five modes and switches between them', () => {
     renderSettings();
 
     fireEvent.click(screen.getByRole('tab', {name: 'Playback'}));
@@ -71,8 +71,9 @@ describe('Settings playback loop', () => {
       'Current track',
       'Whole tracklist',
       'Random tracklist',
+      'Clips in tracklist',
     ]);
-    for (const value of ['track', 'playlist', 'shuffle', 'off']) {
+    for (const value of ['track', 'playlist', 'shuffle', 'clips', 'off']) {
       fireEvent.change(select, {target: {value}});
       expect(select.value).toBe(value);
     }

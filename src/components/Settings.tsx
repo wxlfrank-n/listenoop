@@ -339,6 +339,7 @@ function PlaybackTab() {
           <option value="track">{t('settings.loopModeTrack')}</option>
           <option value="playlist">{t('settings.loopModePlaylist')}</option>
           <option value="shuffle">{t('settings.loopModeShuffle')}</option>
+          <option value="clips">{t('settings.loopModeClips')}</option>
         </select>
       </div>
       <div className="settings-field">

@@ -47,6 +47,10 @@ import {
 } from '../utils/swipe';
 
 interface ProgressBarProps {
+  setClipSequence?: (
+    clips: InitClipData[],
+    select: (index: number) => void,
+  ) => (() => void) | undefined;
   /** Seek to an absolute track time (seconds). */
   onSeek: (time: number) => void;
 
@@ -70,6 +74,7 @@ interface ProgressBarProps {
 }
 
 export function ProgressBar({
+  setClipSequence,
   onSeek,
   onPlayRange,
   onStopPlayback,
@@ -181,6 +186,11 @@ export function ProgressBar({
   useEffect(() => {
     setScopedClips(null);
   }, [clips]);
+
+  useEffect(() => {
+    if (waveformStatus !== 'ready') return;
+    return setClipSequence?.(displayClips, setActiveClip);
+  }, [displayClips, waveformStatus, setClipSequence]);
 
   /*
    * ---------------------------------------------------------

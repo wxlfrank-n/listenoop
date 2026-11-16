@@ -30,6 +30,10 @@ describe('outside click closes overlays and menu', () => {
     render(
       <Provider store={store}>
         <Playlist
+          playlistNames={['']}
+          activePlaylist=""
+          onSwitchPlaylist={vi.fn()}
+          onCreatePlaylist={vi.fn()}
           onSelectTrack={vi.fn()}
           onRemoveTrack={vi.fn()}
           onAddFiles={vi.fn()}

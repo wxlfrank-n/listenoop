@@ -224,3 +224,5 @@ surrounding silent gap is included in playback: default/minimum 0.25, maximum
 0.4, adjustable in 0.01 steps. It is saved automatically and applies immediately.
 Expansion changes playback bounds only; detected sound bounds and the minimum
 clip-length constraint remain unchanged.
+
+Select Settings > Playback > Loop mode > Clips in tracklist to play every displayed clip for the configured repetitions, then advance through the sorted tracklist (wrapping after the last track). Tracks without qualifying clips play normally. Play/resume starts at the current or next clip, and tapping a clip starts the sequence there. Pause cancels the current round; resuming repeats that clip from its start.

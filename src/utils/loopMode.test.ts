@@ -8,6 +8,8 @@ describe('loop modes', () => {
     expect(nextLoopTrackIndex(order, 0, 'track')).toBe(0);
     expect(nextLoopTrackIndex(order, 0, 'playlist')).toBe(1);
     expect(nextLoopTrackIndex(order, 1, 'playlist')).toBe(2);
+    expect(nextLoopTrackIndex(order, 0, 'clips')).toBe(1);
+    expect(nextLoopTrackIndex(order, 1, 'clips')).toBe(2);
   });
   it('randomly chooses another track, including both ends of the choice range', () => {
     expect(nextLoopTrackIndex(order, 0, 'shuffle', () => 0)).toBe(2);
@@ -19,7 +21,7 @@ describe('loop modes', () => {
   it('handles empty and single-track lists and a missing selection', () => {
     for (const mode of LOOP_MODES)
       expect(nextLoopTrackIndex([], -1, mode)).toBeNull();
-    for (const mode of ['track', 'playlist', 'shuffle'] as const) {
+    for (const mode of ['track', 'playlist', 'shuffle', 'clips'] as const) {
       expect(nextLoopTrackIndex([7], 7, mode)).toBe(7);
       expect(nextLoopTrackIndex(order, -1, mode, () => 0)).toBe(2);
     }

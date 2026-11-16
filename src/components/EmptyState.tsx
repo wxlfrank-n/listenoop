@@ -11,10 +11,11 @@ import {useT} from '../i18n';
 import './EmptyState.css';
 
 interface EmptyStateProps {
+  onOpenPlaylist: () => void;
   onAddFiles: (files: FileList) => void;
 }
 
-export function EmptyState({onAddFiles}: EmptyStateProps) {
+export function EmptyState({onAddFiles, onOpenPlaylist}: EmptyStateProps) {
   const fileInputRef = useRef<HTMLInputElement>(null);
   const t = useT();
 
@@ -31,6 +32,9 @@ export function EmptyState({onAddFiles}: EmptyStateProps) {
           onClick={() => fileInputRef.current?.click()}
         >
           {t('emptyState.addFiles')}
+        </button>
+        <button className="empty-state__add" onClick={onOpenPlaylist}>
+          {t('actions.playlist')}
         </button>
         <input
           ref={fileInputRef}

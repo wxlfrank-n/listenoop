@@ -1,4 +1,10 @@
-export const LOOP_MODES = ['off', 'track', 'playlist', 'shuffle'] as const;
+export const LOOP_MODES = [
+  'off',
+  'track',
+  'playlist',
+  'shuffle',
+  'clips',
+] as const;
 export type LoopMode = (typeof LOOP_MODES)[number];
 
 export function restoreLoopMode(
@@ -21,7 +27,7 @@ export function nextLoopTrackIndex(
 ): number | null {
   if (mode === 'off' || !order.length) return null;
   if (mode === 'track') return order.includes(current) ? current : order[0]!;
-  if (mode === 'playlist')
+  if (mode === 'playlist' || mode === 'clips')
     return order[(order.indexOf(current) + 1) % order.length]!;
   const candidates = order.filter(index => index !== current);
   if (!candidates.length) return order[0]!;

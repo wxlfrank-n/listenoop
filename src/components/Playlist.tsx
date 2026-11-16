@@ -4,7 +4,7 @@
  * Supports file input for adding new tracks.
  */
 
-import {useRef, useCallback} from 'react';
+import {useRef, useCallback, useState} from 'react';
 import {TrackList} from './TrackList';
 import {useAppSelector} from '../store/hooks';
 import {selectTracks, selectCurrentTrackIndex} from '../store/selectors';
@@ -14,6 +14,10 @@ import CloseIcon from '../assets/icons/close.svg?react';
 import './Playlist.css';
 
 interface PlaylistProps {
+  playlistNames: string[];
+  activePlaylist: string;
+  onSwitchPlaylist: (name: string) => void;
+  onCreatePlaylist: (name: string) => void;
   onSelectTrack: (index: number) => void;
   onRemoveTrack: (index: number) => void;
   onAddFiles: (files: FileList) => void;
@@ -21,6 +25,10 @@ interface PlaylistProps {
 }
 
 export function Playlist({
+  playlistNames,
+  activePlaylist,
+  onSwitchPlaylist,
+  onCreatePlaylist,
   onSelectTrack,
   onRemoveTrack,
   onAddFiles,
@@ -31,6 +39,7 @@ export function Playlist({
   const tracks = useAppSelector(selectTracks);
   const currentTrackIndex = useAppSelector(selectCurrentTrackIndex);
   const t = useT();
+  const [playlistName, setPlaylistName] = useState<string | null>(null);
 
   const handleClose = useCallback(() => onClose(), [onClose]);
 
@@ -70,6 +79,52 @@ export function Playlist({
             </button>
           </div>
         </div>
+        <div className="playlist-picker">
+          <select
+            aria-label={t('playlist.choose')}
+            value={activePlaylist}
+            onChange={e => onSwitchPlaylist(e.target.value)}
+          >
+            {playlistNames.map(name => (
+              <option key={name} value={name}>
+                {name || t('playlist.default')}
+              </option>
+            ))}
+          </select>
+          <button onClick={() => setPlaylistName('')}>
+            {t('playlist.new')}
+          </button>
+        </div>
+        {playlistName !== null && (
+          <form
+            className="playlist-picker"
+            onSubmit={e => {
+              e.preventDefault();
+              const name = playlistName.trim();
+              if (!name || playlistNames.includes(name)) return;
+              onCreatePlaylist(name);
+              setPlaylistName(null);
+            }}
+          >
+            <input
+              aria-label={t('playlist.name')}
+              placeholder={t('playlist.name')}
+              value={playlistName}
+              onChange={e => setPlaylistName(e.target.value)}
+            />
+            <button
+              disabled={
+                !playlistName.trim() ||
+                playlistNames.includes(playlistName.trim())
+              }
+            >
+              {t('playlist.create')}
+            </button>
+            <button type="button" onClick={() => setPlaylistName(null)}>
+              {t('playlist.cancel')}
+            </button>
+          </form>
+        )}
         <input
           ref={fileInputRef}
           type="file"

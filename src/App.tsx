@@ -26,13 +26,15 @@
 
 import './App.css';
 
-import {useRef, useCallback, useState} from 'react';
+import {useRef, useCallback, useEffect, useState} from 'react';
 import {useAudioPlayer} from './hooks/useAudioPlayer';
 import {useConfig} from './hooks/useConfig';
 import {useWaveform} from './hooks/useWaveform';
 import {useClipDetection} from './hooks/useClipDetection';
 import {useAddFiles} from './hooks/useAddFiles';
 import {useDocumentLang} from './hooks/useDocumentLang';
+import {loadPlaylists, savePlaylists} from './store/playlistStorage';
+import type {SavedPlaylists} from './store/playlistStorage';
 import {useAppSelector} from './store/hooks';
 import {selectCurrentTrack} from './store/selectors';
 import {NowPlaying} from './components/NowPlaying';
@@ -55,11 +57,14 @@ export default function App() {
 
   // Set up audio player with all playback controls and state
   const {
+    setClipSequence,
     togglePlay,
     next,
     prev,
     seek,
     addTracks,
+    capturePlaylistTracks,
+    replacePlaylistTracks,
     removeTrack,
     selectTrack,
     skipForward,
@@ -136,9 +141,84 @@ export default function App() {
     [],
   );
 
+  const [playlists, setPlaylists] = useState<SavedPlaylists | null>(null);
+  const playlistsRef = useRef<SavedPlaylists | null>(null);
+  const playlistLoadFailed = useRef(false);
+
+  useEffect(() => {
+    let cancelled = false;
+    function initialize(saved?: SavedPlaylists) {
+      if (cancelled) return;
+      const library = saved ?? {
+        active: '',
+        lists: [{name: '', tracks: capturePlaylistTracks()}],
+      };
+      if (saved) {
+        const selected = saved.lists.find(list => list.name === saved.active);
+        if (selected) replacePlaylistTracks(selected.tracks);
+      }
+      playlistsRef.current = library;
+      setPlaylists(library);
+    }
+    loadPlaylists().then(initialize, () => {
+      if (cancelled) return;
+      playlistLoadFailed.current = true;
+      initialize();
+    });
+    return () => {
+      cancelled = true;
+    };
+  }, [capturePlaylistTracks, replacePlaylistTracks]);
+
+  function updatePlaylists(next: SavedPlaylists) {
+    playlistsRef.current = next;
+    setPlaylists(next);
+    const reportError = () => showNotice(t('playlist.saveError'), 'error');
+    if (playlistLoadFailed.current) reportError();
+    else void savePlaylists(next).catch(reportError);
+  }
+
+  function saveActiveTracks() {
+    const library = playlistsRef.current;
+    if (!library) return;
+    updatePlaylists({
+      ...library,
+      lists: library.lists.map(list =>
+        list.name === library.active
+          ? {...list, tracks: capturePlaylistTracks()}
+          : list,
+      ),
+    });
+  }
+
+  function switchPlaylist(name: string) {
+    const library = playlistsRef.current;
+    if (!library || name === library.active) return;
+    const selected = library.lists.find(list => list.name === name);
+    if (!selected) return;
+    replacePlaylistTracks(selected.tracks);
+    updatePlaylists({...library, active: name});
+  }
+
+  function createPlaylist(input: string) {
+    const library = playlistsRef.current;
+    const name = input.trim();
+    if (!library || !name || library.lists.some(list => list.name === name))
+      return;
+    replacePlaylistTracks([]);
+    updatePlaylists({
+      active: name,
+      lists: [...library.lists, {name, tracks: []}],
+    });
+  }
+
   // Adding files (file picker) with a skip notice for non-MP3 files.
   const {handleFiles} = useAddFiles(
-    addTracks,
+    (files, playAfter) => {
+      const result = addTracks(files, playAfter);
+      if (result.added) saveActiveTracks();
+      return result;
+    },
     useCallback(
       (skipped: number) =>
         showNotice(
@@ -152,7 +232,7 @@ export default function App() {
 
   return (
     <div className="app">
-      <div className="player-layout">
+      <div className="player-layout" inert={!playlists}>
         <div className="player-main">
           {currentTrack ? (
             <div className="player-card">
@@ -167,6 +247,7 @@ export default function App() {
               />
               <ProgressBar
                 key={currentTrack?.url ?? 'none'}
+                setClipSequence={setClipSequence}
                 onSeek={seek}
                 onPlayRange={playRange}
                 onStopPlayback={togglePlay}
@@ -198,16 +279,26 @@ export default function App() {
                   onOpenSettings={openSettings}
                 />
               </div>
-              <EmptyState onAddFiles={handleFiles} />
+              <EmptyState
+                onAddFiles={handleFiles}
+                onOpenPlaylist={togglePlaylist}
+              />
             </>
           )}
         </div>
       </div>
 
-      {showPlaylist && (
+      {showPlaylist && playlists && (
         <Playlist
           onSelectTrack={selectTrack}
-          onRemoveTrack={removeTrack}
+          playlistNames={playlists.lists.map(list => list.name)}
+          activePlaylist={playlists.active}
+          onSwitchPlaylist={switchPlaylist}
+          onCreatePlaylist={createPlaylist}
+          onRemoveTrack={index => {
+            removeTrack(index);
+            saveActiveTracks();
+          }}
           onAddFiles={handleFiles}
           onClose={closePlaylist}
         />

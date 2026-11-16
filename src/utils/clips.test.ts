@@ -739,37 +739,50 @@ describe('long-clip valley splitting', () => {
     ).toHaveLength(1);
   });
 
-  it.each([
-    [1450, 0.8, 0.8],
-    [1900, 0.8, 1.2],
-    [1700, 0.8, 0.8],
-    [1700, 1.6, 1.2],
-  ])(
-    'weighs peak spacing (%i ms) and the clip-wide peak (%f)',
-    (lastPeak, initialLevel, expected) => {
-      const points = [
-        [0, initialLevel],
-        [350, 0.8],
-        [550, 1],
-        [800, 0.3],
-        [1000, 1],
-        [1200, 0.5],
-        [lastPeak, 1],
-        [2000, 0.8],
-      ] as const;
-      let segment = 0;
+  it.each([true, false])(
+    'centers uneven valleys (deep section first: %s)',
+    deepFirst => {
       const audio = Float32Array.from({length: 2000}, (_, i) => {
-        if (i > points[segment + 1]![0]) segment++;
-        const [start, from] = points[segment]!;
-        const [end, to] = points[segment + 1]!;
-        return from + ((i - start) / (end - start)) * (to - from);
+        if (i >= 500 && i < 512) return 0.4;
+        if (i >= 1100 && i < 1300) {
+          const deep = deepFirst ? i < 1140 : i >= 1260;
+          return deep ? 0.4 : 0.51;
+        }
+        return 1;
+      });
+      const {clips} = getInitClipData(audio, sampleRate, options);
+      expect(clips).toHaveLength(2);
+      expect(Math.abs(clips[0]!.end - 1.2)).toBeLessThan(0.02);
+    },
+  );
+
+  it('ignores a sustained dip shallower than 3 dB', () => {
+    const audio = Float32Array.from({length: 2000}, (_, i) =>
+      i >= 900 && i < 1100 ? 0.999 : 1,
+    );
+    expect(getInitClipData(audio, sampleRate, options).clips).toHaveLength(1);
+  });
+
+  it.each([
+    [0.45, 0.6, [0.8]],
+    [0.91, 0.6, [1.2]],
+    [0.91, 0.9, []],
+  ])(
+    'filters dips with first level %f and minimum clip length %f',
+    (firstLevel, minClipLength, expected) => {
+      const audio = Float32Array.from({length: 2000}, (_, i) => {
+        if (Math.abs(i - 800) < 40) return firstLevel;
+        if (Math.abs(i - 1200) < 40) return 0.4;
+        return 1;
       });
       const {clips} = getInitClipData(audio, sampleRate, {
         ...options,
-        minClipLength: 0.6,
+        minClipLength,
       });
-      expect(clips).toHaveLength(2);
-      expect(Math.abs(clips[0]!.end - expected)).toBeLessThan(0.02);
+      expect(clips).toHaveLength(expected.length + 1);
+      expected.forEach((time, i) => {
+        expect(Math.abs(clips[i]!.end - time)).toBeLessThan(0.02);
+      });
     },
   );
 });

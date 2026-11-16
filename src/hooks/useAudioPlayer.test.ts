@@ -49,6 +49,7 @@ const playerState = vi.hoisted(() => ({
 /* The playlist loop is off by default (`configSlice.DEFAULT_CONFIG`). */
 const configState = vi.hoisted(() => ({
   loopMode: 'off',
+  repetitions: 2,
 }));
 
 vi.mock('../store/store', () => ({
@@ -812,6 +813,96 @@ describe('useAudioPlayer.playRange', () => {
       // The previous track is loaded parked at its end, paused.
       expect(audio.play).not.toHaveBeenCalled();
       expect(audio.paused).toBe(true);
+    });
+  });
+  describe('clip tracklist mode', () => {
+    const clips = [
+      {start: 1, end: 2, vStart: 0.9, vEnd: 2.1},
+      {start: 3, end: 4, vStart: 2.9, vEnd: 4.1},
+    ];
+    beforeEach(() => {
+      configState.loopMode = 'clips';
+      configState.repetitions = 2;
+      playerState.tracks = [
+        {id: 'a', title: 'A', artist: '', duration: 100, url: 'blob:a'},
+        {id: 'b', title: 'B', artist: '', duration: 100, url: 'blob:b'},
+      ];
+      playerState.currentTrackIndex = 0;
+    });
+
+    it('repeats each clip twice then starts the next track', async () => {
+      const {result} = renderHook(() => useAudioPlayer(5));
+      const select = vi.fn();
+      act(() => {
+        result.current.setClipSequence(clips, select);
+        result.current.play();
+      });
+      expect(audio.currentTime).toBe(0.9);
+      await settleRestart();
+      audio.currentTime = 2.1;
+      runRaf();
+      expect(audio.currentTime).toBe(0.9);
+      await settleRestart();
+      await act(async () => {
+        audio.currentTime = 2.1;
+        runRaf();
+      });
+      expect(select).toHaveBeenLastCalledWith(1);
+      expect(audio.currentTime).toBe(2.9);
+      await settleRestart();
+      audio.currentTime = 4.1;
+      runRaf();
+      expect(audio.currentTime).toBe(2.9);
+      await settleRestart();
+      await act(async () => {
+        audio.currentTime = 4.1;
+        runRaf();
+      });
+      expect(dispatch).toHaveBeenCalledWith(setCurrentTrackIndex(1));
+    });
+
+    it('does not advance after pausing at the completion boundary', async () => {
+      configState.repetitions = 1;
+      const {result} = renderHook(() => useAudioPlayer(5));
+      const select = vi.fn();
+      act(() => {
+        result.current.setClipSequence(clips, select);
+        result.current.play();
+      });
+      await settleRestart();
+      await act(async () => {
+        audio.currentTime = 2.1;
+        runRaf();
+        result.current.pause();
+      });
+      expect(select).toHaveBeenCalledTimes(1);
+      expect(audio.paused).toBe(true);
+    });
+
+    it('waits for clip registration and starts at the containing clip', async () => {
+      const {result} = renderHook(() => useAudioPlayer(5));
+      act(() => {
+        result.current.play();
+      });
+      audio.currentTime = 3.2;
+      const select = vi.fn();
+      act(() => {
+        result.current.setClipSequence(clips, select);
+      });
+      expect(select).toHaveBeenLastCalledWith(1);
+      expect(audio.currentTime).toBe(2.9);
+    });
+
+    it('continues ordinary audio when no clips qualify', async () => {
+      const {result} = renderHook(() => useAudioPlayer(5));
+      act(() => {
+        result.current.setClipSequence([], vi.fn());
+        result.current.play();
+      });
+      await act(async () => {
+        audio.dispatchEvent(new Event('ended'));
+      });
+      expect(dispatch).toHaveBeenCalledWith(setCurrentTrackIndex(1));
     });
   });
 });

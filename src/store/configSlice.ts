@@ -11,9 +11,10 @@
  *   splits (default: 0.3). Short detected intervals merge with neighbors; an
  *   isolated interval below the minimum is omitted.
  * - expansionRate: Fraction of surrounding gaps included in playback (0.25–0.4).
- * - repetitions: How many times a clicked clip is repeated (default: 3).
+ * - repetitions: How many times each clip is repeated (default: 3).
  * - loopMode: Stop, repeat the current track, repeat the tracklist, or play
- *   random tracks when a track ends (default: off).
+ *   random tracks, or repeat each clip before advancing through the tracklist
+ *   (default: off).
  * - showAdvancedControls: Whether the clip toolbar (merge gap + repeat
  *   controls) is shown below the waveform (default: false).
  * - mergeScope: Whether a merge/split gesture applies to every clip in the

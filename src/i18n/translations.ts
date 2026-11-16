@@ -50,6 +50,13 @@ export const en = {
     title: 'Playlist ({count})',
     addTracks: 'Add audio files',
     close: 'Close playlist',
+    default: 'Default',
+    choose: 'Choose playlist',
+    new: 'New playlist',
+    name: 'Playlist name',
+    create: 'Create',
+    cancel: 'Cancel',
+    saveError: 'Playlist changes could not be saved on this device.',
   },
 
   trackList: {
@@ -118,11 +125,13 @@ export const en = {
     repeatsHint: 'Choose how many times a clip repeats when you click it.',
 
     loopMode: 'Loop mode',
-    loopModeHint: 'Choose what happens when a track ends.',
+    loopModeHint:
+      'Choose a loop style. Clips in tracklist repeats each clip the configured number of times, then advances to the next clip and track.',
     loopModeOff: 'No loop',
     loopModeTrack: 'Current track',
     loopModePlaylist: 'Whole tracklist',
     loopModeShuffle: 'Random tracklist',
+    loopModeClips: 'Clips in tracklist',
 
     showAdvanced: 'Show advanced controls',
     showAdvancedHint:
@@ -230,6 +239,13 @@ export const no: Messages = {
     title: 'Avspillingsliste ({count})',
     addTracks: 'Legg til lydfiler',
     close: 'Lukk avspillingsliste',
+    default: 'Standard',
+    choose: 'Velg spilleliste',
+    new: 'Ny spilleliste',
+    name: 'Navn på spilleliste',
+    create: 'Opprett',
+    cancel: 'Avbryt',
+    saveError: 'Endringer i spillelisten kunne ikke lagres på denne enheten.',
   },
 
   trackList: {
@@ -299,11 +315,13 @@ export const no: Messages = {
       'Velg hvor mange ganger et klipp repeteres n\u00e5r du klikker p\u00e5 det.',
 
     loopMode: 'Gjentakelsesmodus',
-    loopModeHint: 'Velg hva som skjer når et spor er ferdig.',
+    loopModeHint:
+      'Velg en gjentakelsesmodus. Klipp i spillelisten gjentar hvert klipp det valgte antallet ganger, og fortsetter med neste klipp og spor.',
     loopModeOff: 'Ingen gjentakelse',
     loopModeTrack: 'Gjenta sporet',
     loopModePlaylist: 'Gjenta spillelisten',
     loopModeShuffle: 'Tilfeldig spilleliste',
+    loopModeClips: 'Klipp i spillelisten',
 
     showAdvanced: 'Vis avanserte kontroller',
     showAdvancedHint:
@@ -411,6 +429,13 @@ export const zh: Messages = {
     title: '播放列表（{count}）',
     addTracks: '添加音频',
     close: '关闭播放列表',
+    default: '默认',
+    choose: '选择播放列表',
+    new: '新建播放列表',
+    name: '播放列表名称',
+    create: '创建',
+    cancel: '取消',
+    saveError: '无法在此设备上保存播放列表的更改。',
   },
 
   trackList: {
@@ -478,11 +503,13 @@ export const zh: Messages = {
     repeatsHint: '设置点击片段后自动重复播放的次数。',
 
     loopMode: '循环模式',
-    loopModeHint: '选择曲目结束后的播放方式。',
+    loopModeHint:
+      '选择循环方式。片段播放列表会按设定次数重复每个片段，然后播放下一个片段和曲目。',
     loopModeOff: '不循环',
     loopModeTrack: '单曲循环',
     loopModePlaylist: '列表循环',
     loopModeShuffle: '随机循环',
+    loopModeClips: '片段播放列表',
 
     showAdvanced: '显示高级控制',
     showAdvancedHint: '在波形下方显示片段合并和重复次数的快捷控制。',

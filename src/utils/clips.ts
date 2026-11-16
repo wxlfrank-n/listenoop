@@ -208,7 +208,10 @@ function detectSoundClips(
   return clips;
 }
 /** Smooth log RMS over a 15 ms radius for the second-pass valley search. */
-function smoothLogEnergy(rms: Float32Array, hopSeconds: number): Float32Array {
+function smoothLogEnergy(
+  rms: Float32Array,
+  hopSeconds: number,
+): {db: Float32Array; topDb: number; bottomDb: number} {
   const db = new Float32Array(rms.length);
   for (let i = 0; i < rms.length; i++)
     db[i] = 20 * Math.log10(Math.max(rms[i]!, 1e-8));
@@ -216,12 +219,16 @@ function smoothLogEnergy(rms: Float32Array, hopSeconds: number): Float32Array {
   const prefix = new Float64Array(db.length + 1);
   for (let i = 0; i < db.length; i++) prefix[i + 1] = prefix[i]! + db[i]!;
   const smooth = new Float32Array(db.length);
+  let topDb = -Infinity;
+  let bottomDb = Infinity;
   for (let i = 0; i < db.length; i++) {
     const from = Math.max(0, i - radius);
     const to = Math.min(db.length, i + radius + 1);
     smooth[i] = (prefix[to]! - prefix[from]!) / (to - from);
+    topDb = Math.max(topDb, smooth[i]!);
+    bottomDb = Math.min(bottomDb, smooth[i]!);
   }
-  return smooth;
+  return {db: smooth, topDb, bottomDb};
 }
 /** Split only originally long clips at as many valid local energy valleys as possible. */
 function splitLongClipsAtValleys(
@@ -257,87 +264,79 @@ function splitClipAtValleys(
   // Detected clip starts lie on the original RMS frame grid.
   const startFrame = Math.round(clip.start / hopSeconds);
   const endFrame = Math.ceil(clip.end / hopSeconds - 1e-9);
-  const db = smoothLogEnergy(rms.subarray(startFrame, endFrame), hopSeconds);
-  let highestTop = -Infinity;
-  for (const level of db) highestTop = Math.max(highestTop, level);
-  const candidates: {time: number; score: number}[] = [];
-  // Each flat-bottomed valley contributes one candidate, not one per frame.
-  for (let i = 1; i < db.length - 1;) {
-    const plateauStart = i;
-    while (i < db.length - 2 && db[i + 1]! === db[plateauStart]!) i++;
-    const plateauEnd = i;
-    const level = db[plateauStart]!;
-    if (level < db[plateauStart - 1]! && level < db[plateauEnd + 1]!) {
-      const center = Math.floor((plateauStart + plateauEnd) / 2);
-      const time = (startFrame + center) * hopSeconds;
-      if (
-        time > clip.start &&
-        time < clip.end &&
-        time - clip.start + 1e-9 >= minimum &&
-        clip.end - time + 1e-9 >= minimum
-      ) {
-        const leftTop = findValleyTop(db, plateauStart - 1, -1);
-        const rightTop = findValleyTop(db, plateauEnd + 1, 1);
-        const depth = highestTop - level;
-        const width = (rightTop - leftTop) * hopSeconds;
-        candidates.push({time, score: depth * width});
-      }
-    }
-    i++;
-  }
-  if (!candidates.length) return [clip];
-  // Maximize total valley score with at least minimum seconds between splits.
-  const scores = new Float64Array(candidates.length);
-  const previous = new Int32Array(candidates.length).fill(-1);
-  let eligible = -1;
-  let bestPrevious = -1;
-  const better = (a: number, b: number): boolean =>
-    a >= 0 && (b < 0 || scores[a]! > scores[b]!);
-  for (let i = 0; i < candidates.length; i++) {
-    const candidate = candidates[i]!;
-    while (
-      eligible + 1 < i &&
-      candidate.time - candidates[eligible + 1]!.time + 1e-9 >= minimum
-    ) {
-      eligible++;
-      if (better(eligible, bestPrevious)) bestPrevious = eligible;
-    }
-    previous[i] = bestPrevious;
-    scores[i] =
-      candidate.score + (bestPrevious < 0 ? 0 : scores[bestPrevious]!);
-  }
-  let best = -1;
-  for (let i = 0; i < candidates.length; i++) if (better(i, best)) best = i;
-  const boundaries: number[] = [];
-  for (let i = best; i >= 0; i = previous[i]!)
-    boundaries.push(candidates[i]!.time);
-  boundaries.reverse();
+  const {db, topDb, bottomDb} = smoothLogEnergy(
+    rms.subarray(startFrame, endFrame),
+    hopSeconds,
+  );
+  const rangeDb = topDb - bottomDb;
+  const entryLevel = topDb - Math.max(rangeDb * 0.8, 3);
+  const exitLevel = topDb - rangeDb * 0.7;
+  const valleys = detectValleyBottoms(db, entryLevel, exitLevel, hopSeconds);
   const result: Clip[] = [];
   let start = clip.start;
-  for (const end of [...boundaries, clip.end]) {
-    result.push({start, end, vStart: start, vEnd: end});
-    start = end;
+  for (const valley of valleys) {
+    const center = (valley.firstFrame + valley.lastFrame) / 2;
+    const time = (startFrame + center) * hopSeconds;
+    if (
+      time > start &&
+      time < clip.end &&
+      time - start + 1e-9 >= minimum &&
+      clip.end - time + 1e-9 >= minimum
+    ) {
+      result.push({start, end: time, vStart: start, vEnd: time});
+      start = time;
+    }
   }
+  if (!result.length) return [clip];
+  result.push({start, end: clip.end, vStart: start, vEnd: clip.end});
   return result;
 }
 
-/** Follow a valley's slope to its neighboring peak, centering flat tops. */
-function findValleyTop(
+/** Detect sustained low-energy spans bracketed by higher-energy frames. */
+function detectValleyBottoms(
   db: Float32Array,
-  frame: number,
-  direction: -1 | 1,
-): number {
-  let topStart = frame;
-  for (
-    let next = frame + direction;
-    next >= 0 && next < db.length && db[next]! >= db[frame]!;
-    next += direction
-  ) {
-    if (db[next]! > db[frame]!) topStart = next;
-    frame = next;
+  onsetThreshold: number,
+  offsetThreshold: number,
+  hopSeconds: number,
+): {firstFrame: number; lastFrame: number}[] {
+  const frameCount = db.length;
+  const onsetFrames = Math.max(1, Math.ceil(0.02 / hopSeconds));
+  let candidate = -1;
+  let active = -1;
+  const valleys: {firstFrame: number; lastFrame: number}[] = [];
+  const finish = (end: number) => {
+    valleys.push({firstFrame: active, lastFrame: end - 1});
+    active = -1;
+  };
+  // An interior valley must be preceded by energy above the offset threshold.
+  let firstHighFrame = 0;
+  while (firstHighFrame < frameCount && db[firstHighFrame]! <= offsetThreshold)
+    firstHighFrame++;
+  for (let frame = firstHighFrame; frame < frameCount; frame++) {
+    const level = db[frame]!;
+    if (active >= 0) {
+      if (level > offsetThreshold) finish(frame);
+    } else if (level <= (candidate >= 0 ? offsetThreshold : onsetThreshold)) {
+      if (candidate < 0) {
+        candidate = frame;
+        // Measure both edges at the offset threshold after qualifying the dip.
+        while (
+          candidate > firstHighFrame &&
+          db[candidate - 1]! <= offsetThreshold
+        )
+          candidate--;
+      }
+      if (frame - candidate + 1 >= onsetFrames) {
+        active = candidate;
+        candidate = -1;
+      }
+    } else {
+      candidate = -1;
+    }
   }
-  return (topStart + frame) / 2;
+  return valleys;
 }
+
 /** Enforce unpadded lengths before adding playback padding and the merge gap. */
 function finalizeClips(
   clips: Clip[],

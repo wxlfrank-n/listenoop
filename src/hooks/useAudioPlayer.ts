@@ -1,5 +1,6 @@
 ﻿import {useRef, useCallback, useEffect} from 'react';
 import type {Track} from '../types';
+import type {SavedTrack} from '../store/playlistStorage';
 import {adjacentTrackIndex, sortedTrackIndices} from '../utils/trackOrder';
 import {nextLoopTrackIndex} from '../utils/loopMode';
 import {useState} from 'react';
@@ -16,7 +17,7 @@ import {
   setDuration,
 } from '../store/playerSlice';
 import {selectDetectionOptions} from '../store/selectors';
-import type {SplitOptions} from '../utils/clips';
+import type {Clip, SplitOptions} from '../utils/clips';
 
 // iOS devices (including Chrome on iPhone, which uses the WebKit engine)
 // cannot route an <audio> element through the Web Audio graph reliably:
@@ -89,6 +90,16 @@ export function useAudioPlayer(skipSeconds: number, playbackSpeed = 1) {
     audio.defaultPlaybackRate = speed;
     audio.playbackRate = speed;
   }, [playbackSpeed]);
+  // The waveform owns grouping; transport owns sequencing, so view switches
+  // cannot interrupt the sequence or create competing playback loops.
+  const clipSequenceRef = useRef<{
+    url: string;
+    clips: Clip[];
+    select: (index: number) => void;
+  } | null>(null);
+  const stopCurrentRangeRef = useRef<() => void>(() => {});
+  const startClipSequenceRef = useRef<() => void>(() => {});
+  const loopMode = useAppSelector(s => s.config.loopMode);
   const nextRef = useRef<() => void>(() => {});
   const expectedRawUrlRef = useRef<string | null>(null);
   const trackLoadIdRef = useRef(0);
@@ -101,6 +112,7 @@ export function useAudioPlayer(skipSeconds: number, playbackSpeed = 1) {
   // so it can be revoked when the corresponding track is removed. Without
   // revocation each blob lives for the lifetime of the page and the leaked
   // memory grows with the number of files the user has ever loaded.
+  const importedFilesRef = useRef(new Map<string, Blob>());
   const blobUrlsRef = useRef<Set<string>>(new Set());
 
   // Track a blob URL for later cleanup. Non-blob URLs (e.g. the bundled
@@ -115,6 +127,7 @@ export function useAudioPlayer(skipSeconds: number, playbackSpeed = 1) {
     if (!url.startsWith('blob:')) return;
     URL.revokeObjectURL(url);
     blobUrlsRef.current.delete(url);
+    importedFilesRef.current.delete(url);
   }, []);
   // True while a clip range is paused only to seek back to its start for the
   // next repetition. During that window the element's native `pause` event and
@@ -244,6 +257,7 @@ export function useAudioPlayer(skipSeconds: number, playbackSpeed = 1) {
     ) => {
       // Initialize AudioContext on user gesture (from next/prev buttons or click)
       getAnalyser();
+      stopCurrentRangeRef.current();
       const loadId = ++trackLoadIdRef.current;
       setPlaybackError(false);
       audio.pause();
@@ -353,6 +367,7 @@ export function useAudioPlayer(skipSeconds: number, playbackSpeed = 1) {
     const onLoadedMetadata = () => dispatch(setDuration(audio.duration));
     const onPlay = () => {
       setPlaybackError(false);
+      startClipSequenceRef.current();
       dispatch(setIsPlaying(true));
     };
     const onPause = () => {
@@ -462,6 +477,7 @@ export function useAudioPlayer(skipSeconds: number, playbackSpeed = 1) {
   const rangeRunIdRef = useRef(0);
 
   const stopRangeMonitoring = useCallback(() => {
+    rangeRunIdRef.current++;
     if (rangeRafRef.current) {
       cancelAnimationFrame(rangeRafRef.current);
       rangeRafRef.current = 0;
@@ -473,6 +489,8 @@ export function useAudioPlayer(skipSeconds: number, playbackSpeed = 1) {
     setIsClipPlaying(false);
     suppressRangePauseRef.current = false;
   }, []);
+
+  stopCurrentRangeRef.current = stopRangeMonitoring;
 
   const pause = useCallback(() => {
     stopRangeMonitoring();
@@ -588,6 +606,7 @@ export function useAudioPlayer(skipSeconds: number, playbackSpeed = 1) {
       const newTracks: Track[] = audioFiles.map(file => {
         const url = URL.createObjectURL(file);
         trackBlobUrl(url);
+        importedFilesRef.current.set(url, file);
         return {
           id: crypto.randomUUID(),
           title: file.name.replace(/\.[^/.]+$/, ''),
@@ -670,6 +689,54 @@ export function useAudioPlayer(skipSeconds: number, playbackSpeed = 1) {
       }
     },
     [dispatch, startTrack, revokeBlobUrl],
+  );
+
+  const capturePlaylistTracks = useCallback(
+    (): SavedTrack[] =>
+      getPlayer().tracks.map(({url, ...track}) => ({
+        ...track,
+        source: importedFilesRef.current.get(url) ?? url,
+      })),
+    [],
+  );
+
+  const replacePlaylistTracks = useCallback(
+    (savedTracks: SavedTrack[]) => {
+      stopRangeMonitoring();
+      holdAtEndRef.current = false;
+      window.clearTimeout(startTrackTimerRef.current);
+      trackLoadIdRef.current += 1;
+      expectedRawUrlRef.current = null;
+      const audio = audioRef.current;
+      audio.pause();
+      audio.removeAttribute('src');
+      audio.load();
+
+      for (const url of importedFilesRef.current.keys()) {
+        evictAudio(url);
+        const wavUrl = wavBlobCacheRef.current.get(url);
+        if (wavUrl) {
+          revokeBlobUrl(wavUrl);
+          wavBlobCacheRef.current.delete(url);
+        }
+        revokeBlobUrl(url);
+      }
+
+      const tracks = savedTracks.map(({source, ...track}) => {
+        if (typeof source === 'string') return {...track, url: source};
+        const url = URL.createObjectURL(source);
+        trackBlobUrl(url);
+        importedFilesRef.current.set(url, source);
+        return {...track, url};
+      });
+      setPlaybackError(false);
+      dispatch(setTracks(tracks));
+      dispatch(setCurrentTrackIndex(tracks.length ? 0 : -1));
+      dispatch(setIsPlaying(false));
+      dispatch(setCurrentTime(0));
+      dispatch(setDuration(0));
+    },
+    [dispatch, revokeBlobUrl, stopRangeMonitoring, trackBlobUrl],
   );
 
   const selectTrack = useCallback(
@@ -850,6 +917,35 @@ export function useAudioPlayer(skipSeconds: number, playbackSpeed = 1) {
         onComplete?.();
 
         dispatch(setIsPlaying(false));
+        if (store.getState().config.loopMode === 'clips') {
+          void Promise.resolve().then(() => {
+            if (
+              runId !== rangeRunIdRef.current ||
+              store.getState().config.loopMode !== 'clips'
+            )
+              return;
+            const sequence = clipSequenceRef.current;
+            const player = getPlayer();
+            if (
+              !sequence ||
+              sequence.url !== player.tracks[player.currentTrackIndex]?.url
+            )
+              return;
+            const nextIndex = sequence.clips.findIndex(
+              clip => clip.vEnd > end + 1e-9 && clip.vStart >= start,
+            );
+            if (nextIndex < 0) nextRef.current();
+            else {
+              const clip = sequence.clips[nextIndex]!;
+              sequence.select(nextIndex);
+              playRange(
+                clip.vStart,
+                clip.vEnd,
+                store.getState().config.repetitions,
+              );
+            }
+          });
+        }
       };
 
       /**
@@ -1059,6 +1155,54 @@ export function useAudioPlayer(skipSeconds: number, playbackSpeed = 1) {
     [dispatch, getAnalyser, stopRangeMonitoring, reportPlaybackError],
   );
 
+  startClipSequenceRef.current = () => {
+    if (
+      store.getState().config.loopMode !== 'clips' ||
+      audioRef.current.dataset.clipLoopActive === '1'
+    )
+      return;
+    const sequence = clipSequenceRef.current;
+    const player = getPlayer();
+    if (
+      !sequence ||
+      sequence.url !== player.tracks[player.currentTrackIndex]?.url ||
+      !sequence.clips.length
+    )
+      return;
+    const time = audioRef.current.currentTime;
+    const found = sequence.clips.findIndex(clip => clip.vEnd > time + 1e-9);
+    const index = found < 0 ? 0 : found;
+    const clip = sequence.clips[index]!;
+    sequence.select(index);
+    playRange(clip.vStart, clip.vEnd, store.getState().config.repetitions);
+  };
+
+  const setClipSequence = useCallback(
+    (clips: Clip[], select: (index: number) => void) => {
+      const player = getPlayer();
+      const url = player.tracks[player.currentTrackIndex]?.url;
+      if (!url) return;
+      const sequence = {url, clips, select};
+      clipSequenceRef.current = sequence;
+      if (!audioRef.current.paused) startClipSequenceRef.current();
+      return () => {
+        if (clipSequenceRef.current === sequence)
+          clipSequenceRef.current = null;
+      };
+    },
+    [],
+  );
+
+  const previousLoopMode = useRef(loopMode);
+  useEffect(() => {
+    if (previousLoopMode.current === loopMode) return;
+    const wasClips = previousLoopMode.current === 'clips';
+    previousLoopMode.current = loopMode;
+    const playing = !audioRef.current.paused;
+    if (wasClips) stopRangeMonitoring();
+    if (playing) startClipSequenceRef.current();
+  }, [loopMode, stopRangeMonitoring]);
+
   /*
    * System media integration (parity with the native MediaSession): the OS /
    * lock screen shows the current track and its controls drive the same
@@ -1136,6 +1280,7 @@ export function useAudioPlayer(skipSeconds: number, playbackSpeed = 1) {
 
   return {
     state,
+    setClipSequence,
     playbackError,
     isClipPlaying,
     retryPlayback: () => {
@@ -1151,6 +1296,8 @@ export function useAudioPlayer(skipSeconds: number, playbackSpeed = 1) {
     prev,
     seek,
     addTracks,
+    capturePlaylistTracks,
+    replacePlaylistTracks,
     removeTrack,
     selectTrack,
     skipForward,

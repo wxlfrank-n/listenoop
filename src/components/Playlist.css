@@ -27,6 +27,26 @@
   flex: none;
 }
 
+.playlist-picker {
+  display: flex;
+  gap: 8px;
+  padding: 8px 20px;
+}
+.playlist-picker :is(select, input) {
+  flex: 1;
+  min-width: 0;
+}
+.playlist-picker :is(select, input, button) {
+  background: var(--bg-secondary);
+  color: var(--text-primary);
+  border: 1px solid var(--border);
+  border-radius: 6px;
+  padding: 6px 8px;
+}
+.playlist-picker button:disabled {
+  opacity: 0.5;
+}
+
 .playlist-header h2 {
   font-size: 1rem;
   font-weight: 600;

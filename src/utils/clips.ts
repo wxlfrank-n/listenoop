@@ -12,7 +12,10 @@ export interface Clip {
   vEnd: number;
   /** Original clips kept under a virtually merged parent. */
   children?: Clip[];
+  /** Playback padding has been finalized on this clip. */
   expanded?: boolean;
+  /** Unpadded bounds of the original long clip before valley splitting. */
+  longClipSource?: {start: number; end: number};
 }
 /** User-supplied silence-split parameters (config-driven). */
 export interface SplitOptions {
@@ -208,10 +211,7 @@ function detectSoundClips(
   return clips;
 }
 /** Smooth log RMS over a 15 ms radius for the second-pass valley search. */
-function smoothLogEnergy(
-  rms: Float32Array,
-  hopSeconds: number,
-): {db: Float32Array; topDb: number; bottomDb: number} {
+function smoothLogEnergy(rms: Float32Array, hopSeconds: number): Float32Array {
   const db = new Float32Array(rms.length);
   for (let i = 0; i < rms.length; i++)
     db[i] = 20 * Math.log10(Math.max(rms[i]!, 1e-8));
@@ -219,18 +219,28 @@ function smoothLogEnergy(
   const prefix = new Float64Array(db.length + 1);
   for (let i = 0; i < db.length; i++) prefix[i + 1] = prefix[i]! + db[i]!;
   const smooth = new Float32Array(db.length);
-  let topDb = -Infinity;
-  let bottomDb = Infinity;
   for (let i = 0; i < db.length; i++) {
     const from = Math.max(0, i - radius);
     const to = Math.min(db.length, i + radius + 1);
     smooth[i] = (prefix[to]! - prefix[from]!) / (to - from);
-    topDb = Math.max(topDb, smooth[i]!);
-    bottomDb = Math.min(bottomDb, smooth[i]!);
   }
-  return {db: smooth, topDb, bottomDb};
+  return smooth;
 }
-/** Split only originally long clips at as many valid local energy valleys as possible. */
+
+interface FallbackValley {
+  first: number;
+  last: number;
+  level: number;
+}
+
+interface LongClipAnalysis {
+  db: Float32Array;
+  startFrame: number;
+  hopSeconds: number;
+  fallbackValleys?: FallbackValley[];
+}
+
+/** Recheck long pieces after every successful split. */
 function splitLongClipsAtValleys(
   clips: Clip[],
   rms: Float32Array,
@@ -249,40 +259,73 @@ function splitLongClipsAtValleys(
   const minimum = Math.max(0, minClipLength);
   return clips.flatMap(clip => {
     const duration = clip.end - clip.start;
-    if (duration <= longClipThreshold || duration < 2 * minimum) return [clip];
-    return splitClipAtValleys(clip, rms, hopSeconds, minimum);
+    if (duration <= longClipThreshold) return [clip];
+    const longClipSource = {start: clip.start, end: clip.end};
+    if (duration < 2 * minimum) return [{...clip, longClipSource}];
+    const startFrame = Math.ceil(clip.start / hopSeconds - 1e-9);
+    const endFrame = Math.ceil(clip.end / hopSeconds - 1e-9);
+    const analysis: LongClipAnalysis = {
+      db: smoothLogEnergy(rms.subarray(startFrame, endFrame), hopSeconds),
+      startFrame,
+      hopSeconds,
+    };
+    const pending = [clip];
+    const result: Clip[] = [];
+    while (pending.length) {
+      const piece = pending.pop()!;
+      const length = piece.end - piece.start;
+      if (length > longClipThreshold && length >= 2 * minimum) {
+        const splits = splitClipAtValleys(piece, analysis, minimum);
+        if (splits.length > 1) {
+          for (let i = splits.length - 1; i >= 0; i--) {
+            pending.push(splits[i]!);
+          }
+          continue;
+        }
+      }
+      result.push({...piece, longClipSource});
+    }
+    return result;
   });
 }
 
-/** Build one clip's envelope and select valid split boundaries. */
+/** Select split boundaries from this piece's view of the original envelope. */
 function splitClipAtValleys(
   clip: Clip,
-  rms: Float32Array,
-  hopSeconds: number,
+  analysis: LongClipAnalysis,
   minimum: number,
 ): Clip[] {
-  // Detected clip starts lie on the original RMS frame grid.
-  const startFrame = Math.round(clip.start / hopSeconds);
-  const endFrame = Math.ceil(clip.end / hopSeconds - 1e-9);
-  const {db, topDb, bottomDb} = smoothLogEnergy(
-    rms.subarray(startFrame, endFrame),
-    hopSeconds,
+  const {startFrame, hopSeconds} = analysis;
+  // A previous split can place the start halfway between RMS frames.
+  const from = Math.ceil(clip.start / hopSeconds - 1e-9) - startFrame;
+  const to = Math.min(
+    analysis.db.length,
+    Math.ceil(clip.end / hopSeconds - 1e-9) - startFrame,
   );
+  const db = analysis.db.subarray(from, to);
+  let topDb = -Infinity;
+  let bottomDb = Infinity;
+  for (const level of db) {
+    topDb = Math.max(topDb, level);
+    bottomDb = Math.min(bottomDb, level);
+  }
   const rangeDb = topDb - bottomDb;
   const entryLevel = topDb - Math.max(rangeDb * 0.8, 3);
   const exitLevel = topDb - rangeDb * 0.7;
   const valleys = detectValleyBottoms(db, entryLevel, exitLevel, hopSeconds);
+  const timeAtFrame = (frame: number) => (startFrame + frame) * hopSeconds;
+  const valleyTimes = valleys
+    .map(({firstFrame, lastFrame}) =>
+      timeAtFrame(from + (firstFrame + lastFrame) / 2),
+    )
+    .filter(time => canSplitAt(time, clip.start, clip.end, minimum));
+  const splitTimes = valleyTimes.length
+    ? valleyTimes
+    : findFallbackSplitTimes(analysis, clip, from, to, timeAtFrame, minimum);
   const result: Clip[] = [];
   let start = clip.start;
-  for (const valley of valleys) {
-    const center = (valley.firstFrame + valley.lastFrame) / 2;
-    const time = (startFrame + center) * hopSeconds;
-    if (
-      time > start &&
-      time < clip.end &&
-      time - start + 1e-9 >= minimum &&
-      clip.end - time + 1e-9 >= minimum
-    ) {
+  for (const time of splitTimes) {
+    if (canSplitAt(time, start, clip.end, minimum)) {
       result.push({start, end: time, vStart: start, vEnd: time});
       start = time;
     }
@@ -290,6 +333,58 @@ function splitClipAtValleys(
   if (!result.length) return [clip];
   result.push({start, end: clip.end, vStart: start, vEnd: clip.end});
   return result;
+}
+
+function canSplitAt(time: number, start: number, end: number, minimum: number) {
+  return (
+    time > start &&
+    time < end &&
+    time - start + 1e-9 >= minimum &&
+    end - time + 1e-9 >= minimum
+  );
+}
+
+/** Find and rank local minima once for the original long clip. */
+function findFallbackValleys(db: Float32Array): FallbackValley[] {
+  const candidates: FallbackValley[] = [];
+  for (let first = 1; first < db.length - 1; first++) {
+    const level = db[first]!;
+    if (level >= db[first - 1]!) continue;
+    let last = first;
+    while (db[last + 1] === level) last++;
+    if (last < db.length - 1 && level < db[last + 1]!) {
+      candidates.push({first, last, level});
+    }
+    first = last;
+  }
+
+  return candidates.sort((a, b) => a.level - b.level || a.first - b.first);
+}
+
+function findFallbackSplitTimes(
+  analysis: LongClipAnalysis,
+  clip: Clip,
+  from: number,
+  to: number,
+  timeAtFrame: (frame: number) => number,
+  minimum: number,
+): number[] {
+  const candidates = (analysis.fallbackValleys ??= findFallbackValleys(
+    analysis.db,
+  ));
+  const duration = clip.end - clip.start;
+  const limit = duration < 2 ? 1 : duration < 3 ? 2 : 3;
+  const selected: number[] = [];
+  for (const {first, last} of candidates) {
+    if (first <= from || last >= to - 1) continue;
+    const time = timeAtFrame((first + last) / 2);
+    if (!canSplitAt(time, clip.start, clip.end, minimum)) continue;
+    if (selected.every(other => Math.abs(time - other) + 1e-9 >= minimum)) {
+      selected.push(time);
+      if (selected.length === limit) break;
+    }
+  }
+  return selected.sort((a, b) => a - b);
 }
 
 /** Detect sustained low-energy spans bracketed by higher-energy frames. */
@@ -385,21 +480,41 @@ function expandClips(
       (next.start - prev.end) * expansionRate,
     );
     prev.vEnd = prev.end + expansion;
-    prev.expanded = true;
+    markExpanded(prev);
     next.vStart = next.start - expansion;
     prev = next;
   }
   prev.vEnd =
     prev.end +
     Math.min(maxExpansion, expansionRate * (audioDuration - prev.end));
-  prev.expanded = true;
+  markExpanded(prev);
+}
+
+function markExpanded(clip: Clip, splitLongSource = false): void {
+  const first = clip.children?.[0];
+  const last = clip.children?.at(-1);
+  if (first && last && (splitLongSource || clip.longClipSource)) {
+    // Keep the padded outer bounds when the original long clip is unpacked.
+    // Only its individual pieces get the flag that blocks further splitting.
+    delete clip.expanded;
+    first.vStart = clip.vStart;
+    last.vEnd = clip.vEnd;
+    clip.children!.forEach(child => markExpanded(child, true));
+    return;
+  }
+  clip.expanded = true;
 }
 /**
  * Virtually merge consecutive clips whose intervening gap (in seconds) is at
  * most `mergeGap`. Each merged group becomes a parent clip spanning the first
  * child's start to the last child's end, keeping the originals as children.
+ * Initial grouping can preserve automatic valley splits within one source.
  */
-export function mergeClipsByGap(clips: Clip[], mergeGap: number): Clip[] {
+export function mergeClipsByGap(
+  clips: Clip[],
+  mergeGap: number,
+  {preserveValleySplits = false} = {},
+): Clip[] {
   if (clips.length === 0) return [];
   const result: Clip[] = [];
   let group: Clip[] = [clips[0]!];
@@ -421,8 +536,16 @@ export function mergeClipsByGap(clips: Clip[], mergeGap: number): Clip[] {
   };
   for (let i = 1; i < clips.length; i++) {
     const next = clips[i]!;
-    const gap = next.start - group[group.length - 1]!.end;
-    if (gap <= mergeGap) {
+    const previous = group[group.length - 1]!;
+    const gap = next.start - previous.end;
+    const source = previous.longClipSource;
+    const keepBoundary =
+      preserveValleySplits &&
+      gap === 0 &&
+      source !== undefined &&
+      source.start === next.longClipSource?.start &&
+      source.end === next.longClipSource.end;
+    if (gap <= mergeGap && !keepBoundary) {
       group.push(next);
     } else {
       flush();

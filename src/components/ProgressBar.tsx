@@ -106,18 +106,18 @@ export function ProgressBar({
    * Merge gap is derived from the detected silence gaps
    * for the current waveform.
    */
-  const [mergeGap, setMergeGap] = useState(initGap);
+  const [mergeGap, setMergeGap] = useState<number | null>(null);
 
   useEffect(() => {
-    setMergeGap(initGap);
-  }, [initGap]);
+    setMergeGap(null);
+  }, [clips, initGap]);
 
   /*
    * The grouping the detector itself asked for, before any user merge/split.
    * This is the starting point for "clip" scope.
    */
   const baselineClips = useMemo(
-    () => mergeClipsByGap(clips, initGap),
+    () => mergeClipsByGap(clips, initGap, {preserveValleySplits: true}),
     [clips, initGap],
   );
 
@@ -133,6 +133,7 @@ export function ProgressBar({
 
   const displayClips = useMemo(() => {
     if (mergeScope === 'clip') return scopedClips ?? baselineClips;
+    if (mergeGap === null) return baselineClips;
     return mergeClipsByGap(clips, mergeGap);
   }, [mergeScope, scopedClips, baselineClips, clips, mergeGap]);
 
@@ -576,7 +577,7 @@ export function ProgressBar({
        */}
       {clips.length > 0 && showAdvancedControls && (
         <ClipToolbar
-          mergeGap={mergeGap}
+          mergeGap={mergeGap ?? initGap}
           clipCount={displayClips.length}
           onMergeGapChange={handleMergeGapChange}
           showMergeSlider={mergeScope === 'global'}

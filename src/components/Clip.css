@@ -21,6 +21,44 @@
   box-shadow: inset 0 0 0 2px var(--accent-ink);
 }
 
+.waveform-clip.waveform-clip--long-source {
+  background: rgba(245, 158, 11, 0.32);
+  outline: 1px solid #f59e0b;
+  outline-offset: -1px;
+}
+
+.waveform-clip__boundary {
+  position: absolute;
+  top: 0;
+  bottom: 0;
+  border-left: 1px dashed currentColor;
+  pointer-events: none;
+}
+
+.waveform-clip__boundary > span {
+  position: absolute;
+  width: max-content;
+  border-radius: 3px;
+  padding: 2px 4px;
+  background: var(--clip-label-bg);
+  font: 10px/1.15 monospace;
+}
+
+.waveform-clip__boundary--start > span {
+  bottom: 100%;
+  left: 0;
+}
+
+.waveform-clip__boundary--end > span {
+  top: 100%;
+  right: 1px;
+}
+
+.waveform-clip:hover:has(.waveform-clip__boundary),
+.waveform-clip:focus-visible:has(.waveform-clip__boundary) {
+  z-index: 21;
+}
+
 /*
  * Press flash (replaces the former :hover highlight): flat at rest, the old
  * highlight flashes while the clip is pressed.

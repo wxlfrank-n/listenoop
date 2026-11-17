@@ -59,6 +59,8 @@ export interface ClipProps {
 
   active: boolean;
 
+  showAnnotations?: boolean;
+
   /**
    * Minimum span on each side of a split. Split eligibility is cached here
    * until this clip or the minimum changes.
@@ -178,12 +180,40 @@ const classifyClipSwipe = (dx: number, dy: number): SwipeDirection | null => {
   return null;
 };
 
+const formatSeconds = (seconds: number) => `${seconds.toFixed(3)} s`;
+
+function getLongClipDescription(clip: InitClipData) {
+  const sources = new Set<string>();
+  function addSources(piece: InitClipData) {
+    const source = piece.longClipSource;
+    if (source) {
+      sources.add(
+        `${formatSeconds(source.start)} – ${formatSeconds(source.end)}`,
+      );
+      return;
+    }
+    piece.children?.forEach(addSources);
+  }
+  addSources(clip);
+
+  const source = clip.longClipSource;
+  if (source?.start === clip.start && source.end === clip.end) {
+    return 'Long clip';
+  }
+  if (sources.size) {
+    const label = source ? 'From long clip' : 'Includes long clip audio';
+    return `${label} (${[...sources].join(', ')})`;
+  }
+  return undefined;
+}
+
 export const Clip = memo(
   ({
     clip,
     window,
     id,
     active,
+    showAnnotations = false,
     minClipLength = 0,
     label,
     renderLabel,
@@ -262,6 +292,9 @@ export const Clip = memo(
       ((clip.vEnd - clip.vStart) / windowLen) * 100,
     );
     const renderedDuration = (widthPct / 100) * windowLen;
+    const longClipDescription = showAnnotations
+      ? getLongClipDescription(clip)
+      : undefined;
 
     const activateClip = () => {
       if (playing && active) {
@@ -496,7 +529,8 @@ export const Clip = memo(
         ref={clipRef}
         className={`waveform-clip ${active ? 'waveform-clip--active' : ''} ${
           swipeAction ? 'waveform-clip--swiping' : ''
-        }`}
+        }${longClipDescription ? ' waveform-clip--long-source' : ''}`}
+        title={longClipDescription}
         data-clip-idx={id}
         data-clip-start-sec={clip.start}
         data-clip-end-sec={clip.end}
@@ -552,6 +586,24 @@ export const Clip = memo(
           )}
 
         {renderLabel ? renderLabel(id, clip, indexInArray, active) : label}
+        {showAnnotations &&
+          (['start', 'end'] as const).map(edge => {
+            const time = clip[edge];
+            if (time < windowStartSec || time > windowStartSec + windowLen) {
+              return null;
+            }
+            return (
+              <span
+                key={edge}
+                className={`waveform-clip__boundary waveform-clip__boundary--${edge}`}
+                style={{
+                  left: `${((time - clip.vStart) / renderedDuration) * 100}%`,
+                }}
+              >
+                <span>{formatSeconds(time)}</span>
+              </span>
+            );
+          })}
       </div>
     );
   },

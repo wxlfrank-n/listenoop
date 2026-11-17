@@ -78,7 +78,7 @@ interface ClipsProps {
 export const Clips = memo(
   ({
     clips,
-    window,
+    window: waveformWindow,
     onPlayRange,
     repetitions,
     playing,
@@ -90,9 +90,12 @@ export const Clips = memo(
     getIdx,
     renderLabel,
   }: ClipsProps) => {
-    const {windowStartSec, windowLen} = window;
+    const {windowStartSec, windowLen} = waveformWindow;
 
     const windowEndSec = windowStartSec + windowLen;
+    const showAnnotations =
+      new URLSearchParams(window.location.search).get('clipAnnotations') ===
+      '1';
 
     return (
       <>
@@ -111,9 +114,10 @@ export const Clips = memo(
             <Clip
               key={`${clip.start}:${clip.end}`}
               clip={clip}
-              window={window}
+              window={waveformWindow}
               id={id}
               active={id === activeClip}
+              showAnnotations={showAnnotations}
               minClipLength={minClipLength}
               renderLabel={renderLabel}
               indexInArray={indexInArray}

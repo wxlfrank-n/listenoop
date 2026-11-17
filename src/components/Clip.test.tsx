@@ -65,6 +65,36 @@ beforeAll(() => {
   HTMLElement.prototype.hasPointerCapture = vi.fn(() => false);
 });
 
+it('marks unpadded boundaries and highlights long-clip pieces in test mode', () => {
+  const {getByText, queryByText, rerender, props, rect} = renderClip({
+    clip: {
+      start: 1,
+      end: 1.75,
+      vStart: 0.75,
+      vEnd: 2,
+      longClipSource: {start: 1, end: 3},
+    },
+  });
+  expect(queryByText('1.000 s')).toBeNull();
+  expect(rect.classList.contains('waveform-clip--long-source')).toBe(false);
+
+  rerender(<Clip {...props} showAnnotations />);
+  expect(getByText('1.000 s').parentElement?.style.left).toBe('20%');
+  expect(getByText('1.750 s').parentElement?.style.left).toBe('80%');
+  expect(rect.classList.contains('waveform-clip--long-source')).toBe(true);
+  expect(rect.getAttribute('title')).toBe('From long clip (1.000 s – 3.000 s)');
+
+  rerender(
+    <Clip
+      {...props}
+      window={{...windowConfig, windowStartSec: 1.25}}
+      showAnnotations
+    />,
+  );
+  expect(queryByText('1.000 s')).toBeNull();
+  expect(getByText('1.750 s')).toBeTruthy();
+});
+
 beforeEach(() => {
   clipGestureLedger.active.clear();
   clipGestureLedger.multi = false;

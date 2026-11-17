@@ -716,6 +716,8 @@ describe('long-clip valley splitting', () => {
     expect(result.clips.length).toBeGreaterThan(1);
     result.clips.forEach((clip, i) => {
       expect(clip.end - clip.start).toBeGreaterThanOrEqual(0.2 - 1e-9);
+      expect(clip.longClipSource).toEqual({start: 0, end: 4});
+      expect(clip.expanded).toBe(true);
       if (i > 0) expect(clip.start).toBe(result.clips[i - 1]!.end);
     });
     expect(result.gaps).toEqual([-0.000001]);
@@ -723,7 +725,15 @@ describe('long-clip valley splitting', () => {
     expect(mergeClipsByGap(result.clips, result.initGap)).toHaveLength(
       result.clips.length,
     );
-    expect(mergeClipsByGap(result.clips, 0)).toHaveLength(1);
+    const [parent] = mergeClipsByGap(result.clips, 0);
+    expect(parent?.expanded).toBeUndefined();
+    const split = splitClipAtMiddle(parent!, options.minClipLength);
+    expect(split).not.toBeNull();
+    expect(split?.pieces[0].vStart).toBe(parent?.vStart);
+    expect(split?.pieces[1].vEnd).toBe(parent?.vEnd);
+    expect(
+      mergeClipsByGap(result.clips, 0, {preserveValleySplits: true}),
+    ).toEqual(result.clips);
   });
 
   it('leaves short clips and disabled valley detection unchanged', () => {
@@ -751,16 +761,57 @@ describe('long-clip valley splitting', () => {
         return 1;
       });
       const {clips} = getInitClipData(audio, sampleRate, options);
-      expect(clips).toHaveLength(2);
-      expect(Math.abs(clips[0]!.end - 1.2)).toBeLessThan(0.02);
+      expect(clips).toHaveLength(3);
+      expect(Math.abs(clips[0]!.end - 0.5)).toBeLessThan(0.02);
+      expect(Math.abs(clips[1]!.end - 1.2)).toBeLessThan(0.02);
     },
   );
 
-  it('ignores a sustained dip shallower than 3 dB', () => {
-    const audio = Float32Array.from({length: 2000}, (_, i) =>
-      i >= 900 && i < 1100 ? 0.999 : 1,
-    );
-    expect(getInitClipData(audio, sampleRate, options).clips).toHaveLength(1);
+  it.each([
+    [1800, [0.9]],
+    [2500, [0.9, 1.35]],
+    [3200, [0.45, 0.9, 1.35]],
+  ])('uses the lowest fallback dips for a %i ms clip', (length, expected) => {
+    const audio = Float32Array.from({length}, (_, i) => {
+      if (Math.abs(i - 450) < 40) return 0.96;
+      if (Math.abs(i - 900) < 40) return 0.86;
+      if (Math.abs(i - 1350) < 40) return 0.91;
+      return 1;
+    });
+    const {clips} = getInitClipData(audio, sampleRate, options);
+    expect(clips).toHaveLength(expected.length + 1);
+    expected.forEach((time, i) => {
+      expect(Math.abs(clips[i]!.end - time)).toBeLessThan(0.012);
+    });
+  });
+
+  it('falls back when the only threshold valley is too close to the end', () => {
+    const audio = Float32Array.from({length: 2400}, (_, i) => {
+      if (Math.abs(i - 1100) < 50) return 0.85;
+      if (Math.abs(i - 2250) < 50) return 0.4;
+      return 1;
+    });
+    const {clips} = getInitClipData(audio, sampleRate, {
+      ...options,
+      minClipLength: 0.3,
+    });
+    expect(clips).toHaveLength(2);
+    expect(Math.abs(clips[0]!.end - 1.1)).toBeLessThan(0.012);
+  });
+
+  it('rechecks long fallback pieces and keeps the original source bounds', () => {
+    const audio = Float32Array.from({length: 3600}, (_, i) => {
+      if ([400, 850, 1300].some(time => Math.abs(i - time) < 40)) return 0.86;
+      if (Math.abs(i - 2500) < 40) return 0.96;
+      return 1;
+    });
+    const {clips} = getInitClipData(audio, sampleRate, options);
+    const ends = [0.4, 0.85, 1.3, 2.5, 3.6];
+    expect(clips).toHaveLength(ends.length);
+    clips.forEach((clip, i) => {
+      expect(Math.abs(clip.end - ends[i]!)).toBeLessThan(0.012);
+      expect(clip.longClipSource).toEqual({start: 0, end: 3.6});
+    });
   });
 
   it.each([

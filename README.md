@@ -36,7 +36,7 @@ This starts the Vite dev server (default: <http://localhost:5173>). Open that UR
 
 ```bash
 npm run build        # compiles TypeScript, builds to docs/ (VITE_OUT_DIR)
-npm run build:local  # copies output into .local-deploy/<folder>/ for VITE_BASE_URL=/folder/
+npm run build:local  # copies output into <folder>/ for VITE_BASE_URL=/folder/
 npm run preview      # serves the built app to verify it
 ```
 
@@ -46,7 +46,7 @@ npm run preview      # serves the built app to verify it
 | -------------------- | --------------------------------------------------- |
 | `npm run dev`        | Start the development server with hot reload        |
 | `npm run build`      | Type-check and build the production bundle          |
-| `npm run build:local`| Build and copy output into .local-deploy/<folder>/    |
+| `npm run build:local`| Build and copy output into <folder>/    |
 | `npm run preview`    | Preview the production build                        |
 | `npm run serve`      | Alias for `preview`                                 |
 | `npm run test`       | Run the unit test suite (Vitest)                    |
@@ -56,9 +56,9 @@ npm run preview      # serves the built app to verify it
 
 ## Loading music
 
-Local deployment copies use `.local-deploy/<folder>/` for a base URL such as `/folder/`. A root base URL skips the copy. The source follows `VITE_OUT_DIR` (default `dist`). Unsafe paths and symbolic links at the deployment folder are rejected. Existing files are preserved, so old hashed assets may remain after rebuilding.
+Local deployment copies use `<folder>/` for a base URL such as `/folder/`. A root base URL skips the copy. The source follows `VITE_OUT_DIR` (default `dist`). Unsafe paths and symbolic links at the deployment folder are rejected. Existing files are preserved, so old hashed assets may remain after rebuilding.
 
-1. Click the **playlist** button in the top-left corner to open the playlist panel.
+1. Open **More (⋮) → Playlist**.
 2. Click the **`+`** button and select one or more audio files.
 
 Notes:
@@ -163,7 +163,9 @@ Expansion into surrounding silence is capped at half the minimum clip length on 
 
 ## Playlist
 
-- Open the playlist from the **playlist** button (top-left).
+- Open **More (⋮) → Playlist**, then select **New playlist**, enter a name, and select **Create**.
+- Use the dropdown to switch playlists. Use **+** to add audio to the selected playlist.
+- Listenoop automatically saves playlists and imported audio and restores the last selected playlist when you reopen the app in the same browser profile at the same site address.
 - Click a row to play that track (the current track is highlighted).
 - Remove a track with the **✕** button on its row.
 - The track count is shown in the panel header.
@@ -173,7 +175,7 @@ Expansion into surrounding silence is capped at half the minimum clip length on 
 ## Notes & troubleshooting
 
 - **Audio formats** — MP3, WAV, OGG, M4A, FLAC, and WebM are accepted; other files are skipped and a notice shows the count.
-- **Data stays on your device** — audio is processed locally without uploading it. Settings persist in browser storage. Imported files, playback position, and manual clip edits last for the current page session; select files again after reloading.
+- **Data stays on your device** — audio is processed locally without uploading it. Settings, playlists, and imported audio persist in browser storage. Playback position and manual clip edits last for the current page session.
 - **iOS / iPhone** — WebKit's audio-routing limitation means the live frequency visualizer has no live analyser data; as a fallback the dancing lines are derived from the decoded waveform around the playhead, so they still animate.
 - **Audio playback** may require a user gesture (browser autoplay policy) — tap Play to start. If playback fails, use **Retry** to reload the track or **Next track** to continue.
 

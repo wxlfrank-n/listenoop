@@ -47,6 +47,7 @@ interface ConfigState {
   playbackSpeed: number;
   skipSeconds: number;
   waveformView: WaveformView;
+  showTimeRuler: boolean;
   blockMs: number;
   silenceRatio: number;
   minClipLength: number;
@@ -63,6 +64,7 @@ export const DEFAULT_CONFIG: ConfigState = {
   playbackSpeed: 1,
   skipSeconds: 10,
   waveformView: 'horizontal',
+  showTimeRuler: true,
   blockMs: 12,
   silenceRatio: 0.01,
   minClipLength: 0.3,
@@ -138,6 +140,10 @@ function loadConfig(): ConfigState {
           typeof parsed.showAdvancedControls === 'boolean'
             ? parsed.showAdvancedControls
             : DEFAULT_CONFIG.showAdvancedControls,
+        showTimeRuler:
+          typeof parsed.showTimeRuler === 'boolean'
+            ? parsed.showTimeRuler
+            : DEFAULT_CONFIG.showTimeRuler,
         loopMode,
         language: isLocale(parsed.language)
           ? parsed.language

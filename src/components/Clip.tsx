@@ -530,7 +530,10 @@ export const Clip = memo(
         className={`waveform-clip ${active ? 'waveform-clip--active' : ''} ${
           swipeAction ? 'waveform-clip--swiping' : ''
         }${longClipDescription ? ' waveform-clip--long-source' : ''}`}
-        title={longClipDescription}
+        title={
+          longClipDescription ??
+          `${formatSeconds(clip.start)} – ${formatSeconds(clip.end)}`
+        }
         data-clip-idx={id}
         data-clip-start-sec={clip.start}
         data-clip-end-sec={clip.end}

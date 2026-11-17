@@ -1,0 +1,71 @@
+.waveform-time-ruler {
+  position: absolute;
+  inset: auto 0 0;
+  height: 16px;
+  pointer-events: none;
+  color: var(--text-secondary);
+  font-size: 10px;
+  font-variant-numeric: tabular-nums;
+  line-height: 1;
+}
+
+.waveform-time-ruler__line {
+  display: block;
+  border-top: 1px solid var(--border);
+}
+
+.waveform-time-ruler__tick {
+  position: absolute;
+  top: 0;
+  height: 100%;
+  container-type: inline-size;
+}
+
+.waveform-time-ruler__mark {
+  display: block;
+  height: 3px;
+  border-left: 1px solid currentColor;
+  opacity: 0.5;
+}
+
+.waveform-time-ruler__label {
+  display: none;
+  position: absolute;
+  top: 6px;
+  left: 0;
+  transform: translateX(-50%);
+  white-space: nowrap;
+}
+
+.waveform-time-ruler__tick[data-edge='start'] .waveform-time-ruler__label {
+  transform: none;
+}
+
+.waveform-time-ruler__tick[data-edge='end'] .waveform-time-ruler__label {
+  transform: translateX(-100%);
+}
+
+/* Keep one-second marks and thin out the numbers as the scale gets denser. */
+@container (width >= 4px) and (width < 8px) {
+  [data-ten='true'] > .waveform-time-ruler__label {
+    display: block;
+  }
+}
+
+@container (width >= 8px) and (width < 20px) {
+  [data-five='true'] > .waveform-time-ruler__label {
+    display: block;
+  }
+}
+
+@container (width >= 20px) and (width < 40px) {
+  [data-even='true'] > .waveform-time-ruler__label {
+    display: block;
+  }
+}
+
+@container (width >= 40px) {
+  .waveform-time-ruler__label {
+    display: block;
+  }
+}

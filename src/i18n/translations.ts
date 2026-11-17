@@ -112,6 +112,7 @@ export const en = {
     language: 'Language',
 
     waveformView: 'Waveform view',
+    showTimeRuler: 'Show time ruler',
     singleRow: 'Single row',
     stacked: 'Stacked',
     singleRowHint:
@@ -301,6 +302,7 @@ export const no: Messages = {
     language: 'Spr\u00e5k',
 
     waveformView: 'B\u00f8lgevisning',
+    showTimeRuler: 'Vis tidslinjal',
     singleRow: 'Enkel rad',
     stacked: 'Stakkvis',
     singleRowHint:
@@ -491,6 +493,7 @@ export const zh: Messages = {
     language: '语言',
 
     waveformView: '波形显示',
+    showTimeRuler: '显示时间刻度',
     singleRow: '单行',
     stacked: '多行',
     singleRowHint: '在一行中显示完整波形，并在播放时自动跟随当前位置。',

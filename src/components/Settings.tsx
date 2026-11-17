@@ -279,6 +279,21 @@ function AppearanceTab() {
         value={config.waveformView}
         onChange={waveformView => updateConfig({waveformView})}
       />
+      <div className="settings-field">
+        <label className="settings-switch">
+          <input
+            type="checkbox"
+            checked={config.showTimeRuler}
+            onChange={e => updateConfig({showTimeRuler: e.target.checked})}
+          />
+          <span className="settings-switch__track" aria-hidden="true">
+            <span className="settings-switch__knob" />
+          </span>
+          <span className="settings-switch__label">
+            {t('settings.showTimeRuler')}
+          </span>
+        </label>
+      </div>
     </>
   );
 }

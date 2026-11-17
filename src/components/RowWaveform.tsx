@@ -3,6 +3,7 @@ import {Clips} from './Clips';
 import {ClipLabel, clipLabelProps} from './ClipLabel';
 import {DancingLines} from './DancingLines';
 import {WaveformCursor} from './WaveformCursor';
+import {WaveformTimeRuler} from './WaveformTimeRuler';
 import {WaveformCanvas} from './Waveform';
 import {type WaveformData} from '../hooks/useWaveform';
 import {useRowWaveformScroll, VB_W, VB_H} from '../hooks/useRowWaveformScroll';
@@ -281,6 +282,12 @@ export const RowWaveform = memo(
                 renderLabel={renderRowClipLabel}
               />
             </div>
+            {config.showTimeRuler && (
+              <WaveformTimeRuler
+                window={waveformWindow}
+                contentEndSec={waveform.duration}
+              />
+            )}
             <WaveformCursor
               view="row"
               getPlayedPct={getStripPlayedPct}

@@ -16,6 +16,7 @@ import {ClipLabel, clipLabelProps} from './ClipLabel';
 import {Clips} from './Clips';
 import {WaveformCanvas} from './Waveform';
 import {WaveformCursor} from './WaveformCursor';
+import {WaveformTimeRuler} from './WaveformTimeRuler';
 import {useConfig} from '../hooks/useConfig';
 
 import type {SwipeDirection, WaveformData} from '../types';
@@ -249,6 +250,9 @@ export const StackRow = memo(
           />
         </div>
 
+        {config.showTimeRuler && (
+          <WaveformTimeRuler window={rowWindow} contentEndSec={row.end} />
+        )}
         {showCursor && (
           <WaveformCursor
             view="stacked"

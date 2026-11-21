@@ -35,6 +35,7 @@ function renderToolbar(
   store: ReturnType<typeof makeStore>,
   showMergeSlider?: boolean,
   onMergeGapChange = (_gap: number) => {},
+  disabled = false,
 ) {
   store.dispatch(updateConfig({showAdvancedControls: true}));
   return render(
@@ -46,6 +47,7 @@ function renderToolbar(
         repetitions={3}
         onRepetitionsChange={() => {}}
         showMergeSlider={showMergeSlider}
+        disabled={disabled}
       />
     </Provider>,
   );
@@ -62,6 +64,47 @@ describe('ClipToolbar', () => {
 
     expect(onMergeGapChange).toHaveBeenCalledWith(0);
   });
+
+  it('switches to Clip scope only on a double-click in the gap', () => {
+    const store = makeStore();
+    store.dispatch(updateConfig({mergeScope: 'global'}));
+    const {container, getByRole} = renderToolbar(store, true);
+    const toolbar = container.querySelector('.clip-toolbar')!;
+
+    fireEvent.doubleClick(getByRole('slider', {name: 'Repeats:'}));
+    fireEvent.doubleClick(toolbar);
+    expect(store.getState().config.mergeScope).toBe('global');
+
+    const gap = container.querySelector('.clip-toolbar__scope-gap')!;
+    fireEvent.click(gap);
+    expect(store.getState().config.mergeScope).toBe('global');
+
+    fireEvent.click(gap);
+    expect(store.getState().config.mergeScope).toBe('clip');
+  });
+
+  it.each([false, true])(
+    'switches to Global scope only from empty space (playing: %s)',
+    playing => {
+      const store = makeStore();
+      store.dispatch(updateConfig({mergeScope: 'clip'}));
+      const {container, getByRole} = renderToolbar(
+        store,
+        false,
+        undefined,
+        playing,
+      );
+      const toolbar = container.querySelector('.clip-toolbar--clip-scope')!;
+
+      fireEvent.doubleClick(getByRole('slider', {name: 'Repeats:'}));
+      fireEvent.doubleClick(container.querySelector('.clip-reps__label')!);
+      fireEvent.click(toolbar);
+      expect(store.getState().config.mergeScope).toBe('clip');
+
+      fireEvent.click(toolbar);
+      expect(store.getState().config.mergeScope).toBe('global');
+    },
+  );
 
   it('renders the merge and repeat controls', () => {
     const store = makeStore();

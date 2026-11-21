@@ -6,6 +6,7 @@
  * repeat stepper. Collapses via a swipe down; the collapsed hit area that
  * re-expands it lives inside progress-container.
  */
+import {useRef} from 'react';
 import {useDrag} from '@use-gesture/react';
 
 import {MergeSlider} from './MergeSlider';
@@ -18,6 +19,9 @@ import './ClipToolbar.css';
 
 /** Vertical distance (px) that counts as a swipe to hide the toolbar. */
 export const TOOLBAR_SWIPE_THRESHOLD_PX = 24;
+
+const SCOPE_DOUBLE_CLICK_MS = 500;
+const SCOPE_DOUBLE_CLICK_DISTANCE_PX = 12;
 
 interface ClipToolbarProps {
   /** Snapped merge gap (seconds) applied to the clips. */
@@ -51,6 +55,12 @@ export function ClipToolbar({
   disabled = false,
 }: ClipToolbarProps) {
   const dispatch = useAppDispatch();
+  const lastScopeClick = useRef<{
+    time: number;
+    x: number;
+    y: number;
+    showMergeSlider: boolean;
+  } | null>(null);
 
   /*
    * Swipe down (vertical, downward) hides the toolbar.
@@ -85,8 +95,40 @@ export function ClipToolbar({
 
   return (
     <div
-      className={`clip-toolbar ${disabled ? 'clip-toolbar--disabled' : ''}`}
+      className={`clip-toolbar ${showMergeSlider ? '' : 'clip-toolbar--clip-scope'} ${disabled ? 'clip-toolbar--disabled' : ''}`}
       {...bindToolbar()}
+      onClick={event => {
+        const {target, currentTarget, timeStamp, clientX, clientY} = event;
+        const targetClass = showMergeSlider
+          ? 'clip-toolbar__scope-gap'
+          : 'clip-reps';
+        const hitScopeArea =
+          (!showMergeSlider && target === currentTarget) ||
+          (target instanceof HTMLElement &&
+            target.classList.contains(targetClass));
+        const previous = lastScopeClick.current;
+        lastScopeClick.current = null;
+        if (!hitScopeArea) return;
+
+        if (
+          previous?.showMergeSlider === showMergeSlider &&
+          timeStamp - previous.time <= SCOPE_DOUBLE_CLICK_MS &&
+          Math.hypot(clientX - previous.x, clientY - previous.y) <=
+            SCOPE_DOUBLE_CLICK_DISTANCE_PX
+        ) {
+          dispatch(
+            updateConfig({mergeScope: showMergeSlider ? 'clip' : 'global'}),
+          );
+          return;
+        }
+
+        lastScopeClick.current = {
+          time: timeStamp,
+          x: clientX,
+          y: clientY,
+          showMergeSlider,
+        };
+      }}
     >
       {showMergeSlider && (
         <MergeSlider
@@ -95,6 +137,10 @@ export function ClipToolbar({
           onChange={onMergeGapChange}
           disabled={disabled}
         />
+      )}
+
+      {showMergeSlider && (
+        <div className="clip-toolbar__scope-gap" aria-hidden="true" />
       )}
 
       <RepsStepper

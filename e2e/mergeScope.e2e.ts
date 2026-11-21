@@ -3,6 +3,7 @@ import {expect, test} from '@playwright/test';
 import {
   mergeScopeOption,
   openClipDetectionTab,
+  playButton,
   seedConfig,
   setMergeScope,
   waitForClips,
@@ -32,6 +33,31 @@ test.describe('merge scope', () => {
     // the unrelated repeat control remains.
     await expect(page.locator('.clip-merge')).toHaveCount(0);
     await expect(page.locator('.clip-reps')).toHaveCount(1);
+  });
+
+  test('switches scope in both directions with double-clicks during playback', async ({
+    page,
+  }) => {
+    await seedConfig(page, {showAdvancedControls: true, mergeScope: 'clip'});
+    await page.goto('/');
+    await waitForClips(page);
+
+    const toolbar = page.locator('.clip-toolbar');
+    await playButton(page).click();
+    await expect(toolbar).toHaveClass(/clip-toolbar--disabled/);
+
+    const emptySpace = {position: {x: 8, y: 15}};
+    await toolbar.click(emptySpace);
+    await expect(page.locator('.clip-merge')).toHaveCount(0);
+    await toolbar.dblclick(emptySpace);
+    await expect(page.locator('.clip-merge')).toBeVisible();
+
+    const gap = toolbar.locator('.clip-toolbar__scope-gap');
+    await gap.click();
+    await expect(page.locator('.clip-merge')).toBeVisible();
+    await gap.dblclick();
+    await expect(page.locator('.clip-merge')).toHaveCount(0);
+    await expect(playButton(page)).toHaveClass(/control-btn--playing/);
   });
 
   test('shows the merge slider in whole-track scope', async ({page}) => {

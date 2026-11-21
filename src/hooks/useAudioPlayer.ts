@@ -834,6 +834,7 @@ export function useAudioPlayer(skipSeconds: number, playbackSpeed = 1) {
       repetitions: number,
       onComplete?: () => void,
       onRepeat?: () => void,
+      stopAfterClip = false,
     ) => {
       const audio = audioRef.current;
 
@@ -957,7 +958,7 @@ export function useAudioPlayer(skipSeconds: number, playbackSpeed = 1) {
         onComplete?.();
 
         dispatch(setIsPlaying(false));
-        if (store.getState().config.loopMode === 'clips') {
+        if (!stopAfterClip && store.getState().config.loopMode === 'clips') {
           void Promise.resolve().then(() => {
             if (
               runId !== rangeRunIdRef.current ||

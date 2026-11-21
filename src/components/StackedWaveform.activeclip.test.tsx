@@ -1,6 +1,6 @@
 // @vitest-environment jsdom
 
-import {render, act} from '@testing-library/react';
+import {render, act, fireEvent} from '@testing-library/react';
 import type {ComponentProps} from 'react';
 import {afterEach, beforeEach, describe, expect, it, vi} from 'vitest';
 import {configureStore} from '@reduxjs/toolkit';
@@ -111,7 +111,7 @@ function setup() {
     '.stacked-waveform',
   ) as HTMLElement;
 
-  return {scrollTo, rerender, pageNumber, scroller};
+  return {scrollTo, rerender, pageNumber, scroller, onPlayRange: props.onPlayRange};
 }
 
 beforeEach(() => {
@@ -200,6 +200,22 @@ describe('stacked waveform active-clip follow', () => {
 
     expect(pageNumber()).toBe('1 / 6');
     expect(scrollTo).not.toHaveBeenCalled();
+  });
+
+  it('stays on the page when its last clip is selected and finishes', () => {
+    const {rerender, pageNumber, scroller, onPlayRange} = setup();
+    const clips = scroller.querySelectorAll('.waveform-clip');
+
+    fireEvent.keyDown(clips[0]!, {key: 'Enter'});
+    expect(onPlayRange).toHaveBeenLastCalledWith(0, 3, 3, expect.any(Function));
+    fireEvent.keyDown(clips[1]!, {key: 'Enter'});
+    expect(onPlayRange).toHaveBeenLastCalledWith(
+      3, 6, 3, expect.any(Function), undefined, true,
+    );
+
+    rerender({activeClip: 1, currentTime: 3, playing: true});
+    rerender({currentTime: 6, playing: false});
+    expect(pageNumber()).toBe('1 / 6');
   });
 
   it('pages to an active clip that was not on the current page', async () => {

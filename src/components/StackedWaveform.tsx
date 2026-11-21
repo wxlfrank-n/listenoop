@@ -85,6 +85,8 @@ interface StackedWaveformProps {
     end: number,
     repetitions: number,
     onComplete?: () => void,
+    onRepeat?: () => void,
+    stopAfterClip?: boolean,
   ) => void;
 
   getCurrentTime: () => number;
@@ -381,6 +383,7 @@ export const StackedWaveform = memo(
       [clampPage],
     );
 
+    const tappedPageEndRef = useRef<number | null>(null);
     const pageForTime = useCallback((time: number) => {
       const pages = pageTimesRef.current;
 
@@ -654,6 +657,8 @@ export const StackedWaveform = memo(
           return;
         }
 
+        const tappedEnd = tappedPageEndRef.current;
+        if (tappedEnd !== null && Math.abs(time - tappedEnd) <= 0.05) return;
         const page = pageForTime(time);
 
         if (page === currentPageRef.current) {
@@ -687,6 +692,8 @@ export const StackedWaveform = memo(
         return;
       }
 
+      const tappedEnd = tappedPageEndRef.current;
+      if (tappedEnd !== null && Math.abs(currentTime - tappedEnd) <= 0.05) return;
       const page = pageForTime(currentTime);
 
       if (playing && page > currentPageRef.current) {
@@ -790,6 +797,7 @@ export const StackedWaveform = memo(
 
     const handleRowSeek = useCallback(
       (time: number) => {
+        tappedPageEndRef.current = null;
         onSeek(time);
 
         onActiveClipChange(-1);
@@ -814,12 +822,16 @@ export const StackedWaveform = memo(
      */
 
     const stackedPlayClip = useCallback(
-      (start: number, end: number, reps: number) => {
+      (start: number, end: number, reps: number, stopAfterClip = false) => {
+        tappedPageEndRef.current = stopAfterClip ? end : null;
         setClipPlayActive(true);
 
-        onPlayRange(start, end, reps, () => {
-          setClipPlayActive(false);
-        });
+        const onComplete = () => setClipPlayActive(false);
+        if (stopAfterClip) {
+          onPlayRange(start, end, reps, onComplete, undefined, true);
+        } else {
+          onPlayRange(start, end, reps, onComplete);
+        }
       },
       [onPlayRange],
     );
@@ -883,7 +895,16 @@ export const StackedWaveform = memo(
                       onActivate={onActiveClipChange}
                       onSwipeClip={onSwipeClip}
                       minClipLength={minClipLength}
-                      onPlayRange={stackedPlayClip}
+                      onPlayRange={(start, end, reps) => {
+                        const lastRow = page[page.length - 1]?.row;
+                        const lastClip = lastRow?.clips[lastRow.clips.length - 1]?.clip;
+                        stackedPlayClip(
+                          start,
+                          end,
+                          reps,
+                          lastClip?.vStart === start && lastClip.vEnd === end,
+                        );
+                      }}
                       onSeek={handleRowSeek}
                       getCurrentTime={getCurrentTime}
                       suppressClickRef={suppressRowClickRef}

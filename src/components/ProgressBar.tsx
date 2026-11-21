@@ -63,6 +63,8 @@ interface ProgressBarProps {
     end: number,
     repetitions: number,
     onComplete?: () => void,
+    onRepeat?: () => void,
+    stopAfterClip?: boolean,
   ) => void;
 
   onStopPlayback: () => void;

@@ -153,9 +153,9 @@ describe('stacked waveform active-clip follow', () => {
 
     expect(pageNumber()).toBe('2 / 4');
     const pages = scroller.querySelectorAll('.stacked-waveform__page');
-    expect(pages[1].querySelector('.waveform-clip')).not.toBeNull();
-    expect(pages[1].querySelector('.stacked-waveform__row')).not.toBeNull();
-    expect(pages[3].childElementCount).toBe(0);
+    expect(pages[1]?.querySelector('.waveform-clip')).toBeTruthy();
+    expect(pages[1]?.querySelector('.stacked-waveform__row')).toBeTruthy();
+    expect(pages[3]?.childElementCount).toBe(0);
   });
 
   it('follows a split or merge that re-packs the edited clip onto another page', async () => {

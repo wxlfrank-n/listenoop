@@ -274,9 +274,11 @@ export function Playlist({
           style={{display: 'none'}}
         />
         <input
-          ref={folderInputRef}
+          ref={input => {
+            folderInputRef.current = input;
+            input?.setAttribute('webkitdirectory', '');
+          }}
           type="file"
-          webkitdirectory=""
           multiple
           hidden
           onChange={event => {

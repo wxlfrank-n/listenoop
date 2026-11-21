@@ -127,7 +127,7 @@ function estimateSoundThresholds(
   // These are independent tuning heuristics, not three uses of one rule.
   const amplitudeFloor = 1e-5;
   const referenceNoiseMargin = 1.5;
-  const ratio = Math.max(0.0001, Math.min(0.02, finiteOr(silenceRatio, 0.01)));
+  const ratio = Math.max(0.0001, Math.min(0.05, finiteOr(silenceRatio, 0.01)));
   // At the default ratio (0.01), sound must clear roughly 3x the noise floor.
   const noiseThresholdMultiplier = 1.5 + ratio * 150;
   const hysteresisRatio = 1.5;

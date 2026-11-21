@@ -84,8 +84,8 @@ export const CONFIG_RANGES = {
   // Capped at the detector's own ceiling (`clips.ts` clamps to 0.02): higher
   // values behave identically, so the slider stops here instead of offering a
   // dead range.
-  silenceRatio: {min: 0.005, max: 0.02},
-  minClipLength: {min: 0.3, max: 1},
+  silenceRatio: {min: 0.005, max: 0.05},
+  minClipLength: {min: 0.2, max: 1},
   expansionRate: {min: 0.25, max: 0.4},
   repetitions: {min: 1, max: 20},
 } as const;

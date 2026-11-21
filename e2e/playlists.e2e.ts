@@ -19,7 +19,7 @@ test('named playlists restore the selected imported track and playback position'
     await page.getByRole('button', {name: 'More', exact: true}).click();
     await page.getByRole('menuitem', {name: 'Playlist', exact: true}).click();
   }
-  const picker = page.getByRole('textbox', {name: 'Find or name a playlist'});
+  const picker = page.getByRole('textbox', {name: 'Choose playlist'});
   const panel = page.getByRole('dialog');
   async function create(name: string) {
     await picker.fill(name);

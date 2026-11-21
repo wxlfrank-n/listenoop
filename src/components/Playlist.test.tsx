@@ -35,7 +35,7 @@ it('filters playlists and offers the inline action for the typed name', () => {
     </Provider>,
   );
 
-  const input = screen.getByRole('textbox', {name: 'Find or name a playlist'});
+  const input = screen.getByRole('textbox', {name: 'Choose playlist'});
   expect(screen.queryByRole('button', {name: 'Remove playlist'})).toBeNull();
   expect(screen.getByRole('button', {name: /01A/})).toBeTruthy();
   expect(screen.queryByRole('button', {name: 'Remove track'})).toBeNull();

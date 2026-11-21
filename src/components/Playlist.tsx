@@ -105,8 +105,7 @@ export function Playlist({
             >
               <input
                 ref={inputRef}
-                aria-label={t(editing ? 'playlist.name' : 'playlist.search')}
-                placeholder={t('playlist.search')}
+                aria-label={t(editing ? 'playlist.name' : 'playlist.choose')}
                 value={input}
                 onFocus={event => event.target.select()}
                 onClick={() => {

@@ -47,7 +47,6 @@ export const en = {
   },
 
   playlist: {
-    search: 'Find or name a playlist',
     remove: 'Remove playlist',
     rename: 'Rename',
     confirmRemove: 'Remove playlist "{name}"?',
@@ -244,7 +243,6 @@ export const no: Messages = {
   },
 
   playlist: {
-    search: 'Finn eller gi navn til en spilleliste',
     remove: 'Fjern spilleliste',
     rename: 'Gi nytt navn',
     confirmRemove: 'Fjerne spillelisten «{name}»?',
@@ -442,7 +440,6 @@ export const zh: Messages = {
   },
 
   playlist: {
-    search: '查找或输入播放列表名称',
     remove: '移除播放列表',
     rename: '重命名',
     confirmRemove: '移除播放列表“{name}”？',

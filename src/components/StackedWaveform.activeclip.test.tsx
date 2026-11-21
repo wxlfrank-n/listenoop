@@ -140,6 +140,24 @@ afterEach(() => {
 });
 
 describe('stacked waveform active-clip follow', () => {
+  it('updates the visible clips when scrolling during an automatic page change', () => {
+    const {rerender, pageNumber, scroller} = setup();
+
+    rerender({displayClips: shortClips, activeClip: 22});
+    expect(pageNumber()).toBe('4 / 4');
+
+    act(() => {
+      scroller.scrollLeft = 800;
+      scroller.dispatchEvent(new Event('scroll'));
+    });
+
+    expect(pageNumber()).toBe('2 / 4');
+    const pages = scroller.querySelectorAll('.stacked-waveform__page');
+    expect(pages[1].querySelector('.waveform-clip')).not.toBeNull();
+    expect(pages[1].querySelector('.stacked-waveform__row')).not.toBeNull();
+    expect(pages[3].childElementCount).toBe(0);
+  });
+
   it('follows a split or merge that re-packs the edited clip onto another page', async () => {
     const {scrollTo, rerender, pageNumber} = setup();
 

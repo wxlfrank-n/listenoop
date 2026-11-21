@@ -4,7 +4,8 @@
  * Supports file input for adding new tracks.
  */
 
-import {useRef, useCallback, useState} from 'react';
+import {useRef, useState} from 'react';
+import {isDefaultTrack} from '../defaultTracks';
 import {TrackList} from './TrackList';
 import {useAppSelector} from '../store/hooks';
 import {selectTracks, selectCurrentTrackIndex} from '../store/selectors';
@@ -18,6 +19,8 @@ interface PlaylistProps {
   activePlaylist: string;
   onSwitchPlaylist: (name: string) => void;
   onCreatePlaylist: (name: string) => void;
+  onRenamePlaylist: (oldName: string, newName: string) => void;
+  onRemovePlaylist: (name: string) => void;
   onSelectTrack: (index: number) => void;
   onRemoveTrack: (index: number) => void;
   onAddFiles: (files: FileList) => void;
@@ -29,19 +32,43 @@ export function Playlist({
   activePlaylist,
   onSwitchPlaylist,
   onCreatePlaylist,
+  onRenamePlaylist,
+  onRemovePlaylist,
   onSelectTrack,
   onRemoveTrack,
   onAddFiles,
   onClose,
 }: PlaylistProps) {
+  const [importMenuOpen, setImportMenuOpen] = useState(false);
+  const folderInputRef = useRef<HTMLInputElement>(null);
   const fileInputRef = useRef<HTMLInputElement>(null);
   const panelRef = useRef<HTMLDivElement>(null);
   const tracks = useAppSelector(selectTracks);
   const currentTrackIndex = useAppSelector(selectCurrentTrackIndex);
   const t = useT();
-  const [playlistName, setPlaylistName] = useState<string | null>(null);
-
-  const handleClose = useCallback(() => onClose(), [onClose]);
+  const [query, setQuery] = useState<string | null>(null);
+  const [dropdownOpen, setDropdownOpen] = useState(false);
+  const [editing, setEditing] = useState<string | null>(null);
+  const inputRef = useRef<HTMLInputElement>(null);
+  const label = (name: string) => name || t('playlist.default');
+  const input = query ?? label(activePlaylist);
+  const name = input.trim();
+  const search = name.toLowerCase();
+  const exact =
+    query === null
+      ? activePlaylist
+      : (playlistNames.find(item => label(item) === name) ??
+        playlistNames.find(item => label(item).toLowerCase() === search));
+  const canRename =
+    !!editing &&
+    !!name &&
+    name !== editing &&
+    !playlistNames.some(
+      item => item !== editing && label(item).toLowerCase() === search,
+    );
+  const results = playlistNames.filter(
+    item => query === null || label(item).toLowerCase().includes(search),
+  );
 
   // Trap Tab / Shift+Tab inside the panel, close on Escape, and restore
   // focus to the trigger button on unmount.
@@ -59,72 +86,182 @@ export function Playlist({
         onClick={e => e.stopPropagation()}
       >
         <div className="playlist-header">
-          <h2 id="playlist-title">
-            {t('playlist.title', {count: tracks.length})}
+          <div className="playlist-picker">
+            <form
+              onSubmit={event => {
+                event.preventDefault();
+                if (editing) {
+                  if (!canRename) return;
+                  onRenamePlaylist(editing, name);
+                  setEditing(null);
+                } else if (exact !== undefined) {
+                  onSwitchPlaylist(exact);
+                } else if (name) {
+                  onCreatePlaylist(name);
+                }
+                setQuery(null);
+                setDropdownOpen(false);
+              }}
+            >
+              <input
+                ref={inputRef}
+                aria-label={t(editing ? 'playlist.name' : 'playlist.search')}
+                placeholder={t('playlist.search')}
+                value={input}
+                onFocus={event => event.target.select()}
+                onClick={() => {
+                  if (!editing) setDropdownOpen(true);
+                }}
+                onChange={event => {
+                  setImportMenuOpen(false);
+                  setQuery(event.target.value);
+                  if (!editing) setDropdownOpen(true);
+                }}
+                onKeyDown={event => {
+                  if (!editing && event.key === 'ArrowDown') {
+                    event.preventDefault();
+                    setDropdownOpen(true);
+                  }
+                }}
+              />
+              {editing && (
+                <>
+                  <button type="submit" disabled={!canRename}>
+                    {t('playlist.rename')}
+                  </button>
+                  <button
+                    type="button"
+                    onClick={() => {
+                      setEditing(null);
+                      setQuery(null);
+                    }}
+                  >
+                    {t('playlist.cancel')}
+                  </button>
+                </>
+              )}
+              {!editing && name && exact === undefined && (
+                <button type="submit" aria-label={t('playlist.new')}>
+                  +
+                </button>
+              )}
+              {dropdownOpen && !editing && exact && (
+                <button
+                  type="button"
+                  aria-label={t('playlist.rename')}
+                  onClick={() => {
+                    setDropdownOpen(false);
+                    setEditing(exact);
+                    setQuery(exact);
+                    inputRef.current?.focus();
+                    inputRef.current?.select();
+                  }}
+                >
+                  &#9998;
+                </button>
+              )}
+              {dropdownOpen && !editing && exact && (
+                <button
+                  type="button"
+                  aria-label={t('playlist.remove')}
+                  onClick={() => {
+                    if (
+                      window.confirm(t('playlist.confirmRemove', {name: exact}))
+                    ) {
+                      setDropdownOpen(false);
+                      onRemovePlaylist(exact);
+                      setQuery(null);
+                    }
+                  }}
+                >
+                  <CloseIcon width={16} height={16} />
+                </button>
+              )}
+              {!editing && (
+                <button
+                  type="button"
+                  className="playlist-picker__toggle"
+                  aria-label={t('playlist.choose')}
+                  aria-expanded={dropdownOpen}
+                  onClick={() => {
+                    setImportMenuOpen(false);
+                    setDropdownOpen(open => !open);
+                  }}
+                >
+                  <span aria-hidden="true" />
+                </button>
+              )}
+            </form>
+            {dropdownOpen && !editing && results.length > 0 && (
+              <div className="playlist-picker__results">
+                {results.map(item => (
+                  <button
+                    type="button"
+                    key={item}
+                    aria-pressed={item === activePlaylist}
+                    onClick={() => {
+                      onSwitchPlaylist(item);
+                      setDropdownOpen(false);
+                      setQuery(null);
+                    }}
+                  >
+                    {label(item)}
+                  </button>
+                ))}
+              </div>
+            )}
+          </div>
+          <h2
+            id="playlist-title"
+            className="playlist-track-count"
+            aria-label={t('playlist.title', {count: tracks.length})}
+          >
+            {t(
+              tracks.length === 1
+                ? 'playlist.trackCountOne'
+                : 'playlist.trackCount',
+              {
+                count: tracks.length,
+              },
+            )}
           </h2>
-          <div className="playlist-header__actions">
+          <div className="playlist-import">
             <button
+              type="button"
               className="add-btn"
               aria-label={t('playlist.addTracks')}
-              onClick={() => fileInputRef.current?.click()}
+              aria-expanded={importMenuOpen}
+              onClick={() => {
+                setDropdownOpen(false);
+                setImportMenuOpen(open => !open);
+              }}
             >
-              +
+              <span aria-hidden="true">&#9835;</span>
             </button>
-            <button
-              className="playlist-close"
-              onClick={handleClose}
-              aria-label={t('playlist.close')}
-            >
-              <CloseIcon width={18} height={18} />
-            </button>
+            {importMenuOpen && (
+              <div className="playlist-import__options">
+                <button
+                  type="button"
+                  onClick={() => {
+                    fileInputRef.current?.click();
+                    setImportMenuOpen(false);
+                  }}
+                >
+                  {t('playlist.addTracks')}
+                </button>
+                <button
+                  type="button"
+                  onClick={() => {
+                    folderInputRef.current?.click();
+                    setImportMenuOpen(false);
+                  }}
+                >
+                  {t('playlist.addFolder')}
+                </button>
+              </div>
+            )}
           </div>
         </div>
-        <div className="playlist-picker">
-          <select
-            aria-label={t('playlist.choose')}
-            value={activePlaylist}
-            onChange={e => onSwitchPlaylist(e.target.value)}
-          >
-            {playlistNames.map(name => (
-              <option key={name} value={name}>
-                {name || t('playlist.default')}
-              </option>
-            ))}
-          </select>
-          <button onClick={() => setPlaylistName('')}>
-            {t('playlist.new')}
-          </button>
-        </div>
-        {playlistName !== null && (
-          <form
-            className="playlist-picker"
-            onSubmit={e => {
-              e.preventDefault();
-              const name = playlistName.trim();
-              if (!name || playlistNames.includes(name)) return;
-              onCreatePlaylist(name);
-              setPlaylistName(null);
-            }}
-          >
-            <input
-              aria-label={t('playlist.name')}
-              placeholder={t('playlist.name')}
-              value={playlistName}
-              onChange={e => setPlaylistName(e.target.value)}
-            />
-            <button
-              disabled={
-                !playlistName.trim() ||
-                playlistNames.includes(playlistName.trim())
-              }
-            >
-              {t('playlist.create')}
-            </button>
-            <button type="button" onClick={() => setPlaylistName(null)}>
-              {t('playlist.cancel')}
-            </button>
-          </form>
-        )}
         <input
           ref={fileInputRef}
           type="file"
@@ -136,11 +273,25 @@ export function Playlist({
           }}
           style={{display: 'none'}}
         />
+        <input
+          ref={folderInputRef}
+          type="file"
+          webkitdirectory=""
+          multiple
+          hidden
+          onChange={event => {
+            if (event.target.files?.length) onAddFiles(event.target.files);
+            event.target.value = '';
+          }}
+        />
         <TrackList
           tracks={tracks}
           currentTrackIndex={currentTrackIndex}
           onSelectTrack={onSelectTrack}
           onRemoveTrack={onRemoveTrack}
+          canRemoveTrack={track =>
+            activePlaylist !== '' || !isDefaultTrack(track.id)
+          }
         />
       </div>
     </div>

@@ -594,6 +594,11 @@ export const StackedWaveform = memo(
       if (!el) return;
 
       const onScroll = () => {
+        const idx = clampPage(
+          Math.round(el.scrollLeft / Math.max(1, el.clientWidth)),
+        );
+        setViewPage(idx);
+
         /*
          * Programmatic auto-follow scroll.
          */
@@ -605,13 +610,7 @@ export const StackedWaveform = memo(
 
         setUserScrolling(true);
 
-        const idx = clampPage(
-          Math.round(el.scrollLeft / Math.max(1, el.clientWidth)),
-        );
-
         currentPageRef.current = idx;
-
-        setViewPage(idx);
 
         if (playingRef.current) {
           manualOverrideRef.current = true;
@@ -626,14 +625,16 @@ export const StackedWaveform = memo(
         passive: true,
       });
 
-      return () => {
-        stopScrollListener();
-
-        window.clearTimeout(userScrollTimerRef.current);
-
-        window.clearTimeout(autoScrollResetRef.current);
-      };
+      return stopScrollListener;
     }, [clampPage]);
+
+    useEffect(
+      () => () => {
+        window.clearTimeout(userScrollTimerRef.current);
+        window.clearTimeout(autoScrollResetRef.current);
+      },
+      [],
+    );
 
     /*
      * =========================================================
@@ -836,6 +837,8 @@ export const StackedWaveform = memo(
      * =========================================================
      */
 
+    const visiblePage = clampPage(viewPage);
+
     return (
       <div
         className="stacked-waveform"
@@ -855,44 +858,48 @@ export const StackedWaveform = memo(
       >
         {pagedRows.length > 0 && (
           <div className="stacked-waveform__pageno">
-            {Math.min(viewPage + 1, pagedRows.length)} / {pagedRows.length}
+            {visiblePage + 1} / {pagedRows.length}
           </div>
         )}
 
         <div className="stacked-waveform__pages">
           {pagedRows.map((page, pageIndex) => (
             <div key={pageIndex} className="stacked-waveform__page">
-              {page.map(({row, gi}) => (
-                <StackRow
-                  key={gi}
-                  row={row}
-                  gi={gi}
-                  waveform={waveform}
-                  windowSecs={windowSecs}
-                  currentTime={currentTime}
-                  playing={playing}
-                  clipPlayActive={clipPlayActive}
-                  activeClip={activeClip}
-                  repetitions={repetitions}
-                  onStopPlayback={onStopPlayback}
-                  onActivate={onActiveClipChange}
-                  onSwipeClip={onSwipeClip}
-                  minClipLength={minClipLength}
-                  onPlayRange={stackedPlayClip}
-                  onSeek={handleRowSeek}
-                  getCurrentTime={getCurrentTime}
-                  suppressClickRef={suppressRowClickRef}
-                />
-              ))}
+              {pageIndex === visiblePage && (
+                <>
+                  {page.map(({row, gi}) => (
+                    <StackRow
+                      key={gi}
+                      row={row}
+                      gi={gi}
+                      waveform={waveform}
+                      windowSecs={windowSecs}
+                      currentTime={currentTime}
+                      playing={playing}
+                      clipPlayActive={clipPlayActive}
+                      activeClip={activeClip}
+                      repetitions={repetitions}
+                      onStopPlayback={onStopPlayback}
+                      onActivate={onActiveClipChange}
+                      onSwipeClip={onSwipeClip}
+                      minClipLength={minClipLength}
+                      onPlayRange={stackedPlayClip}
+                      onSeek={handleRowSeek}
+                      getCurrentTime={getCurrentTime}
+                      suppressClickRef={suppressRowClickRef}
+                    />
+                  ))}
 
-              {Array.from({
-                length: Math.max(0, rowsPerPage - page.length),
-              }).map((_, virtualIndex) => (
-                <div
-                  key={`virtual-${virtualIndex}`}
-                  className="stacked-waveform__row stacked-waveform__row--virtual"
-                />
-              ))}
+                  {Array.from({
+                    length: Math.max(0, rowsPerPage - page.length),
+                  }).map((_, virtualIndex) => (
+                    <div
+                      key={`virtual-${virtualIndex}`}
+                      className="stacked-waveform__row stacked-waveform__row--virtual"
+                    />
+                  ))}
+                </>
+              )}
             </div>
           ))}
         </div>

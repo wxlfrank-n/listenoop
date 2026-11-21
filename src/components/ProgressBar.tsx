@@ -133,9 +133,8 @@ export function ProgressBar({
 
   const displayClips = useMemo(() => {
     if (mergeScope === 'clip') return scopedClips ?? baselineClips;
-    if (mergeGap === null) return baselineClips;
-    return mergeClipsByGap(clips, mergeGap);
-  }, [mergeScope, scopedClips, baselineClips, clips, mergeGap]);
+    return mergeClipsByGap(clips, mergeGap ?? initGap);
+  }, [mergeScope, scopedClips, baselineClips, clips, mergeGap, initGap]);
 
   /*
    * Scroll state shared with RowWaveform's follow behavior.

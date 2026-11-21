@@ -46,6 +46,12 @@ function snatchToStart(audio: HTMLAudioElement, time: number) {
   });
 }
 
+// Fresh read of player state for imperative callbacks (event handlers, rAF).
+const getPlayer = () => store.getState().player;
+
+const hasTrackUrl = (url: string) =>
+  getPlayer().tracks.some(track => track.url === url);
+
 export function useAudioPlayer(skipSeconds: number, playbackSpeed = 1) {
   const [isClipPlaying, setIsClipPlaying] = useState(false);
   const [playbackError, setPlaybackError] = useState(false);
@@ -56,9 +62,6 @@ export function useAudioPlayer(skipSeconds: number, playbackSpeed = 1) {
   const dispatch = useAppDispatch();
   // Live playback state, kept in Redux so every component shares it.
   const state = useAppSelector(s => s.player);
-
-  // Fresh read of player state for imperative callbacks (event handlers, rAF).
-  const getPlayer = () => store.getState().player;
 
   // Detection options for the worker's `decode` request. Read via a ref so
   // changes don't trigger re-decode — only the URL matters; the cache is
@@ -101,6 +104,7 @@ export function useAudioPlayer(skipSeconds: number, playbackSpeed = 1) {
   const startClipSequenceRef = useRef<() => void>(() => {});
   const loopMode = useAppSelector(s => s.config.loopMode);
   const nextRef = useRef<() => void>(() => {});
+  const initialSeekRef = useRef<{url: string; time: number} | null>(null);
   const expectedRawUrlRef = useRef<string | null>(null);
   const trackLoadIdRef = useRef(0);
   const wavBlobCacheRef = useRef<Map<string, string>>(new Map());
@@ -221,7 +225,7 @@ export function useAudioPlayer(skipSeconds: number, playbackSpeed = 1) {
       if (cached) return cached;
 
       const {wavBlob} = await decodeAudio(url, detectionOptionsRef.current);
-      if (!getPlayer().tracks.some(track => track.url === url)) {
+      if (!hasTrackUrl(url)) {
         throw new DOMException('Track removed', 'AbortError');
       }
       const objectUrl = URL.createObjectURL(wavBlob);
@@ -263,6 +267,7 @@ export function useAudioPlayer(skipSeconds: number, playbackSpeed = 1) {
       audio.pause();
       holdAtEndRef.current = false;
       dispatch(setIsPlaying(false));
+      initialSeekRef.current = null;
       expectedRawUrlRef.current = url;
 
       const load = (src: string) => {
@@ -362,9 +367,23 @@ export function useAudioPlayer(skipSeconds: number, playbackSpeed = 1) {
     const audio = audioRef.current;
 
     const onTimeUpdate = () => {
-      dispatch(setCurrentTime(audio.currentTime));
+      if (!initialSeekRef.current) dispatch(setCurrentTime(audio.currentTime));
     };
-    const onLoadedMetadata = () => dispatch(setDuration(audio.duration));
+    const onLoadedMetadata = () => {
+      const pending = initialSeekRef.current;
+      if (
+        pending?.url === expectedRawUrlRef.current &&
+        Number.isFinite(audio.duration) &&
+        audio.duration > 0
+      ) {
+        initialSeekRef.current = null;
+        const time = Math.min(pending.time, audio.duration);
+        holdAtEndRef.current = time === audio.duration;
+        audio.currentTime = time;
+        dispatch(setCurrentTime(audio.currentTime));
+      }
+      dispatch(setDuration(audio.duration));
+    };
     const onPlay = () => {
       setPlaybackError(false);
       startClipSequenceRef.current();
@@ -434,18 +453,28 @@ export function useAudioPlayer(skipSeconds: number, playbackSpeed = 1) {
   useEffect(() => {
     const audio = audioRef.current;
     const track = state.tracks[state.currentTrackIndex];
-    if (track && !audio.src) {
+    const canLoadTrack = (url: string) => !audio.src && hasTrackUrl(url);
+    if (track && canLoadTrack(track.url)) {
       expectedRawUrlRef.current = track.url;
       getPlayableUrl(track.url)
         .then(playableUrl => {
-          if (expectedRawUrlRef.current === track.url && !audio.src) {
+          if (
+            expectedRawUrlRef.current === track.url &&
+            canLoadTrack(track.url)
+          ) {
             audio.src = playableUrl;
             audio.load();
           }
         })
         .catch(error => {
-          console.error('Failed to decode initial audio:', error);
-          if (expectedRawUrlRef.current === track.url && !audio.src) {
+          if (error instanceof DOMException && error.name === 'AbortError') {
+            return;
+          }
+          if (
+            expectedRawUrlRef.current === track.url &&
+            canLoadTrack(track.url)
+          ) {
+            console.error('Failed to decode initial audio source:', error);
             audio.src = track.url;
             audio.load();
           }
@@ -656,6 +685,7 @@ export function useAudioPlayer(skipSeconds: number, playbackSpeed = 1) {
       if (index === s.currentTrackIndex) {
         if (newTracks.length === 0) {
           trackLoadIdRef.current += 1;
+          initialSeekRef.current = null;
           expectedRawUrlRef.current = null;
           newIndex = -1;
           audio.pause();
@@ -701,7 +731,7 @@ export function useAudioPlayer(skipSeconds: number, playbackSpeed = 1) {
   );
 
   const replacePlaylistTracks = useCallback(
-    (savedTracks: SavedTrack[]) => {
+    (savedTracks: SavedTrack[], resume?: {trackId: string; time: number}) => {
       stopRangeMonitoring();
       holdAtEndRef.current = false;
       window.clearTimeout(startTrackTimerRef.current);
@@ -722,6 +752,7 @@ export function useAudioPlayer(skipSeconds: number, playbackSpeed = 1) {
         revokeBlobUrl(url);
       }
 
+      initialSeekRef.current = null;
       const tracks = savedTracks.map(({source, ...track}) => {
         if (typeof source === 'string') return {...track, url: source};
         const url = URL.createObjectURL(source);
@@ -729,11 +760,20 @@ export function useAudioPlayer(skipSeconds: number, playbackSpeed = 1) {
         importedFilesRef.current.set(url, source);
         return {...track, url};
       });
+      const savedIndex = resume
+        ? tracks.findIndex(track => track.id === resume.trackId)
+        : -1;
+      const savedTrack = tracks[savedIndex];
+      if (resume && savedTrack && resume.time > 0) {
+        initialSeekRef.current = {url: savedTrack.url, time: resume.time};
+      }
       setPlaybackError(false);
       dispatch(setTracks(tracks));
-      dispatch(setCurrentTrackIndex(tracks.length ? 0 : -1));
+      dispatch(
+        setCurrentTrackIndex(tracks.length ? Math.max(0, savedIndex) : -1),
+      );
       dispatch(setIsPlaying(false));
-      dispatch(setCurrentTime(0));
+      dispatch(setCurrentTime(initialSeekRef.current?.time ?? 0));
       dispatch(setDuration(0));
     },
     [dispatch, revokeBlobUrl, stopRangeMonitoring, trackBlobUrl],

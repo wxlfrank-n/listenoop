@@ -34,6 +34,8 @@ describe('outside click closes overlays and menu', () => {
           activePlaylist=""
           onSwitchPlaylist={vi.fn()}
           onCreatePlaylist={vi.fn()}
+          onRenamePlaylist={vi.fn()}
+          onRemovePlaylist={() => {}}
           onSelectTrack={vi.fn()}
           onRemoveTrack={vi.fn()}
           onAddFiles={vi.fn()}

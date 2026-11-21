@@ -52,7 +52,11 @@ export function MergeSlider({
   disabled = false,
 }: MergeSliderProps) {
   // Detected silent-gap lengths the slider snaps to, ascending.
-  const gapValues = useAppSelector(selectGaps);
+  const detectedGaps = useAppSelector(selectGaps);
+  // Include a setting below the shortest pause so the slider can undo
+  // every optional merge, including a merge at the shortest detected gap.
+  const gapValues =
+    (detectedGaps[0] ?? 0) > 0 ? [0, ...detectedGaps] : detectedGaps;
   const t = useT();
   // Raw thumb position (seconds). Internal so the thumb tracks the pointer
   // continuously while dragging; only the reported `value` snaps.

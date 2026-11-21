@@ -47,8 +47,15 @@ export const en = {
   },
 
   playlist: {
+    search: 'Find or name a playlist',
+    remove: 'Remove playlist',
+    rename: 'Rename',
+    confirmRemove: 'Remove playlist "{name}"?',
     title: 'Playlist ({count})',
+    trackCountOne: '{count} track',
+    trackCount: '{count} tracks',
     addTracks: 'Add audio files',
+    addFolder: 'Add audio folder',
     close: 'Close playlist',
     default: 'Default',
     choose: 'Choose playlist',
@@ -237,8 +244,15 @@ export const no: Messages = {
   },
 
   playlist: {
+    search: 'Finn eller gi navn til en spilleliste',
+    remove: 'Fjern spilleliste',
+    rename: 'Gi nytt navn',
+    confirmRemove: 'Fjerne spillelisten «{name}»?',
     title: 'Avspillingsliste ({count})',
+    trackCountOne: '{count} spor',
+    trackCount: '{count} spor',
     addTracks: 'Legg til lydfiler',
+    addFolder: 'Legg til lydmappe',
     close: 'Lukk avspillingsliste',
     default: 'Standard',
     choose: 'Velg spilleliste',
@@ -428,8 +442,15 @@ export const zh: Messages = {
   },
 
   playlist: {
+    search: '查找或输入播放列表名称',
+    remove: '移除播放列表',
+    rename: '重命名',
+    confirmRemove: '移除播放列表“{name}”？',
     title: '播放列表（{count}）',
+    trackCountOne: '{count} 首',
+    trackCount: '{count} 首',
     addTracks: '添加音频',
+    addFolder: '添加音频文件夹',
     close: '关闭播放列表',
     default: '默认',
     choose: '选择播放列表',

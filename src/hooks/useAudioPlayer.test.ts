@@ -10,6 +10,7 @@ import {
   setIsPlaying,
   setCurrentTrackIndex,
   setDuration,
+  setTracks,
 } from '../store/playerSlice';
 
 /*
@@ -19,17 +20,19 @@ import {
  */
 
 const dispatch = vi.fn();
+let renderedPlayer: typeof playerState | undefined;
 
 vi.mock('../store/hooks', () => ({
   useAppDispatch: () => dispatch,
 
-  useAppSelector: () => ({
-    tracks: [],
-    currentTrackIndex: -1,
-    isPlaying: false,
-    currentTime: 0,
-    duration: 100,
-  }),
+  useAppSelector: () =>
+    renderedPlayer ?? {
+      tracks: [],
+      currentTrackIndex: -1,
+      isPlaying: false,
+      currentTime: 0,
+      duration: 100,
+    },
 }));
 
 const playerState = vi.hoisted(() => ({
@@ -148,6 +151,10 @@ class FakeAudio extends EventTarget {
   });
 
   load = vi.fn();
+
+  removeAttribute(name: string) {
+    if (name === 'src') this.src = '';
+  }
 }
 
 let audio: FakeAudio;
@@ -241,6 +248,7 @@ describe('useAudioPlayer.playRange', () => {
   });
 
   afterEach(() => {
+    renderedPlayer = undefined;
     vi.useRealTimers();
 
     vi.unstubAllGlobals();
@@ -251,6 +259,42 @@ describe('useAudioPlayer.playRange', () => {
    * Initial start
    * ----------------------------------------------------------
    */
+
+  it('loads the saved track and seeks after its metadata is available', async () => {
+    const {result, rerender} = renderHook(() => useAudioPlayer(5));
+    const savedTracks = ['first', 'second'].map(id => ({
+      id,
+      title: id,
+      artist: '',
+      duration: 0,
+      source: `/${id}.mp3`,
+    }));
+
+    act(() => {
+      result.current.replacePlaylistTracks(savedTracks, {
+        trackId: 'second',
+        time: 12.5,
+      });
+    });
+    expect(dispatch).toHaveBeenCalledWith(setCurrentTrackIndex(1));
+    const tracks = savedTracks.map(({source, ...track}) => ({
+      ...track,
+      url: source,
+    }));
+    expect(dispatch).toHaveBeenCalledWith(setTracks(tracks));
+    playerState.tracks = tracks;
+    renderedPlayer = {...playerState, tracks, currentTrackIndex: 1};
+
+    await act(async () => rerender());
+    act(() => {
+      audio.dispatchEvent(new Event('timeupdate'));
+      audio.dispatchEvent(new Event('loadedmetadata'));
+    });
+    expect(audio.currentTime).toBe(12.5);
+    expect(dispatch).toHaveBeenLastCalledWith(setDuration(100));
+    expect(dispatch).not.toHaveBeenCalledWith(setCurrentTime(0));
+    expect(audio.play).not.toHaveBeenCalled();
+  });
 
   it('changes speed during a clip without changing pitch or restarting playback', () => {
     const {result, rerender} = renderHook(

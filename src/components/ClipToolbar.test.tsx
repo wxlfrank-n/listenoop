@@ -1,12 +1,12 @@
 // @vitest-environment jsdom
 
 import {cleanup, fireEvent, render} from '@testing-library/react';
-import {afterEach, beforeAll, describe, expect, it} from 'vitest';
+import {afterEach, beforeAll, describe, expect, it, vi} from 'vitest';
 import {configureStore} from '@reduxjs/toolkit';
 import {Provider} from 'react-redux';
 import configReducer, {updateConfig} from '../store/configSlice';
 import playerReducer from '../store/playerSlice';
-import analysisReducer from '../store/analysisSlice';
+import analysisReducer, {setClips} from '../store/analysisSlice';
 import {ClipToolbar} from './ClipToolbar';
 
 afterEach(cleanup);
@@ -34,6 +34,7 @@ function makeStore() {
 function renderToolbar(
   store: ReturnType<typeof makeStore>,
   showMergeSlider?: boolean,
+  onMergeGapChange = (_gap: number) => {},
 ) {
   store.dispatch(updateConfig({showAdvancedControls: true}));
   return render(
@@ -41,7 +42,7 @@ function renderToolbar(
       <ClipToolbar
         mergeGap={0.01}
         clipCount={3}
-        onMergeGapChange={() => {}}
+        onMergeGapChange={onMergeGapChange}
         repetitions={3}
         onRepetitionsChange={() => {}}
         showMergeSlider={showMergeSlider}
@@ -51,6 +52,17 @@ function renderToolbar(
 }
 
 describe('ClipToolbar', () => {
+  it('can step below the shortest positive gap', () => {
+    const store = makeStore();
+    store.dispatch(setClips({clips: [], gaps: [0.01, 0.3], initGap: 0.155}));
+    const onMergeGapChange = vi.fn();
+    const {getByRole} = renderToolbar(store, true, onMergeGapChange);
+
+    fireEvent.click(getByRole('button', {name: 'Merge fewer clips'}));
+
+    expect(onMergeGapChange).toHaveBeenCalledWith(0);
+  });
+
   it('renders the merge and repeat controls', () => {
     const store = makeStore();
     const {container} = renderToolbar(store);

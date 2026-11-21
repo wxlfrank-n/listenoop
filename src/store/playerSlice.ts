@@ -20,7 +20,7 @@ export interface PlayerState {
   duration: number;
 }
 
-const defaultTracks: Track[] = DEFAULT_TRACKS.map(t => ({
+export const defaultTracks: Track[] = DEFAULT_TRACKS.map(t => ({
   id: t.filename,
   title: t.title,
   artist: 'Unknown Artist',

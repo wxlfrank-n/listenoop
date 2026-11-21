@@ -13,6 +13,7 @@ interface TrackListProps {
   tracks: Track[];
   currentTrackIndex: number;
   onSelectTrack: (index: number) => void;
+  canRemoveTrack: (track: Track) => boolean;
   onRemoveTrack: (index: number) => void;
 }
 
@@ -21,6 +22,7 @@ export function TrackList({
   currentTrackIndex,
   onSelectTrack,
   onRemoveTrack,
+  canRemoveTrack,
 }: TrackListProps) {
   const t = useT();
   if (tracks.length === 0) {
@@ -63,16 +65,18 @@ export function TrackList({
               <span className="track-item__artist">{track.artist}</span>
             </div>
           </div>
-          <button
-            className="track-item__remove"
-            aria-label={t('trackList.removeTrack')}
-            onClick={e => {
-              e.stopPropagation();
-              onRemoveTrack(index);
-            }}
-          >
-            {'\u2715'}
-          </button>
+          {canRemoveTrack(track) && (
+            <button
+              className="track-item__remove"
+              aria-label={t('trackList.removeTrack')}
+              onClick={e => {
+                e.stopPropagation();
+                onRemoveTrack(index);
+              }}
+            >
+              {'\u2715'}
+            </button>
+          )}
         </div>
       ))}
     </div>

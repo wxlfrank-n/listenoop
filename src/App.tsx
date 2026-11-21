@@ -1,3 +1,5 @@
+import {isDefaultTrack} from './defaultTracks';
+import {defaultTracks} from './store/playerSlice';
 /**
  * Main application component.
  *
@@ -34,6 +36,11 @@ import {useClipDetection} from './hooks/useClipDetection';
 import {useAddFiles} from './hooks/useAddFiles';
 import {useDocumentLang} from './hooks/useDocumentLang';
 import {loadPlaylists, savePlaylists} from './store/playlistStorage';
+import {
+  loadPlaybackPosition,
+  savePlaybackPosition,
+} from './store/playbackStorage';
+import {store} from './store/store';
 import type {SavedPlaylists} from './store/playlistStorage';
 import {useAppSelector} from './store/hooks';
 import {selectCurrentTrack} from './store/selectors';
@@ -57,6 +64,7 @@ export default function App() {
 
   // Set up audio player with all playback controls and state
   const {
+    state: {currentTime, duration, isPlaying},
     setClipSequence,
     togglePlay,
     next,
@@ -149,14 +157,30 @@ export default function App() {
     let cancelled = false;
     function initialize(saved?: SavedPlaylists) {
       if (cancelled) return;
-      const library = saved ?? {
-        active: '',
-        lists: [{name: '', tracks: capturePlaylistTracks()}],
+      const savedDefault = saved?.lists.find(list => list.name === '');
+      const tracks = savedDefault?.tracks ?? [];
+      const defaultList = {
+        name: '',
+        tracks: [
+          ...tracks,
+          ...defaultTracks
+            .filter(
+              track => !tracks.some(savedTrack => savedTrack.id === track.id),
+            )
+            .map(({url, ...track}) => ({...track, source: url})),
+        ],
       };
-      if (saved) {
-        const selected = saved.lists.find(list => list.name === saved.active);
-        if (selected) replacePlaylistTracks(selected.tracks);
-      }
+      const lists = saved?.lists ?? [];
+      const library = {
+        active: saved?.active ?? '',
+        lists: savedDefault
+          ? lists.map(list => (list.name === '' ? defaultList : list))
+          : [defaultList, ...lists],
+      };
+      const resume = loadPlaybackPosition(library.active);
+      const selected = library.lists.find(list => list.name === library.active);
+      if (selected && (saved || resume))
+        replacePlaylistTracks(selected.tracks, resume);
       playlistsRef.current = library;
       setPlaylists(library);
     }
@@ -168,7 +192,29 @@ export default function App() {
     return () => {
       cancelled = true;
     };
-  }, [capturePlaylistTracks, replacePlaylistTracks]);
+  }, [replacePlaylistTracks]);
+
+  const lastPlaybackSave = useRef(0);
+  useEffect(() => {
+    if (!playlists || (currentTrack && !(duration > 0))) return;
+    const now = Date.now();
+    if (isPlaying && now - lastPlaybackSave.current < 1000) return;
+    savePlaybackPosition(playlists.active, currentTrack?.id, currentTime);
+    lastPlaybackSave.current = now;
+  }, [playlists, currentTrack, currentTime, duration, isPlaying]);
+
+  useEffect(() => {
+    const flushPosition = () => {
+      const library = playlistsRef.current;
+      if (!library) return;
+      const player = store.getState().player;
+      const track = player.tracks[player.currentTrackIndex];
+      if (track && !(player.duration > 0)) return;
+      savePlaybackPosition(library.active, track?.id, player.currentTime);
+    };
+    window.addEventListener('pagehide', flushPosition);
+    return () => window.removeEventListener('pagehide', flushPosition);
+  }, []);
 
   function updatePlaylists(next: SavedPlaylists) {
     playlistsRef.current = next;
@@ -210,6 +256,44 @@ export default function App() {
       active: name,
       lists: [...library.lists, {name, tracks: []}],
     });
+  }
+
+  function renamePlaylist(oldName: string, input: string) {
+    const library = playlistsRef.current;
+    const name = input.trim();
+    if (
+      !library ||
+      !oldName ||
+      !name ||
+      !library.lists.some(list => list.name === oldName) ||
+      library.lists.some(
+        list =>
+          list.name !== oldName &&
+          list.name.toLowerCase() === name.toLowerCase(),
+      )
+    )
+      return;
+    const position = loadPlaybackPosition(oldName);
+    if (position) savePlaybackPosition(name, position.trackId, position.time);
+    updatePlaylists({
+      active: library.active === oldName ? name : library.active,
+      lists: library.lists.map(list =>
+        list.name === oldName ? {...list, name} : list,
+      ),
+    });
+  }
+
+  function removePlaylist(name: string) {
+    const library = playlistsRef.current;
+    if (!library || !name || !library.lists.some(list => list.name === name))
+      return;
+    const lists = library.lists.filter(list => list.name !== name);
+    const active = library.active === name ? '' : library.active;
+    if (loadPlaybackPosition(name)) savePlaybackPosition(name, undefined, 0);
+    if (library.active === name) {
+      replacePlaylistTracks(lists.find(list => list.name === '')?.tracks ?? []);
+    }
+    updatePlaylists({active, lists});
   }
 
   // Adding files (file picker) with a skip notice for non-MP3 files.
@@ -295,7 +379,15 @@ export default function App() {
           activePlaylist={playlists.active}
           onSwitchPlaylist={switchPlaylist}
           onCreatePlaylist={createPlaylist}
+          onRenamePlaylist={renamePlaylist}
+          onRemovePlaylist={removePlaylist}
           onRemoveTrack={index => {
+            const track = store.getState().player.tracks[index];
+            if (
+              !track ||
+              (playlistsRef.current?.active === '' && isDefaultTrack(track.id))
+            )
+              return;
             removeTrack(index);
             saveActiveTracks();
           }}

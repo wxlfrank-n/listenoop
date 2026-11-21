@@ -82,7 +82,6 @@ describe('getInitClipData — adaptive RMS', () => {
     expect(bounds(clips)).toEqual([[0, 1]]);
     expect(clips[0]!.vStart).toBe(0);
     expect(clips[0]!.vEnd).toBe(1);
-    expect(clips[0]!.expanded).toBe(true);
   });
 
   it('detects separated speech over a steady noise floor', () => {
@@ -214,7 +213,6 @@ describe('getInitClipData — adaptive RMS', () => {
     expect(clip.vEnd - clip.end).toBeCloseTo(opts.minClipLength / 2, 8);
     expect(clip.vStart).toBeGreaterThanOrEqual(0);
     expect(clip.vEnd).toBeLessThanOrEqual(7.5);
-    expect(clip.expanded).toBe(true);
   });
 
   it('caps both sides of shared gaps using the configured minimum', () => {
@@ -239,7 +237,7 @@ describe('getInitClipData — adaptive RMS', () => {
     }
   });
 
-  it('expands both sides of each shared gap consistently and marks every clip expanded', () => {
+  it('expands both sides of each shared gap consistently', () => {
     const result = detect([
       [0.3, 0],
       [0.4, 0.1],
@@ -250,7 +248,6 @@ describe('getInitClipData — adaptive RMS', () => {
       [0.3, 0],
     ]);
     expect(result.clips).toHaveLength(3);
-    expect(result.clips.every(clip => clip.expanded)).toBe(true);
     const first = result.clips[0]!;
     const last = result.clips.at(-1)!;
     expect(first.start - first.vStart).toBeCloseTo(first.start * 0.25, 8);
@@ -284,10 +281,10 @@ describe('getInitClipData — adaptive RMS', () => {
       [0.3, 0],
     ];
     const baseline = detect(parts);
-    const expanded = detect(parts, {expansionRate: 0.4});
-    expect(bounds(expanded.clips)).toEqual(bounds(baseline.clips));
-    expect(expanded.initGap).toBe(baseline.initGap);
-    const [left, right] = expanded.clips;
+    const withMorePadding = detect(parts, {expansionRate: 0.4});
+    expect(bounds(withMorePadding.clips)).toEqual(bounds(baseline.clips));
+    expect(withMorePadding.initGap).toBe(baseline.initGap);
+    const [left, right] = withMorePadding.clips;
     const gap = right!.start - left!.end;
     expect(left!.vStart).toBeCloseTo(
       left!.start - Math.min(opts.minClipLength / 2, left!.start * 0.4),
@@ -352,7 +349,6 @@ describe('enforceMinClipLength', () => {
       [2, 3],
     ]);
     expect(result.every(clip => clip.end - clip.start >= 0.5)).toBe(true);
-    expect(result.every(clip => !clip.expanded)).toBe(true);
   });
 
   it('keeps merging short groups until every resulting span meets the minimum', () => {
@@ -360,7 +356,7 @@ describe('enforceMinClipLength', () => {
       [mk(0, 0.1), mk(0.12, 0.2), mk(0.22, 0.3), mk(0.32, 0.4)],
       0.35,
     );
-    expect(bounds(result)).toEqual([[0, 0.4]]);
+    expect(result).toEqual([mk(0, 0.4)]);
   });
 
   it('merges short trailing and leading intervals, and breaks ties to the left', () => {
@@ -426,6 +422,14 @@ describe('mergeClipsByGap', () => {
     expect(mergeClipsByGap([a, b], 0.5)).toEqual([
       {start: 0, end: 2, vStart: 0, vEnd: 2, children: [a, b]},
     ]);
+  });
+
+  it('coalesces touching detector clips without retaining children', () => {
+    expect(
+      mergeClipsByGap([mk(0, 1), mk(1, 2), mk(3, 4)], 0, {
+        keepChildren: false,
+      }),
+    ).toEqual([mk(0, 2), mk(3, 4)]);
   });
 
   it('keeps clips separate when the gap exceeds mergeGap', () => {
@@ -528,11 +532,6 @@ describe('position-based splits', () => {
     expect(splitClipAtMiddle(group, 1)?.gap).toBe(0);
   });
 
-  it('treats expanded clips as unsplittable for every direction', () => {
-    expect(splitClipAtMiddle({...parent, expanded: true})).toBeNull();
-    expect(splitClipAtThird({...parent, expanded: true}, 'left')).toBeNull();
-    expect(splitClipAtThird({...parent, expanded: true}, 'right')).toBeNull();
-  });
 });
 
 describe('splitClipAtMiddle', () => {
@@ -558,12 +557,10 @@ describe('splitClipAtMiddle', () => {
 
   it('does not tear apart a nested group: splits at its direct children', () => {
     /*
-     * A detector-merged subgroup `bc` (expanded into the surrounding silence,
-     * with unexpanded raw children) sits inside a larger display group. The
-     * split must cut between the direct children of the display group and
-     * leave `bc` intact, otherwise the pieces lose the subgroup's expansion.
+     * Split between the direct children of the display group and keep the
+     * nested subgroup `bc` intact with its playback padding.
      */
-    const a = {...mk(0, 1), vStart: 0, vEnd: 1.2, expanded: true};
+    const a = {...mk(0, 1), vStart: 0, vEnd: 1.2};
     const b = mk(1, 1.5);
     const c = mk(1.5, 2);
     const bc = {
@@ -571,7 +568,6 @@ describe('splitClipAtMiddle', () => {
       end: 2,
       vStart: 0.9,
       vEnd: 2.1,
-      expanded: true,
       children: [b, c],
     };
     const parent = {...mk(0, 2), children: [a, bc]};
@@ -580,68 +576,18 @@ describe('splitClipAtMiddle', () => {
 
     expect(result?.gap).toBe(0);
     expect(result?.pieces).toEqual([a, bc]);
-    expect(result?.pieces[1]!.expanded).toBe(true);
     expect(result?.pieces[1]!.vStart).toBeCloseTo(0.9, 6);
     expect(result?.pieces[1]!.vEnd).toBeCloseTo(2.1, 6);
   });
 
-  /*
-   * Expanded clips: an `expanded` clip (its vStart/vEnd pushed out into
-   * the surrounding silence by `expandClip`) is treated as a single
-   * visual unit and never split. The guard at the top of
-   * `splitClipAtMiddle` short-circuits to null so the UI hides the
-   * split affordance for any clip whose `expanded` flag is set, even if
-   * it has multiple children that would otherwise be valid split targets.
-   */
-  describe('with expanded clips', () => {
-    it('returns null when the clip itself is marked expanded', () => {
-      // Same clip that the "cuts a group at its largest child gap" test
-      // splits successfully when unexpanded — but with `expanded: true`
-      // the guard fires and the function rejects the split.
-      const a = mk(0, 1);
-      const b = mk(2, 3);
-      const c = mk(4, 5);
-      const parent = {
-        ...mk(0, 5),
-        vStart: -0.1,
-        vEnd: 5.1,
-        expanded: true,
-        children: [a, b, c],
-      };
-
-      expect(splitClipAtMiddle(parent)).toBeNull();
-      // The min-piece floor is irrelevant once the guard fires.
-      expect(splitClipAtMiddle(parent, 0.1)).toBeNull();
-    });
-
-    it('returns null for an expanded clip regardless of minPieceSec', () => {
-      // Even with minPieceSec=0 (no floor), the expanded guard fires first.
-      const a = mk(0, 1);
-      const b = mk(2, 3);
-      const parent = {
-        ...mk(0, 3),
-        vStart: 0,
-        vEnd: 3.1,
-        expanded: true,
-        children: [a, b],
-      };
-
-      expect(splitClipAtMiddle(parent, 0)).toBeNull();
-    });
-
-    it('still splits an unexpanded parent that has expanded children', () => {
-      // The guard only fires when the clip being split is itself expanded.
-      // An unexpanded parent whose children happen to be expanded leaves
-      // (the normal case after `expandClips` runs on detected leaves and
-      // `mergeClipPair` builds a fresh unexpanded parent around them) is
-      // still split at the valid gap nearest its midpoint.
-      const a = {...mk(0, 1), vStart: 0, vEnd: 1.2, expanded: true};
-      const b = {...mk(2, 3), vStart: 1.9, vEnd: 3.1, expanded: true};
+  describe('with playback padding', () => {
+    it('still splits a parent with padded children', () => {
+      const a = {...mk(0, 1), vStart: 0, vEnd: 1.2};
+      const b = {...mk(2, 3), vStart: 1.9, vEnd: 3.1};
       const parent = {
         ...mk(0, 3),
         vStart: 0, // matches a.vStart
         vEnd: 3.1, // matches b.vEnd
-        // expanded intentionally NOT set on the parent
         children: [a, b],
       };
 
@@ -717,7 +663,6 @@ describe('long-clip valley splitting', () => {
     result.clips.forEach((clip, i) => {
       expect(clip.end - clip.start).toBeGreaterThanOrEqual(0.2 - 1e-9);
       expect(clip.longClipSource).toEqual({start: 0, end: 4});
-      expect(clip.expanded).toBe(true);
       if (i > 0) expect(clip.start).toBe(result.clips[i - 1]!.end);
     });
     expect(result.gaps).toEqual([-0.000001]);
@@ -726,7 +671,6 @@ describe('long-clip valley splitting', () => {
       result.clips.length,
     );
     const [parent] = mergeClipsByGap(result.clips, 0);
-    expect(parent?.expanded).toBeUndefined();
     const split = splitClipAtMiddle(parent!, options.minClipLength);
     expect(split).not.toBeNull();
     expect(split?.pieces[0].vStart).toBe(parent?.vStart);
@@ -872,14 +816,12 @@ describe('mergeClipPair', () => {
     expect(merged.children).toEqual([group, c]);
   });
 
-  it('keeps an expanded nested group intact instead of flattening it', () => {
+  it('keeps a padded nested group intact', () => {
     /*
-     * A subgroup expanded into the surrounding silence must survive the merge
-     * unflattened (same object reference), otherwise its expansion (vStart/
-     * vEnd) is lost. Nesting keeps the whole parent as one child, so nothing
-     * is torn apart at all.
+     * Keep the original subgroup and its playback bounds when nesting it in
+     * another merge.
      */
-    const a = {...mk(0, 1), vStart: 0, vEnd: 1.2, expanded: true};
+    const a = {...mk(0, 1), vStart: 0, vEnd: 1.2};
     const b = mk(1, 1.5);
     const c = mk(1.5, 2);
     const bc = {
@@ -887,7 +829,6 @@ describe('mergeClipPair', () => {
       end: 2,
       vStart: 0.9,
       vEnd: 2.1,
-      expanded: true,
       children: [b, c],
     };
     const parent = {...mk(0, 2), children: [a, bc]};
@@ -900,9 +841,9 @@ describe('mergeClipPair', () => {
     expect(merged.children![0]!.children![1]!.vEnd).toBeCloseTo(2.1, 6);
   });
 
-  it('keeps a single expanded leaf whole', () => {
-    const a = {...mk(0, 1), vStart: 0, vEnd: 1.2, expanded: true};
-    const b = {...mk(2, 3), vStart: 1.9, vEnd: 3.1, expanded: true};
+  it('keeps both padded clips whole when merging them', () => {
+    const a = {...mk(0, 1), vStart: 0, vEnd: 1.2};
+    const b = {...mk(2, 3), vStart: 1.9, vEnd: 3.1};
 
     const merged = mergeClipPair(a, b);
 

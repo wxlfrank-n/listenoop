@@ -12,8 +12,6 @@ export interface Clip {
   vEnd: number;
   /** Original clips kept under a virtually merged parent. */
   children?: Clip[];
-  /** Playback padding has been finalized on this clip. */
-  expanded?: boolean;
   /** Unpadded bounds of the original long clip before valley splitting. */
   longClipSource?: {start: number; end: number};
 }
@@ -443,7 +441,7 @@ function finalizeClips(
   longClipThreshold: number,
 ): InitClipData {
   // Overlapping windows may touch. Coalesce those without manufacturing a gap.
-  clips = mergeClipsByGap(clips, 0);
+  clips = mergeClipsByGap(clips, 0, {keepChildren: false});
   clips = splitLongClipsAtValleys(
     clips,
     rms,
@@ -480,40 +478,24 @@ function expandClips(
       (next.start - prev.end) * expansionRate,
     );
     prev.vEnd = prev.end + expansion;
-    markExpanded(prev);
     next.vStart = next.start - expansion;
     prev = next;
   }
   prev.vEnd =
     prev.end +
     Math.min(maxExpansion, expansionRate * (audioDuration - prev.end));
-  markExpanded(prev);
 }
 
-function markExpanded(clip: Clip, splitLongSource = false): void {
-  const first = clip.children?.[0];
-  const last = clip.children?.at(-1);
-  if (first && last && (splitLongSource || clip.longClipSource)) {
-    // Keep the padded outer bounds when the original long clip is unpacked.
-    // Only its individual pieces get the flag that blocks further splitting.
-    delete clip.expanded;
-    first.vStart = clip.vStart;
-    last.vEnd = clip.vEnd;
-    clip.children!.forEach(child => markExpanded(child, true));
-    return;
-  }
-  clip.expanded = true;
-}
 /**
  * Virtually merge consecutive clips whose intervening gap (in seconds) is at
  * most `mergeGap`. Each merged group becomes a parent clip spanning the first
- * child's start to the last child's end, keeping the originals as children.
+ * child's start to the last child's end. By default it keeps the originals as children.
  * Initial grouping can preserve automatic valley splits within one source.
  */
 export function mergeClipsByGap(
   clips: Clip[],
   mergeGap: number,
-  {preserveValleySplits = false} = {},
+  {preserveValleySplits = false, keepChildren = true} = {},
 ): Clip[] {
   if (clips.length === 0) return [];
   const result: Clip[] = [];
@@ -529,7 +511,7 @@ export function mergeClipsByGap(
         end: last.end,
         vStart: first.vStart,
         vEnd: last.vEnd,
-        children: group,
+        ...(keepChildren ? {children: group} : {}),
       });
     }
     group = [];
@@ -602,7 +584,6 @@ const isSplittableBoundary = (
 /** List the midpoints and child indices of gaps that can split this clip. */
 export function getClipSplitBoundaries(clip: Clip, minPieceSec = 0) {
   const boundaries: {time: number; index: number}[] = [];
-  if (clip.expanded) return boundaries;
   const children = clip.children ?? [];
   for (let i = 1; i < children.length; i++) {
     if (isSplittableBoundary(children, i, minPieceSec)) {
@@ -727,10 +708,18 @@ export function enforceMinClipLength(
     const leftGap = left ? clip.start - left.end : Infinity;
     const rightGap = right ? right.start - clip.end : Infinity;
     if (leftGap <= rightGap + 1e-9) {
-      result.splice(index - 1, 2, mergeClipPair(left!, clip));
+      result.splice(
+        index - 1,
+        2,
+        mergeClipPair(left!, clip, {keepChildren: false}),
+      );
       index--;
     } else {
-      result.splice(index, 2, mergeClipPair(clip, right!));
+      result.splice(
+        index,
+        2,
+        mergeClipPair(clip, right!, {keepChildren: false}),
+      );
     }
   }
   return result;
@@ -738,15 +727,18 @@ export function enforceMinClipLength(
 /**
  * Merge two adjacent clips into one group. The two clips become the group's
  * direct children as-is, keeping their own children (and any expansion)
- * nested inside them. The result is always a merged clip with exactly these
- * two children, so it can be split again.
+ * nested inside them by default so the pair can be split again.
  */
-export function mergeClipPair(left: Clip, right: Clip): Clip {
+export function mergeClipPair(
+  left: Clip,
+  right: Clip,
+  {keepChildren = true} = {},
+): Clip {
   return {
     start: left.start,
     end: right.end,
     vStart: left.vStart,
     vEnd: right.vEnd,
-    children: [left, right],
+    ...(keepChildren ? {children: [left, right]} : {}),
   };
 }

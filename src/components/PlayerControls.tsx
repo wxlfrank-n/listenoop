@@ -2,11 +2,11 @@
  * Playback control buttons row.
  *
  * Controls:
- * - Skip backward (configurable seconds, default 10s)
  * - Back to start
+ * - Skip backward (configurable seconds, default 10s)
  * - Play/Pause toggle (main control)
- * - Skip to end
  * - Skip forward (configurable seconds, default 10s)
+ * - Skip to end
  *
  * All buttons are disabled when no track is loaded.
  * The play button shows loading state while audio is being decoded.
@@ -61,6 +61,14 @@ export const PlayerControls = memo(
       <div className="player-controls">
         <span className="playback-speed-spacer" aria-hidden="true" />
         <button
+          className="control-btn"
+          onClick={onPrev}
+          disabled={!hasTrack || clipPlaying}
+          aria-label={t('player.backToStart')}
+        >
+          <PrevIcon width={20} height={20} />
+        </button>
+        <button
           className="control-btn control-btn--skip"
           onClick={onSkipBackward}
           disabled={!hasTrack || clipPlaying || atStart}
@@ -70,14 +78,6 @@ export const PlayerControls = memo(
           <span className="control-btn__label" aria-hidden="true">
             {skipSeconds}
           </span>
-        </button>
-        <button
-          className="control-btn"
-          onClick={onPrev}
-          disabled={!hasTrack || clipPlaying}
-          aria-label={t('player.backToStart')}
-        >
-          <PrevIcon width={20} height={20} />
         </button>
         <button
           className={`control-btn control-btn--play ${isPlaying ? 'control-btn--playing' : 'control-btn--paused'}`}
@@ -92,14 +92,6 @@ export const PlayerControls = memo(
           )}
         </button>
         <button
-          className="control-btn"
-          onClick={onNext}
-          disabled={!hasTrack || clipPlaying}
-          aria-label={t('player.skipToEnd')}
-        >
-          <NextIcon width={20} height={20} />
-        </button>
-        <button
           className="control-btn control-btn--skip"
           onClick={onSkipForward}
           disabled={!hasTrack || clipPlaying || atEnd}
@@ -109,6 +101,14 @@ export const PlayerControls = memo(
           <span className="control-btn__label" aria-hidden="true">
             {skipSeconds}
           </span>
+        </button>
+        <button
+          className="control-btn"
+          onClick={onNext}
+          disabled={!hasTrack || clipPlaying}
+          aria-label={t('player.skipToEnd')}
+        >
+          <NextIcon width={20} height={20} />
         </button>
         <SpeedControl disabled={isPlaying || clipPlaying} />
       </div>

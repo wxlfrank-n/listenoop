@@ -835,6 +835,7 @@ export function useAudioPlayer(skipSeconds: number, playbackSpeed = 1) {
       onComplete?: () => void,
       onRepeat?: () => void,
       stopAfterClip = false,
+      initialTime = start,
     ) => {
       const audio = audioRef.current;
 
@@ -851,6 +852,8 @@ export function useAudioPlayer(skipSeconds: number, playbackSpeed = 1) {
       const runId = ++rangeRunIdRef.current;
 
       let count = 0;
+      const firstStart =
+        initialTime >= start && initialTime < end ? initialTime : start;
 
       /*
        * Ignore stale currentTime until the requested
@@ -1018,9 +1021,14 @@ export function useAudioPlayer(skipSeconds: number, playbackSpeed = 1) {
 
         audio.pause();
 
-        audio.currentTime = start;
+        const seekTarget = repeat ? start : firstStart;
+        const resumeInPlace =
+          !repeat && firstStart > start && audio.currentTime === firstStart &&
+          !audio.seeking;
+        seeking = !resumeInPlace;
+        if (!resumeInPlace) audio.currentTime = seekTarget;
 
-        dispatch(setCurrentTime(start));
+        dispatch(setCurrentTime(seekTarget));
 
         /*
          * Authoritative repetition event.
@@ -1043,7 +1051,7 @@ export function useAudioPlayer(skipSeconds: number, playbackSpeed = 1) {
 
           resumeTimer = 0;
 
-          snatchToStart(audio, start);
+          if (!resumeInPlace) snatchToStart(audio, seekTarget);
 
           audio
             .play()
@@ -1072,7 +1080,8 @@ export function useAudioPlayer(skipSeconds: number, playbackSpeed = 1) {
         const t = audio.currentTime;
 
         if (seeking) {
-          const nearStart = t >= start - 0.05 && t <= start + 0.15;
+          const seekTarget = count === 0 ? firstStart : start;
+          const nearStart = t >= seekTarget - 0.05 && t <= seekTarget + 0.15;
 
           if (nearStart) {
             seeking = false;
@@ -1092,7 +1101,7 @@ export function useAudioPlayer(skipSeconds: number, playbackSpeed = 1) {
 
               audio.pause();
 
-              audio.currentTime = start;
+              audio.currentTime = seekTarget;
 
               seekRequestTs = performance.now();
 

@@ -53,6 +53,9 @@ export interface RowWaveformProps {
     end: number,
     repetitions: number,
     onComplete?: () => void,
+    onRepeat?: () => void,
+    stopAfterClip?: boolean,
+    initialTime?: number,
   ) => void;
   repetitions: number;
   onStopPlayback?: () => void;
@@ -271,7 +274,9 @@ export const RowWaveform = memo(
               <Clips
                 clips={displayClips}
                 window={waveformWindow}
-                onPlayRange={playClip}
+                onPlayRange={(start, end, reps) =>
+                  playClip(start, end, reps, getCurrentTime())
+                }
                 repetitions={repetitions}
                 playing={playing}
                 onStopPlayback={onStopPlayback}

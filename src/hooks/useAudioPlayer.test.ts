@@ -430,6 +430,28 @@ describe('useAudioPlayer.playRange', () => {
    * ----------------------------------------------------------
    */
 
+  it('uses the playhead only for the first repetition of a resumed clip', async () => {
+    const {result} = renderHook(() => useAudioPlayer(5));
+    const onComplete = vi.fn();
+
+    audio.currentTime = 15;
+    act(() => {
+      result.current.playRange(10, 20, 2, onComplete, undefined, false, 15);
+    });
+    await settleRestart();
+    expect(audio.currentTime).toBe(15);
+
+    audio.currentTime = 20;
+    runRaf();
+    expect(audio.currentTime).toBe(10);
+
+    await settleRestart();
+    audio.currentTime = 20;
+    runRaf();
+    expect(onComplete).toHaveBeenCalledTimes(1);
+    expect(audio.paused).toBe(true);
+  });
+
   it('plays the requested number of repetitions', async () => {
     const {result} = renderHook(() => useAudioPlayer(5));
 

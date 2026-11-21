@@ -87,6 +87,7 @@ interface StackedWaveformProps {
     onComplete?: () => void,
     onRepeat?: () => void,
     stopAfterClip?: boolean,
+    initialTime?: number,
   ) => void;
 
   getCurrentTime: () => number;
@@ -822,12 +823,22 @@ export const StackedWaveform = memo(
      */
 
     const stackedPlayClip = useCallback(
-      (start: number, end: number, reps: number, stopAfterClip = false) => {
+      (
+        start: number,
+        end: number,
+        reps: number,
+        stopAfterClip = false,
+        position = start,
+      ) => {
         tappedPageEndRef.current = stopAfterClip ? end : null;
         setClipPlayActive(true);
 
         const onComplete = () => setClipPlayActive(false);
-        if (stopAfterClip) {
+        if (position > start && position < end) {
+          onPlayRange(
+            start, end, reps, onComplete, undefined, stopAfterClip, position,
+          );
+        } else if (stopAfterClip) {
           onPlayRange(start, end, reps, onComplete, undefined, true);
         } else {
           onPlayRange(start, end, reps, onComplete);
@@ -903,6 +914,7 @@ export const StackedWaveform = memo(
                           end,
                           reps,
                           lastClip?.vStart === start && lastClip.vEnd === end,
+                          getCurrentTime(),
                         );
                       }}
                       onSeek={handleRowSeek}

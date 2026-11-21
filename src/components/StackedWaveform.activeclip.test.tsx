@@ -202,6 +202,17 @@ describe('stacked waveform active-clip follow', () => {
     expect(scrollTo).not.toHaveBeenCalled();
   });
 
+  it('passes the current position when it is inside a tapped clip', () => {
+    const {rerender, scroller, onPlayRange} = setup();
+    rerender({currentTime: 4});
+    const clips = scroller.querySelectorAll('.waveform-clip');
+
+    fireEvent.keyDown(clips[1]!, {key: 'Enter'});
+    expect(onPlayRange).toHaveBeenLastCalledWith(
+      3, 6, 3, expect.any(Function), undefined, true, 4,
+    );
+  });
+
   it('stays on the page when its last clip is selected and finishes', () => {
     const {rerender, pageNumber, scroller, onPlayRange} = setup();
     const clips = scroller.querySelectorAll('.waveform-clip');

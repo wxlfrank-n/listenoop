@@ -53,6 +53,8 @@ export interface UseRowWaveformScrollArgs {
     repetitions: number,
     onComplete?: () => void,
     onRepeat?: () => void,
+    stopAfterClip?: boolean,
+    initialTime?: number,
   ) => void;
   repetitions: number;
   onStopPlayback?: () => void;
@@ -452,16 +454,16 @@ export function useRowWaveformScroll({
     [renderFrame, setLiveAnchor],
   );
   const playClip = useCallback(
-    (start: number, end: number, reps: number) => {
+    (start: number, end: number, reps: number, position = start) => {
       playbackContextRef.current = {type: 'clip', start, end};
       startClipRound(start, end);
-      onPlayRange(
-        start,
-        end,
-        reps,
-        () => completeClipPlayback(end),
-        () => startClipRound(start, end, true),
-      );
+      const complete = () => completeClipPlayback(end);
+      const repeat = () => startClipRound(start, end, true);
+      if (position > start && position < end) {
+        onPlayRange(start, end, reps, complete, repeat, false, position);
+      } else {
+        onPlayRange(start, end, reps, complete, repeat);
+      }
     },
     [completeClipPlayback, onPlayRange, startClipRound],
   );

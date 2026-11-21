@@ -74,7 +74,7 @@
   align-items: center;
   justify-content: center;
   font-size: 0.8125rem;
-  font-weight: 700;
+  font-weight: 400;
   pointer-events: none;
   /* The ring's bottom gap lifts its optical center, so the number rides 1px
      low to sit centered in the ring (mirrors the iOS y+1 label offset). */

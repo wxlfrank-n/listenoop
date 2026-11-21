@@ -2,8 +2,7 @@
  * Displays currently playing track information.
  *
  * Shows:
- * - Track title and artist
- * - Audio metadata (channels, sample rate, bitrate)
+ * - Track title, duration, sample rate, and bitrate
  * - Music note icon (static when no track, animated when playing)
  *
  * Falls back to "No track selected" message when the playlist is empty.
@@ -13,7 +12,7 @@ import {memo} from 'react';
 import type {ReactNode} from 'react';
 import {useAudioMeta} from '../hooks/useAudioMeta';
 import {useAppSelector} from '../store/hooks';
-import {selectCurrentTrack} from '../store/selectors';
+import {selectCurrentTrack, selectDuration} from '../store/selectors';
 import {ListeningLoopIcon} from './ListeningLoopIcon';
 import {useT} from '../i18n';
 import './NowPlaying.css';
@@ -25,8 +24,17 @@ interface NowPlayingProps {
 
 export const NowPlaying = memo(({actions}: NowPlayingProps) => {
   const track = useAppSelector(selectCurrentTrack);
-  // Fetch and display audio metadata (channels, sample rate, bitrate)
+  const playbackDuration = useAppSelector(selectDuration);
+  const duration = track && track.duration > 0 ? track.duration : playbackDuration;
+  const seconds = Math.floor(duration);
   const meta = useAudioMeta(track?.url ?? null);
+  const details = [
+    Number.isFinite(duration) && duration > 0
+      ? `${Math.floor(seconds / 60)}m ${seconds % 60}s`
+      : null,
+    meta ? `${(meta.sampleRate / 1000).toFixed(1)} kHz` : null,
+    meta ? `${meta.bitrate} kbps` : null,
+  ].filter(Boolean).join(' · ');
   const t = useT();
 
   if (!track) {
@@ -37,7 +45,7 @@ export const NowPlaying = memo(({actions}: NowPlayingProps) => {
         </div>
         <div className="now-playing__info">
           <span className="now-playing__title">{t('nowPlaying.noTrack')}</span>
-          <span className="now-playing__artist">
+          <span className="now-playing__hint">
             {t('nowPlaying.addMusic')}
           </span>
         </div>
@@ -53,17 +61,7 @@ export const NowPlaying = memo(({actions}: NowPlayingProps) => {
       </div>
       <div className="now-playing__info">
         <span className="now-playing__title">{track.title}</span>
-        <span className="now-playing__artist">{track.artist}</span>
-        {meta && (
-          <span className="now-playing__meta">
-            {meta.channels === 1
-              ? t('nowPlaying.mono')
-              : t('nowPlaying.stereo')}
-            {' · '}
-            {(meta.sampleRate / 1000).toFixed(1)} kHz{' · '}
-            {meta.bitrate} kbps
-          </span>
-        )}
+        {details && <span className="now-playing__meta">{details}</span>}
       </div>
       {actions && <div className="now-playing__actions">{actions}</div>}
     </div>

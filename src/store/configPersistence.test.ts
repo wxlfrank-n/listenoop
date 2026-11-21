@@ -28,6 +28,20 @@ it('defaults to Listenoop Night, migrates System, and preserves chosen palettes'
 });
 
 describe('settings persistence', () => {
+  it('uses the nearest preset for legacy skip intervals', async () => {
+    vi.resetModules();
+    localStorage.setItem(
+      'Listeenoop_config',
+      JSON.stringify({skipSeconds: 24}),
+    );
+    try {
+      const {default: reducer} = await import('./configSlice');
+      expect(reducer(undefined, {type: 'init'}).skipSeconds).toBe(30);
+    } finally {
+      localStorage.clear();
+    }
+  });
+
   it('keeps reducers independent of browser storage', () => {
     const save = vi.spyOn(Storage.prototype, 'setItem');
     const next = configReducer(DEFAULT_CONFIG, updateConfig({skipSeconds: 15}));
@@ -38,6 +52,7 @@ describe('settings persistence', () => {
   it('saves changed settings without saving on playback updates', () => {
     const save = vi.spyOn(Storage.prototype, 'setItem');
     store.dispatch(updateConfig({skipSeconds: 20}));
+    expect(store.getState().config.skipSeconds).toBe(15);
     expect(save).toHaveBeenCalledWith(
       'Listeenoop_config',
       JSON.stringify(store.getState().config),

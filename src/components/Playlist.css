@@ -12,14 +12,19 @@
   border: 1px solid var(--border);
   border-radius: var(--radius-lg);
   width: 420px;
-  max-width: 90vw;
-  max-height: 70vh;
+  max-width: calc(100vw - 32px);
+  max-height: min(480px, calc(100dvh - 32px));
   display: flex;
   flex-direction: column;
 }
+.playlist-panel > .track-list {
+  border-end-start-radius: calc(var(--radius-lg) - 1px);
+  border-end-end-radius: calc(var(--radius-lg) - 1px);
+}
+
 .playlist-header {
   display: flex;
-  align-items: center;
+  align-items: flex-start;
   gap: 8px;
   padding: 12px;
   border-bottom: 1px solid var(--border);
@@ -33,6 +38,9 @@
 }
 .playlist-picker form {
   display: flex;
+  min-height: 56px;
+  box-sizing: border-box;
+  background: var(--bg-tertiary);
   border: 1px solid var(--border);
   border-radius: var(--radius);
 }
@@ -40,6 +48,7 @@
   border-color: var(--accent-ink);
 }
 .playlist-picker input {
+  font-size: 1rem;
   flex: 1;
   min-width: 0;
   padding: 8px 12px;
@@ -75,35 +84,38 @@
   opacity: 0.5;
 }
 .playlist-picker__results {
-  display: flex;
-  flex-direction: column;
   position: absolute;
   z-index: 1;
-  left: 0;
-  right: 0;
-  top: 100%;
+  inset-inline: 0;
+  top: calc(100% + 6px);
+  display: flex;
+  flex-direction: column;
   max-height: 132px;
-  border: 1px solid var(--border);
   border-radius: var(--radius);
   background: var(--bg-secondary);
   overflow: auto;
-  gap: 4px;
-  margin-top: 6px;
+  outline: 1px solid var(--border);
+  outline-offset: -1px;
 }
 .playlist-picker__results button {
   flex: none;
-  min-height: 40px;
+  height: 44px;
   text-align: left;
   padding: 6px 10px;
   border-radius: var(--radius);
-  overflow-wrap: anywhere;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
 }
 .playlist-picker__results button[aria-pressed='true'] {
-  background: var(--bg-hover);
+  background: var(--bg-tertiary);
   color: var(--accent-ink);
 }
 
 .playlist-track-count {
+  margin-top: 0;
+  margin-bottom: 0;
+  line-height: 56px;
   font-size: 0.75rem;
   white-space: nowrap;
   font-weight: 600;
@@ -154,6 +166,7 @@
 
 .playlist-import {
   position: relative;
+  margin-top: 10px;
   flex: none;
 }
 .playlist-import__options {

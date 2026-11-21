@@ -13,7 +13,11 @@ import {useCallback, useEffect, useRef, useState} from 'react';
 import {useAppSelector} from '../store/hooks';
 import {useConfig} from '../hooks/useConfig';
 import {useFocusTrap} from '../hooks/useFocusTrap';
-import {CONFIG_RANGES, DEFAULT_CONFIG} from '../store/configSlice';
+import {
+  CONFIG_RANGES,
+  DEFAULT_CONFIG,
+  SKIP_INTERVALS,
+} from '../store/configSlice';
 import {THEMES, THEME_IDS, type ThemeId} from '../themes';
 import {LanguageSelect} from './LanguageSelect';
 import {useT, type TranslationKey} from '../i18n';
@@ -180,7 +184,7 @@ function SliderSetting({
   );
 }
 
-interface SegmentedSettingProps<T extends string> {
+interface SegmentedSettingProps<T extends string | number> {
   label: string;
   hint?: string;
   options: {value: T; label: string}[];
@@ -188,7 +192,7 @@ interface SegmentedSettingProps<T extends string> {
   onChange: (v: T) => void;
 }
 
-function SegmentedSetting<T extends string>({
+function SegmentedSetting<T extends string | number>({
   label,
   hint,
   options,
@@ -317,15 +321,11 @@ function PlaybackTab() {
         unit="×"
         onChange={v => updateConfig({playbackSpeed: v})}
       />
-      <SliderSetting
+      <SegmentedSetting
         label={t('settings.skipBy')}
-        presets={[5, 10, 15, 30]}
+        options={SKIP_INTERVALS.map(value => ({value, label: `${value} s`}))}
         value={skipSeconds}
-        min={CONFIG_RANGES.skipSeconds.min}
-        max={CONFIG_RANGES.skipSeconds.max}
-        step={1}
-        unit="s"
-        onChange={v => updateConfig({skipSeconds: v})}
+        onChange={skipSeconds => updateConfig({skipSeconds})}
       />
       <SliderSetting
         label={t('settings.repeatsPerClip')}

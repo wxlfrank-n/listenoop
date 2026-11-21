@@ -66,9 +66,12 @@ export function Playlist({
     !playlistNames.some(
       item => item !== editing && label(item).toLowerCase() === search,
     );
-  const results = playlistNames.filter(
+  const matches = playlistNames.filter(
     item => query === null || label(item).toLowerCase().includes(search),
   );
+  const results = matches.includes(activePlaylist)
+    ? [activePlaylist, ...matches.filter(item => item !== activePlaylist)]
+    : matches;
 
   // Trap Tab / Shift+Tab inside the panel, close on Escape, and restore
   // focus to the trigger button on unmount.

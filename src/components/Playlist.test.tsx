@@ -94,3 +94,30 @@ it('filters playlists and offers the inline action for the typed name', () => {
   fireEvent.change(folderInput, {target: {files}});
   expect(onAddFiles).toHaveBeenCalledWith(files);
 });
+
+
+it('shows the active playlist first when opening the dropdown', () => {
+  render(
+    <Provider store={store}>
+      <Playlist
+        playlistNames={['', 'Listening', 'Review', 'Speaking', 'Vocabulary']}
+        activePlaylist="Vocabulary"
+        onSwitchPlaylist={vi.fn()}
+        onCreatePlaylist={vi.fn()}
+        onRenamePlaylist={vi.fn()}
+        onRemovePlaylist={vi.fn()}
+        onSelectTrack={vi.fn()}
+        onRemoveTrack={vi.fn()}
+        onAddFiles={vi.fn()}
+        onClose={vi.fn()}
+      />
+    </Provider>,
+  );
+
+  fireEvent.click(screen.getByRole('button', {name: 'Choose playlist'}));
+  const active = screen.getByRole('button', {
+    name: 'Vocabulary',
+    pressed: true,
+  });
+  expect(active.parentElement?.firstElementChild).toBe(active);
+});

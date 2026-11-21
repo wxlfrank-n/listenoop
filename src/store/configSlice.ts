@@ -80,7 +80,6 @@ export const DEFAULT_CONFIG: ConfigState = {
 /** Valid numeric ranges for each configurable value (drives the Settings UI). */
 export const CONFIG_RANGES = {
   playbackSpeed: {min: 0.5, max: 1.5, step: 0.05},
-  skipSeconds: {min: 1, max: 60},
   blockMs: {min: 2, max: 64},
   // Capped at the detector's own ceiling (`clips.ts` clamps to 0.02): higher
   // values behave identically, so the slider stops here instead of offering a
@@ -111,6 +110,21 @@ function clampNumber(
     Math.max(range.min, round ? Math.round(n) : n),
   );
   return clamped;
+}
+
+export const SKIP_INTERVALS = [5, 10, 15, 30, 60] as const;
+
+function nearestSkipInterval(value: unknown): number {
+  const seconds =
+    typeof value === 'string' && value.trim() ? Number(value) : value;
+  if (typeof seconds !== 'number' || !Number.isFinite(seconds)) {
+    return DEFAULT_CONFIG.skipSeconds;
+  }
+  return SKIP_INTERVALS.reduce((nearest, interval) =>
+    Math.abs(interval - seconds) < Math.abs(nearest - seconds)
+      ? interval
+      : nearest,
+  );
 }
 
 function loadConfig(): ConfigState {
@@ -166,12 +180,7 @@ function loadConfig(): ConfigState {
           CONFIG_RANGES.playbackSpeed,
           DEFAULT_CONFIG.playbackSpeed,
         ),
-        skipSeconds: clampNumber(
-          parsed.skipSeconds,
-          CONFIG_RANGES.skipSeconds,
-          DEFAULT_CONFIG.skipSeconds,
-          {round: true},
-        ),
+        skipSeconds: nearestSkipInterval(parsed.skipSeconds),
         blockMs: clampNumber(
           parsed.blockMs,
           CONFIG_RANGES.blockMs,
@@ -214,7 +223,13 @@ export const configSlice = createSlice({
   initialState,
   reducers: {
     updateConfig(state, action: PayloadAction<Partial<ConfigState>>) {
-      return {...state, ...action.payload};
+      return {
+        ...state,
+        ...action.payload,
+        skipSeconds: nearestSkipInterval(
+          action.payload.skipSeconds ?? state.skipSeconds,
+        ),
+      };
     },
   },
 });

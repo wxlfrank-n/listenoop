@@ -57,7 +57,7 @@ export interface StackRowProps {
   waveform: WaveformData;
   /** Minimum seconds a row shows, so short clips stay legible. */
   windowSecs: number;
-  currentTime: number;
+  cursorOwnerTime: number;
   playing: boolean;
   /** True while a clip is playing, which suppresses click-to-seek. */
   clipPlayActive: boolean;
@@ -84,7 +84,7 @@ export const StackRow = memo(
     gi,
     waveform,
     windowSecs,
-    currentTime,
+    cursorOwnerTime,
     playing,
     clipPlayActive,
     activeClip,
@@ -145,9 +145,8 @@ export const StackRow = memo(
      * row where it stays put at the end instead of disappearing.
      */
     const showCursor =
-      currentTime >= rowStart &&
-      (currentTime < row.end ||
-        (isLastRow && currentTime >= row.end - END_EPSILON));
+      cursorOwnerTime >= rowStart &&
+      (cursorOwnerTime < row.end || isLastRow);
 
     const handleClick = useCallback(
       (e: React.MouseEvent<HTMLDivElement>) => {

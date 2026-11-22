@@ -385,6 +385,16 @@ export const StackedWaveform = memo(
     );
 
     const tappedPageEndRef = useRef<number | null>(null);
+    const cursorOwnerTime = useCallback(
+      (time: number) => {
+        const clip = displayClips[activeClip];
+        if (clip && Math.abs(time - clip.vStart) <= 0.01) {
+          return (clip.vStart + clip.vEnd) / 2;
+        }
+        return time;
+      },
+      [activeClip, displayClips],
+    );
     const pageForTime = useCallback((time: number) => {
       const pages = pageTimesRef.current;
 
@@ -660,7 +670,7 @@ export const StackedWaveform = memo(
 
         const tappedEnd = tappedPageEndRef.current;
         if (tappedEnd !== null && Math.abs(time - tappedEnd) <= 0.05) return;
-        const page = pageForTime(time);
+        const page = pageForTime(cursorOwnerTime(time));
 
         if (page === currentPageRef.current) {
           manualOverrideRef.current = false;
@@ -676,7 +686,7 @@ export const StackedWaveform = memo(
           scrollToPage(page);
         }
       });
-    }, [playing, userScrolling, pageForTime, scrollToPage, getCurrentTime]);
+    }, [playing, userScrolling, pageForTime, scrollToPage, getCurrentTime, cursorOwnerTime]);
 
     /*
      * =========================================================
@@ -695,7 +705,7 @@ export const StackedWaveform = memo(
 
       const tappedEnd = tappedPageEndRef.current;
       if (tappedEnd !== null && Math.abs(currentTime - tappedEnd) <= 0.05) return;
-      const page = pageForTime(currentTime);
+      const page = pageForTime(cursorOwnerTime(currentTime));
 
       if (playing && page > currentPageRef.current) {
         return;
@@ -714,7 +724,7 @@ export const StackedWaveform = memo(
       setViewPage(page);
 
       scrollToPage(page);
-    }, [currentTime, pageForTime, playing, clipPlayActive, scrollToPage]);
+    }, [currentTime, pageForTime, playing, clipPlayActive, scrollToPage, cursorOwnerTime]);
 
     /*
      * Reset manual override when playback state or
@@ -897,7 +907,7 @@ export const StackedWaveform = memo(
                       gi={gi}
                       waveform={waveform}
                       windowSecs={windowSecs}
-                      currentTime={currentTime}
+                      cursorOwnerTime={cursorOwnerTime(currentTime)}
                       playing={playing}
                       clipPlayActive={clipPlayActive}
                       activeClip={activeClip}

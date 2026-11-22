@@ -140,6 +140,16 @@ afterEach(() => {
 });
 
 describe('stacked waveform active-clip follow', () => {
+  it('keeps the cursor on the selected page when replay lands just before a shared boundary', () => {
+    const {rerender, pageNumber, scroller} = setup();
+    rerender({activeClip: 2, currentTime: 8, playing: true});
+    expect(pageNumber()).toBe('2 / 6');
+
+    rerender({currentTime: 5.995});
+    expect(pageNumber()).toBe('2 / 6');
+    expect(scroller.querySelectorAll('.stacked-waveform__cursor')).toHaveLength(1);
+  });
+
   it('updates the visible clips when scrolling during an automatic page change', () => {
     const {rerender, pageNumber, scroller} = setup();
 

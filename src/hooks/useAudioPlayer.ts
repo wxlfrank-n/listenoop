@@ -1023,7 +1023,9 @@ export function useAudioPlayer(skipSeconds: number, playbackSpeed = 1) {
 
         const seekTarget = repeat ? start : firstStart;
         const resumeInPlace =
-          !repeat && firstStart > start && audio.currentTime === firstStart &&
+          !repeat &&
+          firstStart > start &&
+          audio.currentTime === firstStart &&
           !audio.seeking;
         seeking = !resumeInPlace;
         if (!resumeInPlace) audio.currentTime = seekTarget;

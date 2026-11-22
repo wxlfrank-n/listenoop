@@ -82,12 +82,22 @@ function SliderSetting({
   disabled = false,
   onChange,
 }: SliderSettingProps) {
-  const display = clamp(value, min, max);
+  const [draft, setDraft] = useState<number | null>(null);
+  const display = clamp(draft ?? value, min, max);
   const [preview, setPreview] = useState(false);
-  const drag = useRef<{x: number; y: number; thumb: boolean} | null>(null);
-  const finishDrag = () => {
+  const drag = useRef<{
+    x: number;
+    y: number;
+    thumb: boolean;
+    value?: number;
+  } | null>(null);
+  const finishDrag = (commit: boolean) => {
+    const next = drag.current?.value;
     drag.current = null;
+    setDraft(null);
     setPreview(false);
+    if (commit && !disabled && next !== undefined && next !== value)
+      onChange(next);
   };
   return (
     <div className="settings-field">
@@ -129,12 +139,18 @@ function SliderSetting({
                 dy = Math.abs(event.clientY - start.y);
               if (dx >= 3 && dx > dy) setPreview(true);
             }}
-            onPointerUp={finishDrag}
-            onPointerCancel={finishDrag}
-            onLostPointerCapture={finishDrag}
+            onPointerUp={() => finishDrag(true)}
+            onPointerCancel={() => finishDrag(false)}
+            onLostPointerCapture={() => finishDrag(true)}
             aria-valuetext={`${display}${unit}`}
             onChange={e => {
-              onChange(parseFloat(e.target.value));
+              const next = e.currentTarget.valueAsNumber;
+              if (drag.current) {
+                drag.current.value = next;
+                setDraft(next);
+              } else {
+                onChange(next);
+              }
             }}
           />
           {preview && !disabled && (

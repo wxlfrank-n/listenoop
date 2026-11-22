@@ -145,8 +145,7 @@ export const StackRow = memo(
      * row where it stays put at the end instead of disappearing.
      */
     const showCursor =
-      cursorOwnerTime >= rowStart &&
-      (cursorOwnerTime < row.end || isLastRow);
+      cursorOwnerTime >= rowStart && (cursorOwnerTime < row.end || isLastRow);
 
     const handleClick = useCallback(
       (e: React.MouseEvent<HTMLDivElement>) => {

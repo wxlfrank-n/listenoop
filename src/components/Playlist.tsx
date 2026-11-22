@@ -150,6 +150,7 @@ export function Playlist({
               {dropdownOpen && !editing && exact && (
                 <button
                   type="button"
+                  className="playlist-picker__icon-action"
                   aria-label={t('playlist.rename')}
                   onClick={() => {
                     setDropdownOpen(false);
@@ -165,6 +166,7 @@ export function Playlist({
               {dropdownOpen && !editing && exact && (
                 <button
                   type="button"
+                  className="playlist-picker__icon-action"
                   aria-label={t('playlist.remove')}
                   onClick={() => {
                     if (

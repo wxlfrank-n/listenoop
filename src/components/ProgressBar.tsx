@@ -120,7 +120,7 @@ export function ProgressBar({
    * This is the starting point for "clip" scope.
    */
   const baselineClips = useMemo(
-    () => mergeClipsByGap(clips, initGap, {preserveValleySplits: true}),
+    () => mergeClipsByGap(clips, initGap),
     [clips, initGap],
   );
 

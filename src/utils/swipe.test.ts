@@ -611,6 +611,19 @@ describe('mergeClips', () => {
     expect(second.clips[0]!.children).toEqual([clips[0], clips[1]]);
   });
 
+  it('flattens nested children from earlier merges in clip scope', () => {
+    const a = mk(0, 1);
+    const b = mk(2, 3);
+    const c = mk(4, 5);
+    const d = mk(6, 7);
+    const oldPair = {...mk(0, 3), children: [a, b]};
+    const oldGroup = {...mk(0, 5), children: [oldPair, c]};
+
+    const result = mergeClips([a, b, c, d], [oldGroup, d], 1, 'clip')!;
+
+    expect(result.clips[0]!.children).toEqual([a, b, c, d]);
+  });
+
   it('merges exactly one pair regardless of the merge gap', () => {
     /*
      * The three gaps are 0.4 / 0.6 / 0.5. Clip scope picks the nearest pair
@@ -651,14 +664,7 @@ describe('mergeClipRange', () => {
       [1.2, 5],
       [8, 9],
     ]);
-    expect(result.clips![1]!.children).toEqual([
-      expect.objectContaining({
-        start: 1.2,
-        end: 3,
-        children: [displayClips[1], displayClips[2]],
-      }),
-      displayClips[3],
-    ]);
+    expect(result.clips![1]!.children).toEqual(displayClips.slice(1, 4));
     expect(result.activeClip).toBe(1);
     // Largest silence inside 1..3: 1.2s-2s end 2 .. 2.5 start gap 0.5? 0.5 vs 1? bounded below by... the 3 gaps: 0.2, 0.5, 1 → max 1.
     expect(result.mergeGap).toBeCloseTo(1);

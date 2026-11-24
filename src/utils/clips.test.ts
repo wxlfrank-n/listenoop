@@ -805,7 +805,7 @@ describe('getClipGaps', () => {
 });
 
 describe('mergeClipPair', () => {
-  it('nests the two merged clips as direct children', () => {
+  it('keeps the original clips as direct children', () => {
     const a = mk(0, 1);
     const b = mk(2, 3);
     const group = {...mk(0, 3), children: [a, b]};
@@ -813,14 +813,10 @@ describe('mergeClipPair', () => {
 
     const merged = mergeClipPair(group, c);
 
-    expect(merged.children).toEqual([group, c]);
+    expect(merged.children).toEqual([a, b, c]);
   });
 
-  it('keeps a padded nested group intact', () => {
-    /*
-     * Keep the original subgroup and its playback bounds when nesting it in
-     * another merge.
-     */
+  it('preserves leaf playback bounds when flattening a nested group', () => {
     const a = {...mk(0, 1), vStart: 0, vEnd: 1.2};
     const b = mk(1, 1.5);
     const c = mk(1.5, 2);
@@ -836,9 +832,9 @@ describe('mergeClipPair', () => {
 
     const merged = mergeClipPair(parent, d);
 
-    expect(merged.children).toEqual([parent, d]);
-    expect(merged.children![0]).toBe(parent);
-    expect(merged.children![0]!.children![1]!.vEnd).toBeCloseTo(2.1, 6);
+    expect(merged.children).toEqual([a, b, c, d]);
+    expect(merged.children![0]).toBe(a);
+    expect(mergeClipsByGap([parent, d], 1)).toEqual([merged]);
   });
 
   it('keeps both padded clips whole when merging them', () => {

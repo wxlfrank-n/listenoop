@@ -43,7 +43,11 @@ function isMergeScope(value: unknown): value is MergeScope {
   return MERGE_SCOPES.includes(value as MergeScope);
 }
 
+export const CLIP_REPLAY_MODES = ['start', 'current', 'smart'] as const;
+export type ClipReplayMode = typeof CLIP_REPLAY_MODES[number];
+
 interface ConfigState {
+  clipReplayMode: ClipReplayMode;
   playbackSpeed: number;
   skipSeconds: number;
   waveformView: WaveformView;
@@ -61,6 +65,7 @@ interface ConfigState {
 }
 
 export const DEFAULT_CONFIG: ConfigState = {
+  clipReplayMode: 'current',
   playbackSpeed: 1,
   skipSeconds: 10,
   waveformView: 'horizontal',
@@ -140,6 +145,7 @@ function loadConfig(): ConfigState {
       return {
         ...DEFAULT_CONFIG,
         ...parsed,
+        clipReplayMode: CLIP_REPLAY_MODES.includes(parsed.clipReplayMode) ? parsed.clipReplayMode : DEFAULT_CONFIG.clipReplayMode,
         theme: THEME_IDS.includes(parsed.theme) ? parsed.theme : DEFAULT_THEME,
         repetitions: Number.isFinite(parsed.repetitions)
           ? Math.min(

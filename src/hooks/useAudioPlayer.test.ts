@@ -53,6 +53,8 @@ const playerState = vi.hoisted(() => ({
 const configState = vi.hoisted(() => ({
   loopMode: 'off',
   repetitions: 2,
+  clipReplayMode: 'current',
+  minClipLength: 0.3,
 }));
 
 vi.mock('../store/store', () => ({
@@ -214,6 +216,8 @@ describe('useAudioPlayer.playRange', () => {
     dispatch.mockClear();
 
     configState.loopMode = 'off';
+    configState.clipReplayMode = 'current';
+    configState.minClipLength = 0.3;
 
     audio = new FakeAudio();
 
@@ -450,6 +454,25 @@ describe('useAudioPlayer.playRange', () => {
     runRaf();
     expect(onComplete).toHaveBeenCalledTimes(1);
     expect(audio.paused).toBe(true);
+  });
+
+  it.each([
+    ['start', 0.3, 2, 0],
+    ['current', 0.3, 0.4, 0.2],
+    ['smart', 0.3, 0.8, 0],
+    ['smart', 0.3, 1, 0.5],
+    ['smart', 0.5, 1, 0],
+    ['smart', 0.5, 1.2, 0.6],
+  ] as const)('applies %s replay mode (minimum %s, duration %s)', async (mode, minimum, duration, expected) => {
+    configState.clipReplayMode = mode;
+    configState.minClipLength = minimum;
+    const {result} = renderHook(() => useAudioPlayer(5));
+    audio.currentTime = duration / 2;
+    act(() => {
+      result.current.playRange(0, duration, 2, undefined, undefined, false, duration / 2);
+    });
+    await settleRestart();
+    expect(audio.currentTime).toBeCloseTo(expected);
   });
 
   it('plays the requested number of repetitions', async () => {

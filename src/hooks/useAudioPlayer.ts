@@ -852,8 +852,11 @@ export function useAudioPlayer(skipSeconds: number, playbackSpeed = 1) {
       const runId = ++rangeRunIdRef.current;
 
       let count = 0;
+      const {clipReplayMode, minClipLength} = store.getState().config;
+      const resume = clipReplayMode === 'current' ||
+        (clipReplayMode === 'smart' && end - start > Math.min(3 * minClipLength, 1));
       const firstStart =
-        initialTime >= start && initialTime < end ? initialTime : start;
+        resume && initialTime >= start && initialTime < end ? initialTime : start;
 
       /*
        * Ignore stale currentTime until the requested

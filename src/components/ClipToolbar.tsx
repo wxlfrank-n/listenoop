@@ -26,6 +26,7 @@ const SCOPE_DOUBLE_CLICK_DISTANCE_PX = 12;
 interface ClipToolbarProps {
   /** Snapped merge gap (seconds) applied to the clips. */
   mergeGap: number;
+  gaps?: number[];
   /** Number of clips after merging, shown by the slider. */
   clipCount: number;
   /** Reports a new merge gap whenever the user adjusts it. */
@@ -47,6 +48,7 @@ interface ClipToolbarProps {
 
 export function ClipToolbar({
   mergeGap,
+  gaps,
   clipCount,
   onMergeGapChange,
   repetitions,
@@ -133,6 +135,7 @@ export function ClipToolbar({
       {showMergeSlider && (
         <MergeSlider
           value={mergeGap}
+          gaps={gaps}
           clipCount={clipCount}
           onChange={onMergeGapChange}
           disabled={disabled}

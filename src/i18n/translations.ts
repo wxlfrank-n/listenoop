@@ -127,6 +127,11 @@ export const en = {
     playbackSpeed: 'Playback speed',
     playbackSpeedHint: 'Change speed while preserving the original pitch.',
     skipBy: 'Skip forward or back by',
+    clipReplay: 'Clip replay',
+    clipReplayHint: 'Smart resumes within clips longer than three times the minimum clip length (threshold capped at 1 s).',
+    replayStart: 'Start',
+    replayCurrent: 'Current',
+    replaySmart: 'Smart',
 
     repeatsPerClip: 'Repeats per clip',
     repeatsHint: 'Choose how many times a clip repeats when you click it.',
@@ -323,6 +328,11 @@ export const no: Messages = {
     playbackSpeed: 'Avspillingshastighet',
     playbackSpeedHint: 'Endre hastigheten uten å endre tonehøyden.',
     skipBy: 'Hopp frem eller tilbake med',
+    clipReplay: 'Avspilling av klipp',
+    clipReplayHint: 'Smart fortsetter i klipp som overskrider tre ganger minste klipplengde (grensen er maks 1 s).',
+    replayStart: 'Start',
+    replayCurrent: 'Nåværende',
+    replaySmart: 'Smart',
 
     repeatsPerClip: 'Repetisjoner per klipp',
     repeatsHint:
@@ -519,6 +529,11 @@ export const zh: Messages = {
     playbackSpeed: '播放速度',
     playbackSpeedHint: '调整播放速度并保持原始音高。',
     skipBy: '快进或后退',
+    clipReplay: '片段重播',
+    clipReplayHint: '智能模式：片段长度超过最短片段长度的三倍（阈值最高为1秒）时，从当前位置播放。',
+    replayStart: '开头',
+    replayCurrent: '当前位置',
+    replaySmart: '智能',
 
     repeatsPerClip: '片段重复次数',
     repeatsHint: '设置点击片段后自动重复播放的次数。',

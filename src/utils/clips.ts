@@ -511,7 +511,7 @@ export function mergeClipsByGap(
         end: last.end,
         vStart: first.vStart,
         vEnd: last.vEnd,
-        ...(keepChildren ? {children: group} : {}),
+        ...(keepChildren ? {children: group.flatMap(leafClips)} : {}),
       });
     }
     group = [];
@@ -724,11 +724,11 @@ export function enforceMinClipLength(
   }
   return result;
 }
-/**
- * Merge two adjacent clips into one group. The two clips become the group's
- * direct children as-is, keeping their own children (and any expansion)
- * nested inside them by default so the pair can be split again.
- */
+function leafClips(clip: Clip): Clip[] {
+  return clip.children?.length ? clip.children.flatMap(leafClips) : [clip];
+}
+
+/** Merge two adjacent clips, keeping their leaf clips as direct children. */
 export function mergeClipPair(
   left: Clip,
   right: Clip,
@@ -739,6 +739,6 @@ export function mergeClipPair(
     end: right.end,
     vStart: left.vStart,
     vEnd: right.vEnd,
-    ...(keepChildren ? {children: [left, right]} : {}),
+    ...(keepChildren ? {children: [left, right].flatMap(leafClips)} : {}),
   };
 }

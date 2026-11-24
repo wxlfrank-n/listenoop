@@ -343,6 +343,13 @@ function PlaybackTab() {
         value={skipSeconds}
         onChange={skipSeconds => updateConfig({skipSeconds})}
       />
+      <SegmentedSetting
+        label={t('settings.clipReplay')}
+        hint={t('settings.clipReplayHint')}
+        options={(['start', 'current', 'smart'] as const).map(value => ({value, label: t(value === 'start' ? 'settings.replayStart' : value === 'current' ? 'settings.replayCurrent' : 'settings.replaySmart')}))}
+        value={config.clipReplayMode}
+        onChange={clipReplayMode => updateConfig({clipReplayMode})}
+      />
       <SliderSetting
         label={t('settings.repeatsPerClip')}
         hint={t('settings.repeatsHint')}

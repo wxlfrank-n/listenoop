@@ -22,6 +22,7 @@ import './MergeSlider.css';
 interface MergeSliderProps {
   /** Snapped merge gap (seconds) used for merging clips. */
   value: number;
+  gaps?: number[];
   /** Number of clips after merging, shown on the thumb. */
   clipCount: number;
   /** Reports the snapped merge gap whenever it changes. */
@@ -47,12 +48,14 @@ function bubbleLeftPosition(
 
 export function MergeSlider({
   value,
+  gaps,
   clipCount,
   onChange,
   disabled = false,
 }: MergeSliderProps) {
   // Detected silent-gap lengths the slider snaps to, ascending.
-  const detectedGaps = useAppSelector(selectGaps);
+  const currentGaps = useAppSelector(selectGaps);
+  const detectedGaps = gaps ?? currentGaps;
   // Include a setting below the shortest pause so the slider can undo
   // every optional merge, including a merge at the shortest detected gap.
   const gapValues =

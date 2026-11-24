@@ -24,6 +24,7 @@ import {useT} from '../i18n';
 
 import {
   selectCurrentAudio,
+  selectCurrentTrack,
   selectWaveformView,
   selectIsPlaying,
   selectRepetitions,
@@ -33,6 +34,11 @@ import {
 } from '../store/selectors';
 
 import {updateConfig} from '../store/configSlice';
+import {
+  loadClipEdit,
+  saveClipEdit,
+  type ClipEdit,
+} from '../store/clipEditStorage';
 
 import {mergeClipsByGap} from '../utils/clips';
 import type {Clip as InitClipData} from '../utils/clips';
@@ -101,43 +107,58 @@ export function ProgressBar({
 
   const minClipLength = useAppSelector(selectMinClipLength);
 
-  const {waveform, waveformStatus, clips, currentTime, initGap} = audio;
+  const {
+    waveform,
+    waveformStatus,
+    clips: detectedClips,
+    currentTime,
+    initGap,
+  } = audio;
+  const trackId = useAppSelector(selectCurrentTrack)?.id;
 
   const hasWaveform = waveform !== null && waveform.data.length > 0;
 
-  /*
-   * Merge gap is derived from the detected silence gaps
-   * for the current waveform.
-   */
-  const [mergeGap, setMergeGap] = useState<number | null>(null);
-
-  useEffect(() => {
-    setMergeGap(null);
-  }, [clips, initGap]);
-
-  /*
-   * The grouping the detector itself asked for, before any user merge/split.
-   * This is the starting point for "clip" scope.
-   */
-  const baselineClips = useMemo(
-    () => mergeClipsByGap(clips, initGap),
-    [clips, initGap],
+  const editContext = useMemo(
+    () => ({
+      trackId,
+      mergeScope,
+      saved: trackId ? loadClipEdit(trackId, mergeScope) : undefined,
+    }),
+    [trackId, mergeScope],
+  );
+  const [updatedEdit, setUpdatedEdit] = useState<{
+    context: typeof editContext;
+    edit: ClipEdit;
+  }>();
+  const edit =
+    updatedEdit?.context === editContext ? updatedEdit.edit : editContext.saved;
+  const readyEdit = waveformStatus === 'ready' ? edit : undefined;
+  const clips =
+    mergeScope === 'global'
+      ? (readyEdit?.clips ?? detectedClips)
+      : detectedClips;
+  const mergeGap = readyEdit?.mergeGap ?? initGap;
+  const gaps = readyEdit?.gaps ?? audio.gaps;
+  const displayClips = useMemo(
+    () =>
+      mergeScope === 'clip' && readyEdit
+        ? readyEdit.clips
+        : mergeClipsByGap(clips, mergeGap),
+    [mergeScope, readyEdit, clips, mergeGap],
   );
 
-  /*
-   * "clip" scope cannot be derived from a single threshold, so the regrouped
-   * list is held here instead and only ever changed by a gesture or by the
-   * slider acting on the selected clip. `null` means "not regrouped yet", i.e.
-   * show the baseline.
-   *
-   * Reset per track change (see below) so it can never leak across tracks.
-   */
-  const [scopedClips, setScopedClips] = useState<InitClipData[] | null>(null);
-
-  const displayClips = useMemo(() => {
-    if (mergeScope === 'clip') return scopedClips ?? baselineClips;
-    return mergeClipsByGap(clips, mergeGap ?? initGap);
-  }, [mergeScope, scopedClips, baselineClips, clips, mergeGap, initGap]);
+  const saveGrouping = useCallback(
+    (gap: number, scopedClips?: InitClipData[]) => {
+      if (!editContext.trackId || waveformStatus !== 'ready') return;
+      if (editContext.mergeScope === 'clip' && !scopedClips) return;
+      const next = scopedClips
+        ? {clips: scopedClips}
+        : {clips, mergeGap: gap, gaps};
+      setUpdatedEdit({context: editContext, edit: next});
+      saveClipEdit(editContext.trackId, editContext.mergeScope, next);
+    },
+    [editContext, waveformStatus, clips, gaps],
+  );
 
   /*
    * Scroll state shared with RowWaveform's follow behavior.
@@ -170,25 +191,9 @@ export function ProgressBar({
 
   const playRequestNonceRef = useRef(0);
 
-  /*
-   * Loading a different track replaces `clips` wholesale, so the stored index
-   * no longer refers to the same clip. Reset it.
-   *
-   * Deliberately NOT keyed on `mergeGap`: a split/merge sets both the new gap
-   * and the new active clip in the same handler, so clearing on gap change
-   * would immediately undo the selection the gesture just made.
-   */
   useEffect(() => {
     setActiveClip(-1);
-  }, [clips]);
-
-  /*
-   * Per-clip grouping belongs to the track it was built from, so drop it when
-   * the track's clips are replaced.
-   */
-  useEffect(() => {
-    setScopedClips(null);
-  }, [clips]);
+  }, [trackId, mergeScope, detectedClips]);
 
   useEffect(() => {
     if (waveformStatus !== 'ready') return;
@@ -283,11 +288,10 @@ export function ProgressBar({
         return;
       }
 
-      setMergeGap(result.mergeGap);
-
-      if (mergeScope === 'clip') {
-        setScopedClips(result.clips ?? null);
-      }
+      saveGrouping(
+        result.mergeGap,
+        mergeScope === 'clip' ? result.clips : undefined,
+      );
 
       setActiveClip(result.activeClip);
 
@@ -297,7 +301,7 @@ export function ProgressBar({
         requestClipPlayback(newActiveClip);
       }
     },
-    [mergeScope, requestClipPlayback],
+    [mergeScope, requestClipPlayback, saveGrouping],
   );
 
   const handleClipSwipe = useCallback(
@@ -313,16 +317,10 @@ export function ProgressBar({
           return;
         }
 
-        setMergeGap(result.mergeGap);
-
-        /*
-         * "clip" scope keeps its own grouping, so the gesture's result becomes
-         * the new list. In "global" scope `displayClips` is derived from
-         * `mergeGap`, which was just updated above.
-         */
-        if (mergeScope === 'clip') {
-          setScopedClips(result.clips);
-        }
+        saveGrouping(
+          result.mergeGap,
+          mergeScope === 'clip' ? result.clips : undefined,
+        );
 
         setActiveClip(result.activeClip);
 
@@ -357,6 +355,7 @@ export function ProgressBar({
       minClipLength,
       publishSplit,
       requestClipPlayback,
+      saveGrouping,
     ],
   );
 
@@ -373,11 +372,10 @@ export function ProgressBar({
         return;
       }
 
-      setMergeGap(result.mergeGap);
-
-      if (mergeScope === 'clip') {
-        setScopedClips(result.clips ?? null);
-      }
+      saveGrouping(
+        result.mergeGap,
+        mergeScope === 'clip' ? result.clips : undefined,
+      );
 
       setActiveClip(result.activeClip);
 
@@ -387,7 +385,7 @@ export function ProgressBar({
         requestClipPlayback(newActiveClip);
       }
     },
-    [clips, displayClips, mergeScope, requestClipPlayback],
+    [clips, displayClips, mergeScope, requestClipPlayback, saveGrouping],
   );
 
   /*
@@ -458,9 +456,12 @@ export function ProgressBar({
    * threshold every clip is regrouped by. In "clip" scope merging happens per
    * clip through the swipe gestures instead.
    */
-  const handleMergeGapChange = useCallback((gap: number) => {
-    setMergeGap(gap);
-  }, []);
+  const handleMergeGapChange = useCallback(
+    (gap: number) => {
+      saveGrouping(gap);
+    },
+    [saveGrouping],
+  );
 
   return (
     <>
@@ -579,7 +580,8 @@ export function ProgressBar({
        */}
       {clips.length > 0 && showAdvancedControls && (
         <ClipToolbar
-          mergeGap={mergeGap ?? initGap}
+          mergeGap={mergeGap}
+          gaps={gaps}
           clipCount={displayClips.length}
           onMergeGapChange={handleMergeGapChange}
           showMergeSlider={mergeScope === 'global'}

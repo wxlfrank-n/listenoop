@@ -969,7 +969,7 @@ it('keeps clips crossing a five-minute seam and reports absolute timestamps', ()
     [280, 280.6],
     [299.8, 300.35],
     [307, 307.6],
-  ]) {
+  ] as const) {
     samples.fill(
       0.5,
       Math.round(start * sampleRate),

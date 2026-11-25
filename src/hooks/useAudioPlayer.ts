@@ -763,7 +763,7 @@ export function useAudioPlayer(skipSeconds: number, playbackSpeed = 1) {
     async (
       files: FileList,
       playAfter: boolean = false,
-      canAdd = () => true,
+      canAdd: () => boolean = () => true,
     ) => {
       const all = Array.from(files);
       const supported = /\.(mp3|wav|ogg|m4a|flac|webm)$/i;

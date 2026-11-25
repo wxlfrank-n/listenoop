@@ -1,10 +1,12 @@
 // @vitest-environment jsdom
 
-import {cleanup, fireEvent, render, screen} from '@testing-library/react';
+import {act, cleanup, fireEvent, render, screen} from '@testing-library/react';
 import {afterEach, describe, expect, it} from 'vitest';
 import {configureStore} from '@reduxjs/toolkit';
 import {Provider} from 'react-redux';
-import configReducer from '../store/configSlice';
+import configReducer, {updateConfig} from '../store/configSlice';
+import {setIsClipPlaying} from '../store/playerSlice';
+import {store} from '../store/store';
 import {Settings} from './Settings';
 
 afterEach(cleanup);
@@ -15,9 +17,9 @@ function makeStore() {
   return configureStore({reducer: {config: configReducer}});
 }
 
-function renderSettings() {
+function renderSettings(settingsStore = makeStore()) {
   return render(
-    <Provider store={makeStore()}>
+    <Provider store={settingsStore}>
       <Settings onClose={() => {}} />
     </Provider>,
   );
@@ -78,4 +80,29 @@ describe('Settings playback loop', () => {
       expect(select.value).toBe(value);
     }
   });
+});
+
+it('locks merge scope during clip playback and unlocks it afterward', () => {
+  store.dispatch(
+    updateConfig({mergeScope: 'clip', showAdvancedControls: true}),
+  );
+  store.dispatch(setIsClipPlaying(true));
+  renderSettings(store);
+
+  fireEvent.click(screen.getByRole('tab', {name: 'Clip detection'}));
+  const wholeTrack = screen.getByRole('button', {
+    name: 'Whole track',
+  }) as HTMLButtonElement;
+  expect(wholeTrack.disabled).toBe(true);
+  act(() => {
+    store.dispatch(updateConfig({mergeScope: 'global'}));
+  });
+  expect(store.getState().config.mergeScope).toBe('clip');
+
+  act(() => {
+    store.dispatch(setIsClipPlaying(false));
+  });
+  expect(wholeTrack.disabled).toBe(false);
+  fireEvent.click(wholeTrack);
+  expect(store.getState().config.mergeScope).toBe('global');
 });

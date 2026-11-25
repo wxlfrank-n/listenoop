@@ -1,4 +1,4 @@
-﻿import {useRef, useCallback, useEffect} from 'react';
+import {useRef, useCallback, useEffect} from 'react';
 import type {Track} from '../types';
 import type {SavedTrack} from '../store/playlistStorage';
 import {adjacentTrackIndex, sortedTrackIndices} from '../utils/trackOrder';
@@ -13,6 +13,7 @@ import {
   setTracks,
   setCurrentTrackIndex,
   setIsPlaying,
+  setIsClipPlaying,
   setCurrentTime,
   setDuration,
 } from '../store/playerSlice';
@@ -71,7 +72,6 @@ const hasTrackUrl = (url: string) =>
   getPlayer().tracks.some(track => track.url === url);
 
 export function useAudioPlayer(skipSeconds: number, playbackSpeed = 1) {
-  const [isClipPlaying, setIsClipPlaying] = useState(false);
   const [playbackError, setPlaybackError] = useState(false);
   const reportPlaybackError = useCallback((error: unknown) => {
     if (error instanceof DOMException && error.name === 'AbortError') return;
@@ -80,6 +80,7 @@ export function useAudioPlayer(skipSeconds: number, playbackSpeed = 1) {
   const dispatch = useAppDispatch();
   // Live playback state, kept in Redux so every component shares it.
   const state = useAppSelector(s => s.player);
+  const {isClipPlaying} = state;
 
   // Detection options for the worker's `decode` request. Read via a ref so
   // changes don't trigger re-decode — only the URL matters; the cache is
@@ -640,9 +641,9 @@ export function useAudioPlayer(skipSeconds: number, playbackSpeed = 1) {
     rangeEndedStopRef.current?.();
     rangeEndedStopRef.current = null;
     audio.dataset.clipLoopActive = '0';
-    setIsClipPlaying(false);
+    dispatch(setIsClipPlaying(false));
     suppressRangePauseRef.current = false;
-  }, []);
+  }, [dispatch]);
 
   stopCurrentRangeRef.current = stopRangeMonitoring;
 
@@ -980,7 +981,7 @@ export function useAudioPlayer(skipSeconds: number, playbackSpeed = 1) {
       stopRangeMonitoring();
 
       audio.dataset.clipLoopActive = '1';
-      setIsClipPlaying(true);
+      dispatch(setIsClipPlaying(true));
 
       const runId = ++rangeRunIdRef.current;
 
@@ -1036,7 +1037,7 @@ export function useAudioPlayer(skipSeconds: number, playbackSpeed = 1) {
         rangeEndedStopRef.current = null;
 
         audio.dataset.clipLoopActive = '0';
-        setIsClipPlaying(false);
+        dispatch(setIsClipPlaying(false));
       };
 
       const abortLoop = () => {

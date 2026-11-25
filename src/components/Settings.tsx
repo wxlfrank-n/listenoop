@@ -203,6 +203,7 @@ function SliderSetting({
 
 interface SegmentedSettingProps<T extends string | number> {
   label: string;
+  disabled?: boolean;
   hint?: string;
   options: {value: T; label: string}[];
   value: T;
@@ -215,6 +216,7 @@ function SegmentedSetting<T extends string | number>({
   options,
   value,
   onChange,
+  disabled,
 }: SegmentedSettingProps<T>) {
   return (
     <div className="settings-field">
@@ -229,6 +231,7 @@ function SegmentedSetting<T extends string | number>({
             type="button"
             className={`settings-segmented__option ${value === opt.value ? 'settings-segmented__option--active' : ''}`}
             aria-pressed={value === opt.value}
+            disabled={disabled}
             onClick={() => onChange(opt.value)}
           >
             {opt.label}
@@ -443,6 +446,9 @@ function PlaybackTab() {
 }
 
 function ClipDetectionTab() {
+  const playing = useAppSelector(
+    s => !!(s.player?.isPlaying || s.player?.isClipPlaying),
+  );
   const {config, updateConfig} = useConfig();
   const t = useT();
   const {blockMs, silenceRatio, minClipLength, expansionRate, mergeScope} =
@@ -493,6 +499,7 @@ function ClipDetectionTab() {
       />
       <SegmentedSetting
         label={t('settings.mergeScope')}
+        disabled={playing}
         hint={`${t('settings.mergeScopeHint')} ${t(
           mergeScope === 'clip'
             ? 'settings.mergeScopeClipHint'

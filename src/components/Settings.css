@@ -440,12 +440,17 @@
   color: var(--on-accent);
 }
 
+.settings-segmented__option:disabled {
+  cursor: default;
+  opacity: 0.6;
+}
+
 .settings-segmented__option:focus-visible {
   outline: 2px solid var(--accent-ink);
   outline-offset: -2px;
 }
 
-.settings-segmented__option:not(.settings-segmented__option--active):active {
+.settings-segmented__option:enabled:not(.settings-segmented__option--active):active {
   animation: settings-surface-press 0.3s ease-out;
 }
 

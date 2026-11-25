@@ -16,6 +16,7 @@ export interface PlayerState {
   tracks: Track[];
   currentTrackIndex: number;
   isPlaying: boolean;
+  isClipPlaying: boolean;
   currentTime: number;
   duration: number;
 }
@@ -32,6 +33,7 @@ const initialState: PlayerState = {
   tracks: defaultTracks,
   currentTrackIndex: defaultTracks.length > 0 ? 0 : -1,
   isPlaying: false,
+  isClipPlaying: false,
   currentTime: 0,
   duration: 0,
 };
@@ -49,6 +51,9 @@ export const playerSlice = createSlice({
     setIsPlaying(state, action: PayloadAction<boolean>) {
       state.isPlaying = action.payload;
     },
+    setIsClipPlaying(state, action: PayloadAction<boolean>) {
+      state.isClipPlaying = action.payload;
+    },
     setCurrentTime(state, action: PayloadAction<number>) {
       state.currentTime = action.payload;
     },
@@ -62,6 +67,7 @@ export const {
   setTracks,
   setCurrentTrackIndex,
   setIsPlaying,
+  setIsClipPlaying,
   setCurrentTime,
   setDuration,
 } = playerSlice.actions;

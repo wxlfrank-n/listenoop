@@ -46,6 +46,7 @@ vi.mock('../store/hooks', () => ({
           tracks: [],
           currentTrackIndex: -1,
           isPlaying: false,
+          isClipPlaying: false,
           currentTime: 0,
           duration: 100,
         }),
@@ -61,6 +62,7 @@ const playerState = vi.hoisted(() => ({
   }>,
   currentTrackIndex: -1,
   isPlaying: false,
+  isClipPlaying: false,
   currentTime: 0,
   duration: 100,
 }));

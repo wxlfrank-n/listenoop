@@ -5,16 +5,33 @@
  * the typed hooks in `store/hooks.ts`.
  */
 
-import {configureStore} from '@reduxjs/toolkit';
-import configReducer, {saveConfig} from './configSlice';
+import {combineReducers, configureStore} from '@reduxjs/toolkit';
+import configReducer, {saveConfig, updateConfig} from './configSlice';
 import playerReducer from './playerSlice';
 import analysisReducer from './analysisSlice';
 
+const reducer = combineReducers({
+  config: configReducer,
+  player: playerReducer,
+  analysis: analysisReducer,
+});
+
 export const store = configureStore({
-  reducer: {
-    config: configReducer,
-    player: playerReducer,
-    analysis: analysisReducer,
+  reducer: (
+    state: ReturnType<typeof reducer> | undefined,
+    action: Parameters<typeof reducer>[1],
+  ) => {
+    if (
+      (state?.player.isPlaying || state?.player.isClipPlaying) &&
+      updateConfig.match(action) &&
+      'mergeScope' in action.payload
+    ) {
+      const allowedChanges = {...action.payload};
+      delete allowedChanges.mergeScope;
+      if (Object.keys(allowedChanges).length === 0) return state;
+      return reducer(state, updateConfig(allowedChanges));
+    }
+    return reducer(state, action);
   },
   middleware: getDefaultMiddleware =>
     getDefaultMiddleware({

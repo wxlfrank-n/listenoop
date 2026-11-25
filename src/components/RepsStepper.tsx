@@ -120,7 +120,7 @@ export function RepsStepper({
           strokeLinejoin="round"
           aria-hidden="true"
         >
-          <path d="M12 20v-6a6 6 0 0 1 6-6h37m-5-4 5 4-5 4M56 24v6a6 6 0 0 1-6 6H13m5-4-5 4 5 4" />
+          <path d="M24 36a14 14 0 0 1 0-28h15m-4-4 4 4-4 4M44 8a14 14 0 0 1 0 28H29m4-4-4 4 4 4" />
         </svg>
         {dragging && (
           <span className="clip-reps__rest" aria-hidden="true">

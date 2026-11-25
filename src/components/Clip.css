@@ -1,7 +1,7 @@
 .waveform-clip {
   position: absolute;
   background: rgba(var(--accent-rgb), 0.12);
-  border-radius: 4px;
+  border-radius: var(--radius-pill);
   /* JS owns every clip gesture: vertical/diagonal swipes split/merge, and the
      waveform container observes horizontal moves itself. If the browser is
      allowed to pan natively here (e.g. the old `pan-y`), a vertical swipe is

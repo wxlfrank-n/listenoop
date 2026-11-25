@@ -24,7 +24,7 @@
   color: var(--clip-label-text);
   background: rgba(var(--accent-rgb), 0.32);
   border: none;
-  border-radius: 4px;
+  border-radius: var(--radius-pill);
   cursor: ew-resize;
   touch-action: none;
   user-select: none;
@@ -89,7 +89,7 @@
   bottom: calc(100% + 8px);
   z-index: 50;
   background: var(--bg-secondary);
-  border-radius: 4px;
+  border-radius: var(--radius-pill);
   box-shadow: 0 2px 10px #0005;
 }
 .clip-reps__rest {

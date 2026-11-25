@@ -274,7 +274,7 @@
   width: 64px;
   height: 28px;
   margin-top: -12px;
-  border-radius: 4px;
+  border-radius: var(--radius-pill);
   background: var(--accent-dim);
   border: none;
 }
@@ -282,7 +282,7 @@
   box-sizing: border-box;
   width: 64px;
   height: 28px;
-  border-radius: 4px;
+  border-radius: var(--radius-pill);
   background: var(--accent-dim);
   border: none;
 }

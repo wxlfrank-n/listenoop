@@ -4,6 +4,8 @@ import {act, renderHook} from '@testing-library/react';
 
 import {afterEach, beforeEach, describe, expect, it, vi} from 'vitest';
 
+import {selectTrimRange} from '../store/selectors';
+import type {RootState} from '../store/store';
 import {useAudioPlayer} from './useAudioPlayer';
 import {
   setCurrentTime,
@@ -21,18 +23,32 @@ import {
 
 const dispatch = vi.fn();
 let renderedPlayer: typeof playerState | undefined;
+const trimAnalysis = vi.hoisted(() => ({
+  waveformStatus: 'ready',
+  waveform: {sourceUrl: '/trim.mp3', duration: 100},
+  clips: [
+    {start: 5, end: 8, vStart: 4.85, vEnd: 8.15},
+    {start: 16, end: 20, vStart: 15.85, vEnd: 20.15},
+  ],
+}));
 
 vi.mock('../store/hooks', () => ({
   useAppDispatch: () => dispatch,
 
-  useAppSelector: () =>
-    renderedPlayer ?? {
-      tracks: [],
-      currentTrackIndex: -1,
-      isPlaying: false,
-      currentTime: 0,
-      duration: 100,
-    },
+  useAppSelector: (selector: (state: RootState) => unknown) =>
+    selector === selectTrimRange || selector.name === 'isTrimAnalysisPending'
+      ? selector({
+          player: playerState,
+          config: configState,
+          analysis: trimAnalysis,
+        } as RootState)
+      : (renderedPlayer ?? {
+          tracks: [],
+          currentTrackIndex: -1,
+          isPlaying: false,
+          currentTime: 0,
+          duration: 100,
+        }),
 }));
 
 const playerState = vi.hoisted(() => ({
@@ -51,6 +67,7 @@ const playerState = vi.hoisted(() => ({
 
 /* The playlist loop is off by default (`configSlice.DEFAULT_CONFIG`). */
 const configState = vi.hoisted(() => ({
+  trimEdgeSilence: false,
   loopMode: 'off',
   repetitions: 2,
   clipReplayMode: 'current',
@@ -59,7 +76,11 @@ const configState = vi.hoisted(() => ({
 
 vi.mock('../store/store', () => ({
   store: {
-    getState: () => ({player: playerState, config: configState}),
+    getState: () => ({
+      player: playerState,
+      config: configState,
+      analysis: trimAnalysis,
+    }),
   },
 }));
 
@@ -215,6 +236,7 @@ describe('useAudioPlayer.playRange', () => {
 
     dispatch.mockClear();
 
+    configState.trimEdgeSilence = false;
     configState.loopMode = 'off';
     configState.clipReplayMode = 'current';
     configState.minClipLength = 0.3;
@@ -263,6 +285,59 @@ describe('useAudioPlayer.playRange', () => {
    * Initial start
    * ----------------------------------------------------------
    */
+
+  it('trims track playback at both ends and keeps an interior silent gap seekable', async () => {
+    const originalTracks = playerState.tracks;
+    const originalIndex = playerState.currentTrackIndex;
+    try {
+      playerState.tracks = [
+        {id: 'trim', url: '/trim.mp3', title: '', artist: '', duration: 100},
+      ];
+      playerState.currentTrackIndex = 0;
+      configState.trimEdgeSilence = true;
+      trimAnalysis.waveformStatus = 'loading';
+      renderedPlayer = playerState;
+      const {result, rerender} = renderHook(() => useAudioPlayer(5));
+      await act(async () => result.current.play());
+      expect(audio.play).not.toHaveBeenCalled();
+      trimAnalysis.waveformStatus = 'ready';
+      await act(async () => rerender());
+      expect(audio.play).toHaveBeenCalledTimes(1);
+      expect(audio.currentTime).toBe(4.7);
+      act(() => result.current.seek(12));
+      expect(audio.currentTime).toBe(12);
+      audio.currentTime = 20.4;
+      act(() => {
+        audio.dispatchEvent(new Event('timeupdate'));
+      });
+      expect(audio.paused).toBe(true);
+      expect(audio.currentTime).toBe(20.3);
+      act(() => result.current.skipBackward());
+      expect(audio.currentTime).toBe(15.3);
+      act(() => result.current.seek(6));
+      act(() => result.current.skipBackward());
+      expect(audio.currentTime).toBe(4.7);
+      await act(async () => result.current.play());
+      act(() => result.current.seek(19));
+      act(() => result.current.skipForward());
+      expect(audio.currentTime).toBe(20.3);
+      expect(audio.paused).toBe(true);
+      // Being close to a trimmed edge must still park at that edge.
+      act(() => result.current.seek(20.28));
+      act(() => result.current.next());
+      expect(audio.currentTime).toBe(20.3);
+      act(() => result.current.seek(4.72));
+      act(() => result.current.prev());
+      expect(audio.currentTime).toBe(4.7);
+      act(() => result.current.prev());
+      expect(audio.currentTime).toBe(4.7);
+    } finally {
+      trimAnalysis.waveformStatus = 'ready';
+      renderedPlayer = undefined;
+      playerState.tracks = originalTracks;
+      playerState.currentTrackIndex = originalIndex;
+    }
+  });
 
   it('loads the saved track and seeks after its metadata is available', async () => {
     const {result, rerender} = renderHook(() => useAudioPlayer(5));
@@ -463,17 +538,28 @@ describe('useAudioPlayer.playRange', () => {
     ['smart', 0.3, 1, 0.5],
     ['smart', 0.5, 1, 0],
     ['smart', 0.5, 1.2, 0.6],
-  ] as const)('applies %s replay mode (minimum %s, duration %s)', async (mode, minimum, duration, expected) => {
-    configState.clipReplayMode = mode;
-    configState.minClipLength = minimum;
-    const {result} = renderHook(() => useAudioPlayer(5));
-    audio.currentTime = duration / 2;
-    act(() => {
-      result.current.playRange(0, duration, 2, undefined, undefined, false, duration / 2);
-    });
-    await settleRestart();
-    expect(audio.currentTime).toBeCloseTo(expected);
-  });
+  ] as const)(
+    'applies %s replay mode (minimum %s, duration %s)',
+    async (mode, minimum, duration, expected) => {
+      configState.clipReplayMode = mode;
+      configState.minClipLength = minimum;
+      const {result} = renderHook(() => useAudioPlayer(5));
+      audio.currentTime = duration / 2;
+      act(() => {
+        result.current.playRange(
+          0,
+          duration,
+          2,
+          undefined,
+          undefined,
+          false,
+          duration / 2,
+        );
+      });
+      await settleRestart();
+      expect(audio.currentTime).toBeCloseTo(expected);
+    },
+  );
 
   it('plays the requested number of repetitions', async () => {
     const {result} = renderHook(() => useAudioPlayer(5));

@@ -25,6 +25,7 @@ export interface Track {
  * @property sampleRate - Sample rate of the audio (Hz)
  */
 export interface WaveformData {
+  sourceUrl?: string;
   data: Float32Array;
   sampleRate: number;
   duration: number;

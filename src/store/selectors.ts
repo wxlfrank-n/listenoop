@@ -106,3 +106,30 @@ export function selectCurrentAudio(s: RootState): CurrentAudio {
     currentTime: s.player.currentTime,
   });
 }
+
+/** Derive playback and waveform bounds after getInitClipData publishes clips. */
+export const selectTrimRange = createSelector(
+  [
+    (s: RootState) => s.config.trimEdgeSilence,
+    selectMinClipLength,
+    (s: RootState) => s.analysis.waveformStatus,
+    (s: RootState) => s.analysis.waveform,
+    (s: RootState) => s.analysis.clips,
+    (s: RootState) => selectCurrentTrack(s)?.url,
+  ],
+  (enabled, padding, status, waveform, clips, trackUrl) => {
+    if (
+      !enabled ||
+      status !== 'ready' ||
+      !waveform ||
+      !trackUrl ||
+      waveform.sourceUrl !== trackUrl ||
+      !clips.length
+    )
+      return null;
+    return {
+      start: Math.max(0, clips[0]!.start - padding),
+      end: Math.min(waveform.duration, clips[clips.length - 1]!.end + padding),
+    };
+  },
+);

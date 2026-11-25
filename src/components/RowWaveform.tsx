@@ -44,6 +44,7 @@ function renderRowClipLabel(
 }
 
 export interface RowWaveformProps {
+  range?: {start: number; end: number} | null;
   waveform: WaveformData;
   displayClips: InitClipData[];
   currentTime: number;
@@ -84,6 +85,7 @@ export interface RowWaveformProps {
 export const RowWaveform = memo(
   ({
     waveform,
+    range,
     displayClips,
     currentTime,
     onSeek,
@@ -111,8 +113,10 @@ export const RowWaveform = memo(
     const {config} = useConfig();
     const theme = config.theme;
     const t = useT();
+    const start = range?.start ?? 0;
+    const end = range?.end ?? waveform.duration;
     const onKeyDown = useWaveformKeyboard({
-      duration: waveform.duration,
+      duration: end,
       getCurrentTime,
       onSeek,
       skipSeconds: config.skipSeconds,
@@ -129,7 +133,8 @@ export const RowWaveform = memo(
       getStripPlayedPct,
       playClip,
     } = useRowWaveformScroll({
-      waveformDuration: waveform.duration,
+      waveformDuration: end,
+      waveformStart: start,
       minClipLength: minClipLength ?? config.minClipLength,
       currentTime,
       onSeek,
@@ -213,8 +218,8 @@ export const RowWaveform = memo(
         role="slider"
         tabIndex={0}
         aria-label={t('waveform.ariaLabel')}
-        aria-valuemin={0}
-        aria-valuemax={Math.max(0, waveform.duration)}
+        aria-valuemin={start}
+        aria-valuemax={end}
         aria-valuenow={currentTime}
         onPointerDown={onHsPointerDown}
         onClickCapture={onRootClickCapture}
@@ -288,10 +293,7 @@ export const RowWaveform = memo(
               />
             </div>
             {config.showTimeRuler && (
-              <WaveformTimeRuler
-                window={waveformWindow}
-                contentEndSec={waveform.duration}
-              />
+              <WaveformTimeRuler window={waveformWindow} contentEndSec={end} />
             )}
             <WaveformCursor
               view="row"

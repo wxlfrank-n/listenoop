@@ -23,6 +23,7 @@ import {useAppDispatch, useAppSelector} from '../store/hooks';
 import {useT} from '../i18n';
 
 import {
+  selectTrimRange,
   selectCurrentAudio,
   selectCurrentTrack,
   selectWaveformView,
@@ -95,6 +96,7 @@ export function ProgressBar({
 
   const audio = useAppSelector(selectCurrentAudio, shallowEqual);
 
+  const range = useAppSelector(selectTrimRange, shallowEqual);
   const waveformView = useAppSelector(selectWaveformView);
 
   const playing = useAppSelector(selectIsPlaying);
@@ -508,6 +510,7 @@ export function ProgressBar({
           ) : hasWaveform && waveformView === 'horizontal' ? (
             <RowWaveform
               waveform={waveform!}
+              range={range}
               displayClips={displayClips}
               currentTime={currentTime}
               onSeek={onSeek}
@@ -531,6 +534,7 @@ export function ProgressBar({
           ) : hasWaveform && waveformView === 'stacked' ? (
             <StackedWaveform
               waveform={waveform!}
+              range={range}
               displayClips={displayClips}
               currentTime={currentTime}
               playing={playing}

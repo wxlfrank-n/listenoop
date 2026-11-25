@@ -43,6 +43,7 @@ export {
 } from '../utils/rowWaveform';
 
 export interface UseRowWaveformScrollArgs {
+  waveformStart?: number;
   waveformDuration: number;
   minClipLength: number;
   currentTime: number;
@@ -80,6 +81,7 @@ export interface UseRowWaveformScrollArgs {
 }
 
 export function useRowWaveformScroll({
+  waveformStart = 0,
   waveformDuration,
   minClipLength,
   currentTime,
@@ -153,15 +155,15 @@ export function useRowWaveformScroll({
     (viewportStart: number) => {
       const win = hsWinLenRef.current;
       const bufferLength = Math.min(
-        waveformDuration,
+        waveformDuration - waveformStart,
         win * WAVE_BUFFER_WINDOWS,
       );
       bufferLengthRef.current = bufferLength;
       const desired = viewportStart - win;
       const maxBufferStart = Math.max(0, waveformDuration - bufferLength);
-      return Math.max(0, Math.min(desired, maxBufferStart));
+      return Math.max(waveformStart, Math.min(desired, maxBufferStart));
     },
-    [waveformDuration],
+    [waveformDuration, waveformStart],
   );
   const ensureWaveBuffer = useCallback(
     (viewportStart: number, force = false) => {
@@ -192,25 +194,27 @@ export function useRowWaveformScroll({
   );
   const setLiveAnchor = useCallback(
     (target: number, forceRedraw = false) => {
-      const next = clampWindowAnchor(target, hsMaxStartRef.current);
+      const next = Math.max(
+        waveformStart,
+        clampWindowAnchor(target, hsMaxStartRef.current),
+      );
       viewportAnchorRef.current = next;
       ensureWaveBuffer(next, forceRedraw);
     },
-    [ensureWaveBuffer],
+    [ensureWaveBuffer, waveformStart],
   );
   const applyWidth = useCallback(
     (width: number) => {
       if (width <= 0 || waveformDuration <= 0) return;
       const nextWindowSecs = Math.min(
         getWindowSecs(width, minClipLength),
-        waveformDuration,
+        waveformDuration - waveformStart,
       );
       if (!Number.isFinite(nextWindowSecs) || nextWindowSecs <= 0) return;
-      if (Math.abs(nextWindowSecs - hsWinLenRef.current) < 1e-6) return;
       hsWinLenRef.current = nextWindowSecs;
       hsMaxStartRef.current = Math.max(0, waveformDuration - nextWindowSecs);
       bufferLengthRef.current = Math.min(
-        waveformDuration,
+        waveformDuration - waveformStart,
         nextWindowSecs * WAVE_BUFFER_WINDOWS,
       );
       const nextAnchor = clampWindowAnchor(
@@ -232,6 +236,7 @@ export function useRowWaveformScroll({
       setLiveAnchor,
       setViewportFollow,
       waveformDuration,
+      waveformStart,
     ],
   );
   useLayoutEffect(() => {
@@ -341,7 +346,11 @@ export function useRowWaveformScroll({
   useEffect(() => {
     const previous = previousTimeRef.current;
     previousTimeRef.current = currentTime;
-    if (playingRef.current || draggingRef.current) {
+    const skippedBackward =
+      waveformStart > 0 &&
+      currentTime < previous &&
+      !isTimeInViewport(currentTime);
+    if ((playingRef.current && !skippedBackward) || draggingRef.current) {
       return;
     }
     if (Math.abs(currentTime - previous) < 1e-6) {
@@ -384,13 +393,14 @@ export function useRowWaveformScroll({
     );
     setLiveAnchor(next);
     setViewportFollow(currentTime);
-    renderFrame(currentTime, next);
+    renderFrame(currentTime, viewportAnchorRef.current);
   }, [
     currentTime,
     isTimeInViewport,
     renderFrame,
     setLiveAnchor,
     setViewportFollow,
+    waveformStart,
   ]);
   const completeClipPlayback = useCallback(
     (end: number) => {
@@ -449,7 +459,7 @@ export function useRowWaveformScroll({
         epoch: makeFollowEpoch(target, windowLength, start),
       };
       setLiveAnchor(target, true);
-      renderFrame(start, target);
+      renderFrame(start, viewportAnchorRef.current);
     },
     [renderFrame, setLiveAnchor],
   );

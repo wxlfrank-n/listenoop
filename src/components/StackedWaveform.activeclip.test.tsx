@@ -111,7 +111,13 @@ function setup() {
     '.stacked-waveform',
   ) as HTMLElement;
 
-  return {scrollTo, rerender, pageNumber, scroller, onPlayRange: props.onPlayRange};
+  return {
+    scrollTo,
+    rerender,
+    pageNumber,
+    scroller,
+    onPlayRange: props.onPlayRange,
+  };
 }
 
 beforeEach(() => {
@@ -161,7 +167,9 @@ describe('stacked waveform active-clip follow', () => {
 
     rerender({currentTime: 5.995});
     expect(pageNumber()).toBe('2 / 6');
-    expect(scroller.querySelectorAll('.stacked-waveform__cursor')).toHaveLength(1);
+    expect(scroller.querySelectorAll('.stacked-waveform__cursor')).toHaveLength(
+      1,
+    );
   });
 
   it('updates the visible clips when scrolling during an automatic page change', () => {
@@ -226,6 +234,29 @@ describe('stacked waveform active-clip follow', () => {
     expect(scrollTo).not.toHaveBeenCalled();
   });
 
+  it('keeps the cursor visible at the trimmed end of the final row', () => {
+    const {rerender, pageNumber, scroller} = setup();
+    rerender({
+      displayClips: longClips.slice(0, 10),
+      range: {start: 0, end: 30.3},
+      currentTime: 30.3,
+    });
+
+    expect(pageNumber()).toBe('5 / 5');
+    expect(scroller.querySelector('.stacked-waveform__cursor')).toBeTruthy();
+  });
+
+  it('returns to the first page when playback skips back to the trimmed start', () => {
+    const {rerender, pageNumber, scroller} = setup();
+    rerender({range: {start: 2, end: 36}, currentTime: 24});
+    expect(pageNumber()).toBe('5 / 6');
+
+    // The media element can report a slightly rounded seek position.
+    rerender({currentTime: 1.999, playing: true});
+    expect(pageNumber()).toBe('1 / 6');
+    expect(scroller.querySelector('.stacked-waveform__cursor')).toBeTruthy();
+  });
+
   it('passes the current position when it is inside a tapped clip', () => {
     const {rerender, scroller, onPlayRange} = setup();
     rerender({currentTime: 4});
@@ -233,7 +264,13 @@ describe('stacked waveform active-clip follow', () => {
 
     fireEvent.keyDown(clips[1]!, {key: 'Enter'});
     expect(onPlayRange).toHaveBeenLastCalledWith(
-      3, 6, 3, expect.any(Function), undefined, true, 4,
+      3,
+      6,
+      3,
+      expect.any(Function),
+      undefined,
+      true,
+      4,
     );
   });
 
@@ -245,7 +282,12 @@ describe('stacked waveform active-clip follow', () => {
     expect(onPlayRange).toHaveBeenLastCalledWith(0, 3, 3, expect.any(Function));
     fireEvent.keyDown(clips[1]!, {key: 'Enter'});
     expect(onPlayRange).toHaveBeenLastCalledWith(
-      3, 6, 3, expect.any(Function), undefined, true,
+      3,
+      6,
+      3,
+      expect.any(Function),
+      undefined,
+      true,
     );
 
     rerender({activeClip: 1, currentTime: 3, playing: true});

@@ -44,13 +44,14 @@ function isMergeScope(value: unknown): value is MergeScope {
 }
 
 export const CLIP_REPLAY_MODES = ['start', 'current', 'smart'] as const;
-export type ClipReplayMode = typeof CLIP_REPLAY_MODES[number];
+export type ClipReplayMode = (typeof CLIP_REPLAY_MODES)[number];
 
 interface ConfigState {
   clipReplayMode: ClipReplayMode;
   playbackSpeed: number;
   skipSeconds: number;
   waveformView: WaveformView;
+  trimEdgeSilence: boolean;
   showTimeRuler: boolean;
   blockMs: number;
   silenceRatio: number;
@@ -69,6 +70,7 @@ export const DEFAULT_CONFIG: ConfigState = {
   playbackSpeed: 1,
   skipSeconds: 10,
   waveformView: 'horizontal',
+  trimEdgeSilence: false,
   showTimeRuler: true,
   blockMs: 12,
   silenceRatio: 0.01,
@@ -145,7 +147,9 @@ function loadConfig(): ConfigState {
       return {
         ...DEFAULT_CONFIG,
         ...parsed,
-        clipReplayMode: CLIP_REPLAY_MODES.includes(parsed.clipReplayMode) ? parsed.clipReplayMode : DEFAULT_CONFIG.clipReplayMode,
+        clipReplayMode: CLIP_REPLAY_MODES.includes(parsed.clipReplayMode)
+          ? parsed.clipReplayMode
+          : DEFAULT_CONFIG.clipReplayMode,
         theme: THEME_IDS.includes(parsed.theme) ? parsed.theme : DEFAULT_THEME,
         repetitions: Number.isFinite(parsed.repetitions)
           ? Math.min(
@@ -160,6 +164,7 @@ function loadConfig(): ConfigState {
           typeof parsed.showAdvancedControls === 'boolean'
             ? parsed.showAdvancedControls
             : DEFAULT_CONFIG.showAdvancedControls,
+        trimEdgeSilence: parsed.trimEdgeSilence === true,
         showTimeRuler:
           typeof parsed.showTimeRuler === 'boolean'
             ? parsed.showTimeRuler

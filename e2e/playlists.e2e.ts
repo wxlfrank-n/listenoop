@@ -21,10 +21,12 @@ test('named playlists restore the selected imported track and playback position'
   }
   const picker = page.getByRole('textbox', {name: 'Choose playlist'});
   const panel = page.getByRole('dialog');
+  const chooser = panel.locator('.playlist-picker__browse');
   async function create(name: string) {
+    await chooser.dblclick();
     await picker.fill(name);
     await panel.getByRole('button', {name: 'New playlist'}).click();
-    await expect(picker).toHaveValue(name);
+    await expect(chooser).toHaveText(name);
     await expect(panel.getByText('No tracks yet')).toBeVisible();
   }
 
@@ -47,17 +49,19 @@ test('named playlists restore the selected imported track and playback position'
 
   await create('Review');
   await panel.getByRole('button', {name: 'Choose playlist'}).click();
-  await panel.getByRole('button', {name: 'Default', exact: true}).click();
+  await panel.getByRole('button', {name: 'Default', pressed: false}).click();
   await expect(panel.getByText(defaultTrack, {exact: true})).toBeVisible();
   await expect(imported).toHaveCount(0);
 
+  await chooser.dblclick();
   await picker.fill('review');
   page.once('dialog', dialog => dialog.accept());
-  await panel.getByRole('button', {name: 'Remove playlist'}).click();
+  await panel.getByRole('button', {name: /Remove playlist.*Review/}).click();
   await panel.getByRole('button', {name: 'Choose playlist'}).click();
   await expect(
     panel.getByRole('button', {name: 'Review', exact: true}),
   ).toHaveCount(0);
+  await chooser.dblclick();
   await picker.fill('listen');
   await panel
     .getByRole('button', {name: 'Listening practice', exact: true})
@@ -82,7 +86,7 @@ test('named playlists restore the selected imported track and playback position'
   expect(Math.abs(resumedTime - savedTime)).toBeLessThan(0.5);
   await playButton(page).click();
   await openPlaylist();
-  await expect(picker).toHaveValue('Listening practice');
+  await expect(chooser).toHaveText('Listening practice');
   await expect(imported).toBeVisible();
   await page.keyboard.press('Escape');
   await expect(page.locator('.waveform-clip').first()).toBeVisible();

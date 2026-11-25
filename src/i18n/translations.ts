@@ -118,6 +118,7 @@ export const en = {
     language: 'Language',
 
     waveformView: 'Waveform view',
+    trimEdgeSilence: 'Trim leading and trailing silence',
     showTimeRuler: 'Show time ruler',
     singleRow: 'Single row',
     stacked: 'Stacked',
@@ -128,7 +129,8 @@ export const en = {
     playbackSpeedHint: 'Change speed while preserving the original pitch.',
     skipBy: 'Skip forward or back by',
     clipReplay: 'Clip replay',
-    clipReplayHint: 'Smart resumes within clips longer than three times the minimum clip length (threshold capped at 1 s).',
+    clipReplayHint:
+      'Smart resumes within clips longer than three times the minimum clip length (threshold capped at 1 s).',
     replayStart: 'Start',
     replayCurrent: 'Current',
     replaySmart: 'Smart',
@@ -319,6 +321,7 @@ export const no: Messages = {
     language: 'Spr\u00e5k',
 
     waveformView: 'B\u00f8lgevisning',
+    trimEdgeSilence: 'Trim stillhet i starten og slutten',
     showTimeRuler: 'Vis tidslinjal',
     singleRow: 'Enkel rad',
     stacked: 'Stakkvis',
@@ -329,7 +332,8 @@ export const no: Messages = {
     playbackSpeedHint: 'Endre hastigheten uten å endre tonehøyden.',
     skipBy: 'Hopp frem eller tilbake med',
     clipReplay: 'Avspilling av klipp',
-    clipReplayHint: 'Smart fortsetter i klipp som overskrider tre ganger minste klipplengde (grensen er maks 1 s).',
+    clipReplayHint:
+      'Smart fortsetter i klipp som overskrider tre ganger minste klipplengde (grensen er maks 1 s).',
     replayStart: 'Start',
     replayCurrent: 'Nåværende',
     replaySmart: 'Smart',
@@ -521,6 +525,7 @@ export const zh: Messages = {
     language: '语言',
 
     waveformView: '波形显示',
+    trimEdgeSilence: '裁剪开头和结尾的静音',
     showTimeRuler: '显示时间刻度',
     singleRow: '单行',
     stacked: '多行',
@@ -530,7 +535,8 @@ export const zh: Messages = {
     playbackSpeedHint: '调整播放速度并保持原始音高。',
     skipBy: '快进或后退',
     clipReplay: '片段重播',
-    clipReplayHint: '智能模式：片段长度超过最短片段长度的三倍（阈值最高为1秒）时，从当前位置播放。',
+    clipReplayHint:
+      '智能模式：片段长度超过最短片段长度的三倍（阈值最高为1秒）时，从当前位置播放。',
     replayStart: '开头',
     replayCurrent: '当前位置',
     replaySmart: '智能',

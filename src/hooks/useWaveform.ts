@@ -80,6 +80,7 @@ export function useWaveform(url: string | null): {
         if (cancelled) return;
         dispatch(
           setWaveform({
+            sourceUrl: currentUrl!,
             data: result.mono,
             sampleRate: result.sampleRate,
             duration: result.duration,

@@ -16,7 +16,12 @@ import {
   setCurrentTime,
   setDuration,
 } from '../store/playerSlice';
-import {selectDetectionOptions} from '../store/selectors';
+import {shallowEqual} from 'react-redux';
+import {
+  selectCurrentTrack,
+  selectDetectionOptions,
+  selectTrimRange,
+} from '../store/selectors';
 import type {Clip, SplitOptions} from '../utils/clips';
 
 // iOS devices (including Chrome on iPhone, which uses the WebKit engine)
@@ -48,6 +53,19 @@ function snatchToStart(audio: HTMLAudioElement, time: number) {
 
 // Fresh read of player state for imperative callbacks (event handlers, rAF).
 const getPlayer = () => store.getState().player;
+
+const getTrimRange = () => selectTrimRange(store.getState());
+
+function isTrimAnalysisPending(state: ReturnType<typeof store.getState>) {
+  if (!state.config.trimEdgeSilence) return false;
+  const track = selectCurrentTrack(state);
+  if (!track) return false;
+  const {waveform, waveformStatus} = state.analysis;
+  return (
+    waveformStatus !== 'error' &&
+    (waveformStatus !== 'ready' || waveform?.sourceUrl !== track.url)
+  );
+}
 
 const hasTrackUrl = (url: string) =>
   getPlayer().tracks.some(track => track.url === url);
@@ -82,6 +100,8 @@ export function useAudioPlayer(skipSeconds: number, playbackSpeed = 1) {
     detectionOptionsRef.current = detectionOptions;
   });
 
+  const trimRange = useAppSelector(selectTrimRange, shallowEqual);
+  const trimAnalysisPending = useAppSelector(isTrimAnalysisPending);
   const audioRef = useRef<HTMLAudioElement>(new Audio());
   useEffect(() => {
     const audio = audioRef.current;
@@ -107,6 +127,8 @@ export function useAudioPlayer(skipSeconds: number, playbackSpeed = 1) {
   const initialSeekRef = useRef<{url: string; time: number} | null>(null);
   const expectedRawUrlRef = useRef<string | null>(null);
   const trackLoadIdRef = useRef(0);
+  const pendingPlayRef = useRef<{url: string; loadId: number} | null>(null);
+  const loadedRawUrlRef = useRef<string | null>(null);
   const wavBlobCacheRef = useRef<Map<string, string>>(new Map());
   // Handle of the pending `setTimeout(() => startTrack(...), 0)` scheduled
   // by `addTracks`, so it can be cancelled on unmount instead of firing
@@ -236,6 +258,54 @@ export function useAudioPlayer(skipSeconds: number, playbackSpeed = 1) {
     [trackBlobUrl],
   );
 
+  const requestTrackPlayback = useCallback(
+    (url?: string) => {
+      const audio = audioRef.current;
+      const state = store.getState();
+      const trackUrl = selectCurrentTrack(state)?.url;
+      if (url && url !== trackUrl) return;
+      const loadId = trackLoadIdRef.current;
+      if (
+        state.config.trimEdgeSilence &&
+        trackUrl &&
+        (isTrimAnalysisPending(state) || loadedRawUrlRef.current !== trackUrl)
+      ) {
+        pendingPlayRef.current = {url: trackUrl, loadId};
+        return;
+      }
+      pendingPlayRef.current = null;
+      holdAtEndRef.current = false;
+      const range = selectTrimRange(state);
+      if (
+        range &&
+        (audio.currentTime < range.start || audio.currentTime >= range.end)
+      ) {
+        audio.currentTime = range.start;
+        dispatch(setCurrentTime(range.start));
+      }
+      audio
+        .play()
+        .then(() => {
+          if (trackLoadIdRef.current === loadId) dispatch(setIsPlaying(true));
+        })
+        .catch(error => {
+          if (trackLoadIdRef.current === loadId) reportPlaybackError(error);
+        });
+    },
+    [dispatch, reportPlaybackError],
+  );
+
+  const resumePendingPlayback = useCallback(() => {
+    const pending = pendingPlayRef.current;
+    if (pending?.loadId === trackLoadIdRef.current) {
+      requestTrackPlayback(pending.url);
+    }
+  }, [requestTrackPlayback]);
+
+  useEffect(() => {
+    if (!trimAnalysisPending) resumePendingPlayback();
+  }, [trimAnalysisPending, resumePendingPlayback]);
+
   // Point the audio element at a new source.
   /**
    * Loads a new audio track into the element.
@@ -263,6 +333,8 @@ export function useAudioPlayer(skipSeconds: number, playbackSpeed = 1) {
       getAnalyser();
       stopCurrentRangeRef.current();
       const loadId = ++trackLoadIdRef.current;
+      pendingPlayRef.current = null;
+      loadedRawUrlRef.current = null;
       setPlaybackError(false);
       audio.pause();
       holdAtEndRef.current = false;
@@ -280,6 +352,7 @@ export function useAudioPlayer(skipSeconds: number, playbackSpeed = 1) {
         }
 
         audio.src = src;
+        loadedRawUrlRef.current = url;
         audio.load();
 
         if (atEnd) {
@@ -288,9 +361,9 @@ export function useAudioPlayer(skipSeconds: number, playbackSpeed = 1) {
             // A seek to the very end can emit `ended`; hold it so the parked
             // position is not mistaken for a finished track.
             holdAtEndRef.current = true;
-            const duration = audio.duration;
+            const duration = getTrimRange()?.end ?? audio.duration;
             audio.currentTime = duration;
-            dispatch(setDuration(duration));
+            dispatch(setDuration(audio.duration));
             dispatch(setCurrentTime(duration));
             dispatch(setIsPlaying(false));
           };
@@ -301,15 +374,8 @@ export function useAudioPlayer(skipSeconds: number, playbackSpeed = 1) {
           return;
         }
 
-        if (!play) return;
-
-        audio
-          .play()
-          .then(() => dispatch(setIsPlaying(true)))
-          .catch(err => {
-            console.debug('Start track play failed:', err);
-            if (trackLoadIdRef.current === loadId) reportPlaybackError(err);
-          });
+        if (play) requestTrackPlayback(url);
+        else resumePendingPlayback();
       };
 
       try {
@@ -320,7 +386,13 @@ export function useAudioPlayer(skipSeconds: number, playbackSpeed = 1) {
         load(url);
       }
     },
-    [dispatch, getAnalyser, getPlayableUrl, reportPlaybackError],
+    [
+      dispatch,
+      getAnalyser,
+      getPlayableUrl,
+      requestTrackPlayback,
+      resumePendingPlayback,
+    ],
   );
 
   useEffect(() => {
@@ -367,6 +439,7 @@ export function useAudioPlayer(skipSeconds: number, playbackSpeed = 1) {
     const audio = audioRef.current;
 
     const onTimeUpdate = () => {
+      enforceTrim();
       if (!initialSeekRef.current) dispatch(setCurrentTime(audio.currentTime));
     };
     const onLoadedMetadata = () => {
@@ -377,14 +450,27 @@ export function useAudioPlayer(skipSeconds: number, playbackSpeed = 1) {
         audio.duration > 0
       ) {
         initialSeekRef.current = null;
-        const time = Math.min(pending.time, audio.duration);
-        holdAtEndRef.current = time === audio.duration;
+        const range = getTrimRange();
+        const time = Math.max(
+          range?.start ?? 0,
+          Math.min(pending.time, range?.end ?? audio.duration),
+        );
+        holdAtEndRef.current = time === (range?.end ?? audio.duration);
         audio.currentTime = time;
         dispatch(setCurrentTime(audio.currentTime));
       }
+      enforceTrim();
       dispatch(setDuration(audio.duration));
     };
     const onPlay = () => {
+      const range = getTrimRange();
+      if (
+        range &&
+        audio.dataset.clipLoopActive !== '1' &&
+        (audio.currentTime < range.start || audio.currentTime >= range.end)
+      ) {
+        audio.currentTime = range.start;
+      }
       setPlaybackError(false);
       startClipSequenceRef.current();
       dispatch(setIsPlaying(true));
@@ -419,8 +505,8 @@ export function useAudioPlayer(skipSeconds: number, playbackSpeed = 1) {
         return;
       }
       if (nextIndex === player.currentTrackIndex) {
-        audio.currentTime = 0;
-        dispatch(setCurrentTime(0));
+        audio.currentTime = getTrimRange()?.start ?? 0;
+        dispatch(setCurrentTime(audio.currentTime));
         audio
           .play()
           .then(() => dispatch(setIsPlaying(true)))
@@ -434,13 +520,35 @@ export function useAudioPlayer(skipSeconds: number, playbackSpeed = 1) {
         dispatch(setDuration(0));
       }
     };
+    function enforceTrim() {
+      const range = getTrimRange();
+      if (
+        !range ||
+        initialSeekRef.current ||
+        audio.readyState < 1 ||
+        audio.dataset.clipLoopActive === '1'
+      )
+        return;
+      if (audio.currentTime < range.start) {
+        audio.currentTime = range.start;
+        dispatch(setCurrentTime(range.start));
+      } else if (range.end < audio.duration && audio.currentTime >= range.end) {
+        const wasPlaying = !audio.paused;
+        if (wasPlaying) audio.pause();
+        if (audio.currentTime > range.end) {
+          audio.currentTime = range.end;
+          dispatch(setCurrentTime(range.end));
+        }
+        if (wasPlaying) onEnded();
+      }
+    }
     const onError = () => {
       setPlaybackError(true);
       dispatch(setIsPlaying(false));
       console.error('Audio error', audio.error);
     };
 
-    return addListeners(audio, [
+    const removeListeners = addListeners(audio, [
       ['timeupdate', onTimeUpdate],
       ['loadedmetadata', onLoadedMetadata],
       ['play', onPlay],
@@ -448,7 +556,22 @@ export function useAudioPlayer(skipSeconds: number, playbackSpeed = 1) {
       ['ended', onEnded],
       ['error', onError],
     ]);
-  }, [dispatch, startTrack, reportPlaybackError]);
+    let frame = 0;
+    if (trimRange) {
+      enforceTrim();
+      if (!audio.paused) {
+        const tick = () => {
+          enforceTrim();
+          if (!audio.paused) frame = requestAnimationFrame(tick);
+        };
+        frame = requestAnimationFrame(tick);
+      }
+    }
+    return () => {
+      removeListeners();
+      if (frame) cancelAnimationFrame(frame);
+    };
+  }, [dispatch, startTrack, reportPlaybackError, trimRange, state.isPlaying]);
 
   useEffect(() => {
     const audio = audioRef.current;
@@ -463,7 +586,9 @@ export function useAudioPlayer(skipSeconds: number, playbackSpeed = 1) {
             canLoadTrack(track.url)
           ) {
             audio.src = playableUrl;
+            loadedRawUrlRef.current = track.url;
             audio.load();
+            resumePendingPlayback();
           }
         })
         .catch(error => {
@@ -476,25 +601,25 @@ export function useAudioPlayer(skipSeconds: number, playbackSpeed = 1) {
           ) {
             console.error('Failed to decode initial audio source:', error);
             audio.src = track.url;
+            loadedRawUrlRef.current = track.url;
             audio.load();
+            resumePendingPlayback();
           }
         });
     }
-  }, [state.tracks, state.currentTrackIndex, getPlayableUrl]);
+  }, [
+    state.tracks,
+    state.currentTrackIndex,
+    getPlayableUrl,
+    resumePendingPlayback,
+  ]);
 
   const play = useCallback(() => {
     // Initialize shared AudioContext on first user gesture (play click)
     // This complies with browser autoplay policy and enables Web Audio features
     getAnalyser();
-    holdAtEndRef.current = false;
-    audioRef.current
-      .play()
-      .then(() => dispatch(setIsPlaying(true)))
-      .catch(err => {
-        console.debug('Play failed (may retry):', err);
-        reportPlaybackError(err);
-      });
-  }, [dispatch, getAnalyser, reportPlaybackError]);
+    requestTrackPlayback();
+  }, [getAnalyser, requestTrackPlayback]);
 
   // Reference to the range's active rAF loop / ended listener so that starting a
   // new range (e.g. clicking another clip) drops the previous one instead of
@@ -522,6 +647,7 @@ export function useAudioPlayer(skipSeconds: number, playbackSpeed = 1) {
   stopCurrentRangeRef.current = stopRangeMonitoring;
 
   const pause = useCallback(() => {
+    pendingPlayRef.current = null;
     stopRangeMonitoring();
     const audio = audioRef.current;
     audio.pause();
@@ -538,26 +664,12 @@ export function useAudioPlayer(skipSeconds: number, playbackSpeed = 1) {
   }, [playbackError, stopRangeMonitoring, dispatch]);
 
   const togglePlay = useCallback(() => {
-    const audio = audioRef.current;
-    if (getPlayer().isPlaying) {
-      // Pause playback
-      stopRangeMonitoring();
-      audio.pause();
-      dispatch(setCurrentTime(audio.currentTime));
-      dispatch(setIsPlaying(false));
+    if (getPlayer().isPlaying || pendingPlayRef.current) {
+      pause();
       return;
     }
-    // Resume playback and initialize AudioContext (user gesture)
-    getAnalyser();
-    holdAtEndRef.current = false;
-    audio
-      .play()
-      .then(() => dispatch(setIsPlaying(true)))
-      .catch(err => {
-        console.debug('Toggle play failed (may retry):', err);
-        reportPlaybackError(err);
-      });
-  }, [dispatch, getAnalyser, stopRangeMonitoring, reportPlaybackError]);
+    play();
+  }, [pause, play]);
 
   /*
    * The "skip to end" button works in two steps:
@@ -568,11 +680,15 @@ export function useAudioPlayer(skipSeconds: number, playbackSpeed = 1) {
   const next = useCallback(() => {
     if (audioRef.current.dataset.clipLoopActive === '1') return;
     const audio = audioRef.current;
-    const duration = audio.duration;
+    pendingPlayRef.current = null;
+    const range = getTrimRange();
+    const duration = range?.end ?? audio.duration;
     if (!Number.isFinite(duration) || duration <= 0) return;
 
     const atEnd =
-      audio.ended || audio.currentTime >= duration - EDGE_TOLERANCE_SEC;
+      range && range.end < audio.duration
+        ? Math.abs(audio.currentTime - duration) <= 0.001
+        : audio.ended || audio.currentTime >= duration - EDGE_TOLERANCE_SEC;
 
     if (atEnd) {
       holdAtEndRef.current = false;
@@ -598,17 +714,23 @@ export function useAudioPlayer(skipSeconds: number, playbackSpeed = 1) {
   const prev = useCallback(() => {
     if (audioRef.current.dataset.clipLoopActive === '1') return;
     const audio = audioRef.current;
+    pendingPlayRef.current = null;
     holdAtEndRef.current = false;
 
-    if (audio.currentTime <= EDGE_TOLERANCE_SEC) {
+    const start = getTrimRange()?.start ?? 0;
+    const atStart =
+      start > 0
+        ? Math.abs(audio.currentTime - start) <= 0.001
+        : audio.currentTime <= EDGE_TOLERANCE_SEC;
+    if (atStart && (start === 0 || getPlayer().tracks.length > 1)) {
       loadAdjacentTrack(-1, true);
       return;
     }
 
     stopRangeMonitoring();
     audio.pause();
-    audio.currentTime = 0;
-    dispatch(setCurrentTime(0));
+    audio.currentTime = start;
+    dispatch(setCurrentTime(start));
     dispatch(setIsPlaying(false));
   }, [dispatch, loadAdjacentTrack, stopRangeMonitoring]);
 
@@ -616,6 +738,8 @@ export function useAudioPlayer(skipSeconds: number, playbackSpeed = 1) {
     (time: number) => {
       const audio = audioRef.current;
       holdAtEndRef.current = false;
+      const range = getTrimRange();
+      if (range) time = Math.max(range.start, Math.min(range.end, time));
       if (audio.paused) snatchToStart(audio, time);
       audio.currentTime = time;
       console.debug('Seek to:', time);
@@ -797,11 +921,16 @@ export function useAudioPlayer(skipSeconds: number, playbackSpeed = 1) {
   const skipForward = useCallback(() => {
     if (audioRef.current.dataset.clipLoopActive === '1') return;
     const audio = audioRef.current;
-    holdAtEndRef.current = false;
-    const newTime = Math.min(
-      audio.currentTime + skipSeconds,
-      audio.duration || 0,
-    );
+    const range = getTrimRange();
+    const target = audio.currentTime + skipSeconds;
+    const newTime = range
+      ? Math.max(range.start, Math.min(target, range.end))
+      : Math.min(target, audio.duration || 0);
+    holdAtEndRef.current = !!range && target >= range.end;
+    if (holdAtEndRef.current) {
+      audio.pause();
+      dispatch(setIsPlaying(false));
+    }
     audio.currentTime = newTime;
     dispatch(setCurrentTime(newTime));
   }, [dispatch, skipSeconds]);
@@ -810,7 +939,11 @@ export function useAudioPlayer(skipSeconds: number, playbackSpeed = 1) {
     if (audioRef.current.dataset.clipLoopActive === '1') return;
     const audio = audioRef.current;
     holdAtEndRef.current = false;
-    const newTime = Math.max(audio.currentTime - skipSeconds, 0);
+    const range = getTrimRange();
+    const target = audio.currentTime - skipSeconds;
+    const newTime = range
+      ? Math.max(range.start, Math.min(target, range.end))
+      : Math.max(target, 0);
     audio.currentTime = newTime;
     dispatch(setCurrentTime(newTime));
   }, [dispatch, skipSeconds]);
@@ -853,10 +986,14 @@ export function useAudioPlayer(skipSeconds: number, playbackSpeed = 1) {
 
       let count = 0;
       const {clipReplayMode, minClipLength} = store.getState().config;
-      const resume = clipReplayMode === 'current' ||
-        (clipReplayMode === 'smart' && end - start > Math.min(3 * minClipLength, 1));
+      const resume =
+        clipReplayMode === 'current' ||
+        (clipReplayMode === 'smart' &&
+          end - start > Math.min(3 * minClipLength, 1));
       const firstStart =
-        resume && initialTime >= start && initialTime < end ? initialTime : start;
+        resume && initialTime >= start && initialTime < end
+          ? initialTime
+          : start;
 
       /*
        * Ignore stale currentTime until the requested

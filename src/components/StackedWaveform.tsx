@@ -41,6 +41,7 @@ const ROW_GAP = 4;
 const HORIZONTAL_DRAG_THRESHOLD = 8;
 
 interface StackedWaveformProps {
+  range?: {start: number; end: number} | null;
   waveform: WaveformData;
 
   displayClips: InitClipData[];
@@ -108,6 +109,7 @@ interface PageDrag {
 export const StackedWaveform = memo(
   ({
     waveform,
+    range,
     displayClips,
     currentTime,
     playing,
@@ -128,8 +130,10 @@ export const StackedWaveform = memo(
     const [scrollerWidth, setScrollerWidth] = useState(0);
     const {config} = useConfig();
     const t = useT();
+    const start = range?.start ?? 0;
+    const end = range?.end ?? waveform.duration;
     const onKeyDown = useWaveformKeyboard({
-      duration: waveform.duration,
+      duration: end,
       getCurrentTime,
       onSeek,
       skipSeconds: config.skipSeconds,
@@ -202,18 +206,18 @@ export const StackedWaveform = memo(
          * the waveform even if the first detected
          * clip starts slightly later.
          */
-        rows[0]!.start = 0;
+        rows[0]!.start = start;
 
         /*
          * Last row reaches the physical end of
          * the audio.
          */
         const lastRow = rows[rows.length - 1]!;
-        lastRow.end = Math.max(lastRow.end, waveform.duration);
+        lastRow.end = end;
       }
 
       return rows;
-    }, [displayClips, windowSecs]);
+    }, [displayClips, windowSecs, start, end]);
 
     /*
      * =========================================================
@@ -395,13 +399,16 @@ export const StackedWaveform = memo(
     const tappedPageEndRef = useRef<number | null>(null);
     const cursorOwnerTime = useCallback(
       (time: number) => {
+        // Media seeks can report a time just outside the requested boundary.
+        if (range && Math.abs(time - range.start) <= 0.01) return range.start;
+        if (range && Math.abs(time - range.end) <= 0.01) return range.end;
         const clip = displayClips[activeClip];
         if (clip && Math.abs(time - clip.vStart) <= 0.01) {
           return (clip.vStart + clip.vEnd) / 2;
         }
         return time;
       },
-      [activeClip, displayClips],
+      [activeClip, displayClips, range],
     );
     const pageForTime = useCallback((time: number) => {
       const pages = pageTimesRef.current;
@@ -694,7 +701,14 @@ export const StackedWaveform = memo(
           scrollToPage(page);
         }
       });
-    }, [playing, userScrolling, pageForTime, scrollToPage, getCurrentTime, cursorOwnerTime]);
+    }, [
+      playing,
+      userScrolling,
+      pageForTime,
+      scrollToPage,
+      getCurrentTime,
+      cursorOwnerTime,
+    ]);
 
     /*
      * =========================================================
@@ -707,13 +721,23 @@ export const StackedWaveform = memo(
 
       previousTimeRef.current = currentTime;
 
-      if (Math.abs(currentTime - previousTime) < 1) {
+      const ownerTime = cursorOwnerTime(currentTime);
+      const landedAtTrimEdge =
+        range &&
+        currentTime !== previousTime &&
+        (ownerTime === range.start || ownerTime === range.end);
+      if (!landedAtTrimEdge && Math.abs(currentTime - previousTime) < 1) {
         return;
       }
 
       const tappedEnd = tappedPageEndRef.current;
-      if (tappedEnd !== null && Math.abs(currentTime - tappedEnd) <= 0.05) return;
-      const page = pageForTime(cursorOwnerTime(currentTime));
+      if (
+        !landedAtTrimEdge &&
+        tappedEnd !== null &&
+        Math.abs(currentTime - tappedEnd) <= 0.05
+      )
+        return;
+      const page = pageForTime(ownerTime);
 
       if (playing && page > currentPageRef.current) {
         return;
@@ -732,7 +756,15 @@ export const StackedWaveform = memo(
       setViewPage(page);
 
       scrollToPage(page);
-    }, [currentTime, pageForTime, playing, clipPlayActive, scrollToPage, cursorOwnerTime]);
+    }, [
+      currentTime,
+      range,
+      pageForTime,
+      playing,
+      clipPlayActive,
+      scrollToPage,
+      cursorOwnerTime,
+    ]);
 
     /*
      * Reset manual override when playback state or
@@ -854,7 +886,13 @@ export const StackedWaveform = memo(
         const onComplete = () => setClipPlayActive(false);
         if (position > start && position < end) {
           onPlayRange(
-            start, end, reps, onComplete, undefined, stopAfterClip, position,
+            start,
+            end,
+            reps,
+            onComplete,
+            undefined,
+            stopAfterClip,
+            position,
           );
         } else if (stopAfterClip) {
           onPlayRange(start, end, reps, onComplete, undefined, true);
@@ -887,8 +925,8 @@ export const StackedWaveform = memo(
         role="slider"
         tabIndex={0}
         aria-label={t('waveform.ariaLabel')}
-        aria-valuemin={0}
-        aria-valuemax={Math.max(0, waveform.duration)}
+        aria-valuemin={start}
+        aria-valuemax={end}
         aria-valuenow={currentTime}
         onKeyDown={onKeyDown}
         onPointerDown={e => {
@@ -914,6 +952,7 @@ export const StackedWaveform = memo(
                       row={row}
                       gi={gi}
                       waveform={waveform}
+                      isLastRow={gi === stackedRows.length - 1}
                       windowSecs={windowSecs}
                       cursorOwnerTime={cursorOwnerTime(currentTime)}
                       playing={playing}
@@ -926,7 +965,8 @@ export const StackedWaveform = memo(
                       minClipLength={minClipLength}
                       onPlayRange={(start, end, reps) => {
                         const lastRow = page[page.length - 1]?.row;
-                        const lastClip = lastRow?.clips[lastRow.clips.length - 1]?.clip;
+                        const lastClip =
+                          lastRow?.clips[lastRow.clips.length - 1]?.clip;
                         stackedPlayClip(
                           start,
                           end,

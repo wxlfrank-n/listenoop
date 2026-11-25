@@ -30,7 +30,6 @@ const PAD = 4;
 export const INNER_H = VB_H - PAD * 2;
 
 /** Tolerance for treating the final row as reaching the end of the track. */
-const END_EPSILON = 1e-6;
 
 /** Static base for the played-layer style; only `clipPath` changes per tick. */
 const PLAYED_LAYER_BASE = {
@@ -55,6 +54,7 @@ export interface StackRowProps {
   /** Stable identity for the row, used as its React key. */
   gi: number;
   waveform: WaveformData;
+  isLastRow: boolean;
   /** Minimum seconds a row shows, so short clips stay legible. */
   windowSecs: number;
   cursorOwnerTime: number;
@@ -83,6 +83,7 @@ export const StackRow = memo(
     row,
     gi,
     waveform,
+    isLastRow,
     windowSecs,
     cursorOwnerTime,
     playing,
@@ -138,14 +139,14 @@ export const StackRow = memo(
 
     const playedPct = getPlayedPct();
 
-    const isLastRow = row.end >= waveform.duration - END_EPSILON;
-
     /*
      * The cursor hides while the playhead is past this row, except on the final
      * row where it stays put at the end instead of disappearing.
      */
     const showCursor =
-      cursorOwnerTime >= rowStart && (cursorOwnerTime < row.end || isLastRow);
+      cursorOwnerTime >= rowStart &&
+      (cursorOwnerTime < row.end ||
+        (isLastRow && cursorOwnerTime <= row.end + 1e-6));
 
     const handleClick = useCallback(
       (e: React.MouseEvent<HTMLDivElement>) => {

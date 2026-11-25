@@ -343,10 +343,34 @@ function PlaybackTab() {
         value={skipSeconds}
         onChange={skipSeconds => updateConfig({skipSeconds})}
       />
+      <div className="settings-field">
+        <label className="settings-switch">
+          <input
+            type="checkbox"
+            checked={config.trimEdgeSilence}
+            onChange={e => updateConfig({trimEdgeSilence: e.target.checked})}
+          />
+          <span className="settings-switch__track" aria-hidden="true">
+            <span className="settings-switch__knob" />
+          </span>
+          <span className="settings-switch__label">
+            {t('settings.trimEdgeSilence')}
+          </span>
+        </label>
+      </div>
       <SegmentedSetting
         label={t('settings.clipReplay')}
         hint={t('settings.clipReplayHint')}
-        options={(['start', 'current', 'smart'] as const).map(value => ({value, label: t(value === 'start' ? 'settings.replayStart' : value === 'current' ? 'settings.replayCurrent' : 'settings.replaySmart')}))}
+        options={(['start', 'current', 'smart'] as const).map(value => ({
+          value,
+          label: t(
+            value === 'start'
+              ? 'settings.replayStart'
+              : value === 'current'
+                ? 'settings.replayCurrent'
+                : 'settings.replaySmart',
+          ),
+        }))}
         value={config.clipReplayMode}
         onChange={clipReplayMode => updateConfig({clipReplayMode})}
       />

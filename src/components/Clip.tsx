@@ -101,7 +101,7 @@ export interface ClipProps {
 
 const SWIPE_THRESHOLD_PX = 10;
 const TAP_THRESHOLD_PX = 4;
-const ANNOTATION_HOLD_MS = 2001;
+const ANNOTATION_HOLD_MS = 500;
 
 /*
  * Diagonal band boundaries, expressed as the slope of |dy|/|dx| (tan of the
@@ -232,8 +232,7 @@ export const Clip = memo(
     const {windowStartSec, windowLen, innerH, vbH} = window;
     const t = useT();
     const annotations = useContext(ClipAnnotations);
-    const annotationKey = `${clip.start}:${clip.end}`;
-    const annotated = annotations?.marks.has(annotationKey);
+    const annotated = annotations?.isAnnotated(clip);
     const holdTimer = useRef<ReturnType<typeof setTimeout> | undefined>(
       undefined,
     );
@@ -396,7 +395,7 @@ export const Clip = memo(
               clipGestureLedger.multi = false;
               clipGestureLedger.clipSwipeLocked = false;
               cancel();
-              annotations.toggle(annotationKey);
+              annotations.toggle(clip);
             }, ANNOTATION_HOLD_MS);
           }
 

@@ -117,11 +117,15 @@ it('toggles a persistent review mark without playing or editing the clip', () =>
   const storageKey = 'listenoop:clip-annotations:' + trackId;
   const onPlayRange = vi.fn();
   const onSwipe = vi.fn();
-  const renderTrack = (id: string, withSecondClip = false) =>
+  const renderTrack = (
+    id: string,
+    withSecondClip = false,
+    displayedClip = clip,
+  ) =>
     render(
       <ClipAnnotationProvider trackId={id}>
         <Clip
-          clip={clip}
+          clip={displayedClip}
           window={windowConfig}
           id={0}
           active={false}
@@ -158,7 +162,7 @@ it('toggles a persistent review mark without playing or editing the clip', () =>
     const wasAnnotated = rect.classList.contains('waveform-clip--annotated');
     fireEvent.pointerDown(rect, pointer);
     void act(() => {
-      vi.advanceTimersByTime(2000);
+      vi.advanceTimersByTime(499);
     });
     expect(rect.classList.contains('waveform-clip--annotated')).toBe(
       wasAnnotated,
@@ -181,7 +185,7 @@ it('toggles a persistent review mark without playing or editing the clip', () =>
     fireEvent.pointerDown(rect, pointer);
     fireEvent.pointerMove(rect, {...pointer, clientX: 120});
     void act(() => {
-      vi.advanceTimersByTime(2001);
+      vi.advanceTimersByTime(500);
     });
     fireEvent.pointerUp(rect, {...pointer, clientX: 120});
     expect(rect.classList.contains('waveform-clip--annotated')).toBe(false);
@@ -196,8 +200,25 @@ it('toggles a persistent review mark without playing or editing the clip', () =>
     ).toBe(false);
     other.unmount();
 
+    const changed = renderTrack(trackId, true, {
+      start: 0.5,
+      end: 2,
+      vStart: 0.5,
+      vEnd: 2,
+    });
+    const overlapping = changed.getByRole('button', {name: /^Clip 1\b/});
+    const outside = changed.getByRole('button', {name: /^Clip 2\b/});
+    expect(overlapping.classList.contains('waveform-clip--annotated')).toBe(
+      true,
+    );
+    expect(outside.classList.contains('waveform-clip--annotated')).toBe(false);
+    hold(overlapping);
+    expect(localStorage.getItem(storageKey)).toBe('["2:3"]');
+    changed.unmount();
+
     const reopened = renderTrack(trackId, true);
-    const [reopenedRect, secondClip] = reopened.getAllByRole('button');
+    const reopenedRect = reopened.getByRole('button', {name: /^Clip 1\b/});
+    const secondClip = reopened.getByRole('button', {name: /^Clip 2\b/});
     expect(reopenedRect.classList.contains('waveform-clip--annotated')).toBe(
       true,
     );

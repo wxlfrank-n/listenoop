@@ -102,6 +102,23 @@ describe('audioBufferToWavBlob', () => {
     expect(view.getUint32(4, true)).toBe(236);
   });
 
+  it('preserves samples across encoding chunks and writes only the final samples', async () => {
+    const boundary = 256 * 1024;
+    const samples = new Float32Array(boundary + 2);
+    samples[boundary - 1] = 1;
+    samples[boundary] = -1;
+    samples[boundary + 1] = 0.5;
+
+    const bytes = await audioBufferToWavBlob(
+      makeAudioBuffer([samples]),
+    ).arrayBuffer();
+    const view = new DataView(bytes);
+    expect(bytes.byteLength).toBe(44 + samples.length * 2);
+    expect(view.getInt16(44 + (boundary - 1) * 2, true)).toBe(0x7fff);
+    expect(view.getInt16(44 + boundary * 2, true)).toBe(-0x8000);
+    expect(view.getInt16(44 + (boundary + 1) * 2, true)).toBe(0x3fff);
+  });
+
   it('encodes a full-scale positive sample as 0x7fff', async () => {
     const buf = makeAudioBuffer([new Float32Array([1])]);
     const view = new DataView(await audioBufferToWavBlob(buf).arrayBuffer());

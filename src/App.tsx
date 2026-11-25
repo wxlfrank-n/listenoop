@@ -296,19 +296,29 @@ export default function App() {
     updatePlaylists({active, lists});
   }
 
-  // Adding files (file picker) with a skip notice for non-MP3 files.
+  // Report files that could not be imported.
   const {handleFiles} = useAddFiles(
-    (files, playAfter) => {
-      const result = addTracks(files, playAfter);
+    async (files, playAfter) => {
+      const active = playlistsRef.current?.active;
+      const result = await addTracks(
+        files,
+        playAfter,
+        () => playlistsRef.current?.active === active,
+      );
       if (result.added) saveActiveTracks();
       return result;
     },
     useCallback(
       (skipped: number) =>
         showNotice(
-          t(skipped > 1 ? 'app.skippedNonMp3Plural' : 'app.skippedNonMp3', {
-            count: skipped,
-          }),
+          t(
+            skipped > 1
+              ? 'app.skippedUnsupportedAudioPlural'
+              : 'app.skippedUnsupportedAudio',
+            {
+              count: skipped,
+            },
+          ),
         ),
       [showNotice, t],
     ),

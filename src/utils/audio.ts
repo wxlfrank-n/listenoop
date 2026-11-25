@@ -8,13 +8,6 @@ export interface DecodedAudio {
 }
 
 /**
- * Cache for decoded audio buffers. Maps URLs to their decoded audio data.
- * Ensures files are decoded only once even if used in multiple components
- * (metadata, waveform, playback).
- */
-const decodeCache = new Map<string, Promise<DecodedAudio>>();
-
-/**
  * Shared global AudioContext for playback and waveform analysis.
  * Created lazily on first user gesture (e.g., click play) to comply with
  * browser autoplay policy. This allows the Web Audio API to work without
@@ -50,15 +43,9 @@ export function initializeAudioContext(): AudioContext {
 }
 
 /**
- * Decodes audio data from a URL using a cached buffer or new decode operation.
- * Metadata, waveform, and playback all use this function, ensuring files are
- * decoded only once and the result is shared across components.
- *
- * Strategy:
- * - On initial load (no user gesture): Creates a temporary AudioContext for decoding
- *   (may trigger a browser warning, but audio still works)
- * - After user clicks play: Uses shared AudioContext for subsequent operations
- * - Caches results to avoid redundant decodes
+ * Decodes a URL using the shared context or a temporary one.
+ * The decoder client caches the processed result, so the original multichannel
+ * PCM can be released after processing.
  *
  * @param url - The URL of the audio file to decode
  * @param signal - Optional AbortSignal; aborts the in-flight `fetch` (the
@@ -67,68 +54,55 @@ export function initializeAudioContext(): AudioContext {
  * @returns Promise resolving to decoded audio buffer and byte length
  * @throws Error if audio fetch fails or context creation is not supported
  */
-export function decodeAudioBuffer(
+export async function decodeAudioBuffer(
   url: string,
   signal?: AbortSignal,
 ): Promise<DecodedAudio> {
-  // Return cached result if already decoded. If a decode is in flight and the
-  // caller passes a signal that subsequently aborts, the original promise still
-  // resolves (the cache is shared) but the caller's `.then` is a no-op thanks
-  // to its own `cancelled` flag / signal check.
-  const cached = decodeCache.get(url);
-  if (cached) return cached;
+  // Fetch the audio file. Pass the signal so the network transfer aborts
+  // when the caller switches tracks mid-decode.
+  const response = await fetch(url, signal ? {signal} : undefined);
+  if (!response.ok)
+    throw new Error(`Failed to fetch audio (${response.status})`);
+  const arrayBuffer = await response.arrayBuffer();
+  // If we were aborted during fetch/arrayBuffer read, bail before the
+  // expensive decode step (which is itself un-interruptible).
+  if (signal?.aborted) throw new DOMException('Aborted', 'AbortError');
+  // `decodeAudioData` detaches (transfers) its input buffer, after which
+  // `byteLength` reads 0. Capture the size up front so the bitrate stays
+  // accurate.
+  const byteLength = arrayBuffer.byteLength;
 
-  const pending = (async () => {
-    // Fetch the audio file. Pass the signal so the network transfer aborts
-    // when the caller switches tracks mid-decode.
-    const response = await fetch(url, signal ? {signal} : undefined);
-    if (!response.ok)
-      throw new Error(`Failed to fetch audio (${response.status})`);
-    const arrayBuffer = await response.arrayBuffer();
-    // If we were aborted during fetch/arrayBuffer read, bail before the
-    // expensive decode step (which is itself un-interruptible).
-    if (signal?.aborted) throw new DOMException('Aborted', 'AbortError');
-    // `decodeAudioData` detaches (transfers) its input buffer, after which
-    // `byteLength` reads 0. Capture the size up front so the bitrate stays
-    // accurate.
-    const byteLength = arrayBuffer.byteLength;
+  // Use shared context if available (player initialized), else create temporary one
+  let audioContext = sharedAudioContext;
+  let isTemporary = false;
 
-    // Use shared context if available (player initialized), else create temporary one
-    let audioContext = sharedAudioContext;
-    let isTemporary = false;
-
-    if (!audioContext) {
-      try {
-        // Create temporary context for decoding (may trigger browser warning but works)
-        // Try standard AudioContext first, fall back to webkit for older browsers
-        const Ctor =
-          window.AudioContext ??
-          (window as unknown as {webkitAudioContext?: typeof AudioContext})
-            .webkitAudioContext;
-        if (!Ctor) throw new Error('AudioContext not supported');
-        audioContext = new Ctor({sampleRate: 48000});
-        isTemporary = true;
-      } catch (err) {
-        // Can't create context - likely no user gesture or unsupported browser
-        console.debug('Failed to create temporary AudioContext:', err);
-        throw new Error(
-          'AudioContext not initialized. Please click play to start audio.',
-        );
-      }
-    }
-
+  if (!audioContext) {
     try {
-      const buffer = await audioContext.decodeAudioData(arrayBuffer);
-      return {buffer, byteLength};
-    } finally {
-      // Only close if we created a temporary context (keep shared context alive)
-      if (isTemporary) {
-        await audioContext.close();
-      }
+      // Create temporary context for decoding (may trigger browser warning but works)
+      // Try standard AudioContext first, fall back to webkit for older browsers
+      const Ctor =
+        window.AudioContext ??
+        (window as unknown as {webkitAudioContext?: typeof AudioContext})
+          .webkitAudioContext;
+      if (!Ctor) throw new Error('AudioContext not supported');
+      audioContext = new Ctor({sampleRate: 48000});
+      isTemporary = true;
+    } catch (err) {
+      // Can't create context - likely no user gesture or unsupported browser
+      console.debug('Failed to create temporary AudioContext:', err);
+      throw new Error(
+        'AudioContext not initialized. Please click play to start audio.',
+      );
     }
-  })();
+  }
 
-  decodeCache.set(url, pending);
-  pending.catch(() => decodeCache.delete(url));
-  return pending;
+  try {
+    const buffer = await audioContext.decodeAudioData(arrayBuffer);
+    return {buffer, byteLength};
+  } finally {
+    // Only close if we created a temporary context (keep shared context alive)
+    if (isTemporary) {
+      await audioContext.close();
+    }
+  }
 }

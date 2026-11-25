@@ -43,7 +43,8 @@ describe('decoded audio eviction', () => {
     const response = {
       type: 'decoded',
       url: '/track.mp3',
-      wavBuffer: new ArrayBuffer(8),
+      wavBlob: new Blob([new ArrayBuffer(8)], {type: 'audio/wav'}),
+      hasCachedMono: true,
       mono: new Float32Array(4),
       sampleRate: 48000,
       duration: 1,
@@ -61,4 +62,39 @@ describe('decoded audio eviction', () => {
     evictAudio('/track.mp3');
     await cleanup;
   });
+});
+
+it('reuses the transferred samples when the worker omits its mono copy', async () => {
+  const {decodeAudio, redetectClips} = await import('./audioDecoderClient');
+  const options = {blockMs: 12, silenceRatio: 0.01, minClipLength: 0.3};
+  const url = '/long-track.mp3';
+  const decoded = decodeAudio(url, options);
+  const id = fake.postMessage.mock.calls[0]![0].id;
+  const wavBlob = new Blob(['wav'], {type: 'audio/wav'});
+  fake.handlers.get('message')!({
+    data: {
+      type: 'decoded',
+      id,
+      url,
+      wavBlob,
+      hasCachedMono: false,
+      mono: new Float32Array(48000),
+      sampleRate: 48000,
+      duration: 1,
+      numberOfChannels: 1,
+      byteLength: 8,
+      clips: {clips: [], gaps: [], initGap: 0},
+    },
+  });
+
+  expect((await decoded).wavBlob).toBe(wavBlob);
+  await expect(redetectClips(url, options)).resolves.toBe(
+    (await decoded).clips,
+  );
+  await expect(redetectClips(url, {...options, blockMs: 20})).resolves.toEqual({
+    clips: [],
+    gaps: [],
+    initGap: 0,
+  });
+  expect(fake.postMessage).toHaveBeenCalledTimes(1);
 });

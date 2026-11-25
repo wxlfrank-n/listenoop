@@ -4,6 +4,7 @@ import {act, renderHook} from '@testing-library/react';
 
 import {afterEach, beforeEach, describe, expect, it, vi} from 'vitest';
 
+import {decodeAudioBuffer} from '../utils/audio';
 import {selectTrimRange} from '../store/selectors';
 import type {RootState} from '../store/store';
 import {useAudioPlayer} from './useAudioPlayer';
@@ -145,6 +146,7 @@ class FakeAudio extends EventTarget {
   defaultPlaybackRate = 1;
   preservesPitch = false;
   currentTime = 0;
+  seeking = false;
 
   duration = 100;
 
@@ -225,10 +227,6 @@ async function settleRestart() {
     await Promise.resolve();
   });
 
-  /*
-   * First RAF observes currentTime ~= start
-   * and changes seeking -> false.
-   */
   runRaf();
 }
 
@@ -280,6 +278,54 @@ describe('useAudioPlayer.playRange', () => {
     vi.useRealTimers();
 
     vi.unstubAllGlobals();
+  });
+
+  it('adds only files with decodable audio', async () => {
+    const {result} = renderHook(() => useAudioPlayer(5));
+    const createObjectURL = vi
+      .fn()
+      .mockReturnValueOnce('blob:valid-probe')
+      .mockReturnValueOnce('blob:invalid-probe')
+      .mockReturnValueOnce('blob:valid-track');
+    const revokeObjectURL = vi.fn();
+    vi.stubGlobal(
+      'URL',
+      Object.assign(class extends URL {}, {
+        createObjectURL,
+        revokeObjectURL,
+      }),
+    );
+    vi.mocked(decodeAudioBuffer)
+      .mockResolvedValueOnce({
+        buffer: {length: 48000, duration: 1} as AudioBuffer,
+        byteLength: 4,
+      })
+      .mockRejectedValueOnce(new Error('Unable to decode audio'));
+    const files = [
+      new File(['data'], 'valid.WAV'),
+      new File(['text'], 'renamed.mp3'),
+      new File(['text'], 'notes.txt'),
+      new File([], 'empty.ogg'),
+    ] as unknown as FileList;
+
+    await expect(result.current.addTracks(files)).resolves.toEqual({
+      added: 1,
+      skipped: 3,
+    });
+    expect(revokeObjectURL.mock.calls).toEqual([
+      ['blob:valid-probe'],
+      ['blob:invalid-probe'],
+    ]);
+    expect(dispatch).toHaveBeenCalledWith(
+      setTracks([
+        ...playerState.tracks,
+        expect.objectContaining({
+          title: 'valid',
+          duration: 1,
+          url: 'blob:valid-track',
+        }),
+      ]),
+    );
   });
 
   /*
@@ -435,6 +481,36 @@ describe('useAudioPlayer.playRange', () => {
     await settleRestart();
 
     expect(audio.play).toHaveBeenCalled();
+  });
+
+  it('waits for an edited range to seek before playing its first round', async () => {
+    const {result} = renderHook(() => useAudioPlayer(5));
+    const oldComplete = vi.fn();
+    const newRepeat = vi.fn();
+    act(() => result.current.playRange(10, 20, 2, oldComplete));
+    await settleRestart();
+
+    act(() => {
+      // Splitting the clip replaces the playing range with its first piece.
+      result.current.playRange(10, 14, 2, undefined, newRepeat);
+      audio.seeking = true;
+      audio.currentTime = 17;
+    });
+    await act(async () => vi.advanceTimersByTimeAsync(150));
+    runRaf();
+    expect(audio.paused).toBe(true);
+    expect(audio.play).toHaveBeenCalledTimes(1);
+    expect(newRepeat).not.toHaveBeenCalled();
+
+    audio.currentTime = 10;
+    audio.seeking = false;
+    await settleRestart();
+    expect(audio.play).toHaveBeenCalledTimes(2);
+
+    audio.currentTime = 14;
+    runRaf();
+    expect(newRepeat).toHaveBeenCalledTimes(1);
+    expect(oldComplete).not.toHaveBeenCalled();
   });
 
   it('reports playback rejection and clears the error after successful playback', async () => {

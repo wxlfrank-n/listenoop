@@ -197,10 +197,10 @@ export const en = {
   },
 
   app: {
-    skippedNonMp3:
-      'Skipped {count} file because only supported audio formats are accepted.',
-    skippedNonMp3Plural:
-      'Skipped {count} files because only supported audio formats are accepted.',
+    skippedUnsupportedAudio:
+      'Skipped {count} file because its audio could not be read or its format is unsupported.',
+    skippedUnsupportedAudioPlural:
+      'Skipped {count} files because their audio could not be read or their format is unsupported.',
     listeningLoopIcon: 'Listening loop',
   },
 
@@ -403,10 +403,10 @@ export const no: Messages = {
   },
 
   app: {
-    skippedNonMp3:
-      'Hoppet over {count} fil fordi bare støttede lydformater aksepteres.',
-    skippedNonMp3Plural:
-      'Hoppet over {count} filer fordi bare støttede lydformater aksepteres.',
+    skippedUnsupportedAudio:
+      'Hoppet over {count} fil fordi lydformatet ikke støttes, eller filen ikke kunne leses.',
+    skippedUnsupportedAudioPlural:
+      'Hoppet over {count} filer fordi lydformatet ikke støttes, eller filene ikke kunne leses.',
     listeningLoopIcon: 'Lytte\u00f8kke',
   },
 
@@ -600,8 +600,10 @@ export const zh: Messages = {
   },
 
   app: {
-    skippedNonMp3: '已跳过 {count} 个文件，目前仅支持常见音频格式。',
-    skippedNonMp3Plural: '已跳过 {count} 个文件，目前仅支持常见音频格式。',
+    skippedUnsupportedAudio:
+      '已跳过 {count} 个文件，因为无法读取音频或不支持其格式。',
+    skippedUnsupportedAudioPlural:
+      '已跳过 {count} 个文件，因为无法读取音频或不支持其格式。',
     listeningLoopIcon: '循环聆听',
   },
 

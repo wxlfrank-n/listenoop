@@ -5,6 +5,7 @@ import {
   mergeClipsByGap,
   mergeClipsByGapScoped,
   getInitClipData,
+  getSectionedClipData,
   mergeClipPair,
   splitClipAtMiddle,
   splitClipAtThird,
@@ -531,7 +532,6 @@ describe('position-based splits', () => {
     expect(splitClipAtMiddle(group, 1)?.pieces[0]).toEqual(mk(0, 1));
     expect(splitClipAtMiddle(group, 1)?.gap).toBe(0);
   });
-
 });
 
 describe('splitClipAtMiddle', () => {
@@ -960,4 +960,31 @@ it('uses options.minClipLength without imposing a separate 0.3-second floor', ()
   const group = {...mk(0, 0.5), children};
   expect(splitClipAtMiddle(group, 0.1)?.pieces).toHaveLength(2);
   expect(splitClipAtMiddle(group, 0.3)).toBeNull();
+});
+
+it('keeps clips crossing a five-minute seam and reports absolute timestamps', () => {
+  const sampleRate = 1000;
+  const samples = new Float32Array(310 * sampleRate);
+  for (const [start, end] of [
+    [280, 280.6],
+    [299.8, 300.35],
+    [307, 307.6],
+  ]) {
+    samples.fill(
+      0.5,
+      Math.round(start * sampleRate),
+      Math.round(end * sampleRate),
+    );
+  }
+  const {clips} = getSectionedClipData(samples, sampleRate, {
+    blockMs: 12,
+    silenceRatio: 0.01,
+    minClipLength: 0.2,
+    longClipThreshold: 10,
+  });
+  expect(clips).toHaveLength(3);
+  expect(clips[1]!.start).toBeLessThan(300);
+  expect(clips[1]!.end).toBeGreaterThan(300);
+  expect(clips[2]!.start).toBeGreaterThan(306);
+  expect(clips[1]!.vEnd).toBeLessThanOrEqual(clips[2]!.vStart);
 });

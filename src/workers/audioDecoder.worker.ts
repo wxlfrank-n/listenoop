@@ -4,7 +4,7 @@
  *
  *   fetch(url) → decodeAudioData → mono downmix → WAV encode → clip detection
  *
- * Returns the WAV-encoded audio (as a transferable ArrayBuffer), the mono
+ * Returns the WAV-encoded audio (as a Blob), the mono
  * downmix (as a transferable Float32Array), the metadata the UI needs
  * (sample rate, duration, channel count, file byte length), and the
  * result of clip detection for the supplied SplitOptions.
@@ -14,7 +14,7 @@
  * each, and they only run ONCE per track load. Keeping them on the main
  * thread blocked the UI for ~100 ms+ the moment a track finished decoding.
  *
- * Clip detection (`getInitClipData`) is also moved here so the same
+ * Clip detection (`getSectionedClipData`) is also moved here so the same
  * ~100 ms freeze no longer happens every time the user fiddles with
  * detection settings (silence threshold, analysis detail, min clip
  * length). The worker keeps a per-URL cache of the decoded mono samples
@@ -26,7 +26,7 @@
 
 import {audioBufferToWavBlob} from '../utils/wav';
 import {
-  getInitClipData,
+  getSectionedClipData,
   type InitClipData,
   type SplitOptions,
 } from '../utils/clips';
@@ -44,8 +44,9 @@ export interface WorkerDecodeResponse {
   type: 'decoded';
   id: number;
   url: string;
-  /** WAV-encoded audio bytes (transferred, not copied). */
-  wavBuffer: ArrayBuffer;
+  /** WAV-encoded audio as an immutable Blob. */
+  wavBlob: Blob;
+  hasCachedMono: boolean;
   /** Mono downmixed samples (transferred, not copied). */
   mono: Float32Array;
   sampleRate: number;
@@ -84,14 +85,8 @@ type WorkerMessage =
 type WorkerRequest =
   WorkerDecodeRequest | WorkerRedetectRequest | {type: 'evict'; url: string};
 
-/**
- * Per-URL cache of decoded mono samples + sample rate. The worker keeps a
- * COPY of the mono (the original is transferred to the main thread on the
- * first `decode`), so subsequent `redetect` messages can re-run clip
- * detection without re-fetching or re-decoding. The copy costs one extra
- * 4 bytes * length allocation per track — ~70 MB for a 3-min stereo track
- * at 48 kHz, paid once per loaded track.
- */
+// Large tracks retain their mono samples on the client only.
+const maxCachedMonoBytes = 64 * 1024 * 1024;
 const monoCache = new Map<string, {mono: Float32Array; sampleRate: number}>();
 const decoding = new Map<string, object>();
 
@@ -147,7 +142,11 @@ self.addEventListener('message', async (e: MessageEvent<WorkerRequest>) => {
       return;
     }
     try {
-      const clips = getInitClipData(cached.mono, cached.sampleRate, options);
+      const clips = getSectionedClipData(
+        cached.mono,
+        cached.sampleRate,
+        options,
+      );
       const response: WorkerRedetectResponse = {
         type: 'redetected',
         id,
@@ -199,31 +198,29 @@ self.addEventListener('message', async (e: MessageEvent<WorkerRequest>) => {
       }
     }
 
-    // WAV encode using the original (multi-channel) AudioBuffer so the
-    // playing audio matches the source file's channel layout. Then turn
-    // the resulting Blob into an ArrayBuffer so we can transfer it.
     const wavBlob = audioBufferToWavBlob(audioBuffer);
-    const wavBuffer = await wavBlob.arrayBuffer();
-    if (decoding.get(url) !== token) return;
 
     // Initial clip detection against the requested SplitOptions. This
     // means the first set of clips is available immediately after the
     // decode completes — no second round trip needed.
-    const clips = getInitClipData(mono, audioBuffer.sampleRate, options);
+    const clips = getSectionedClipData(mono, audioBuffer.sampleRate, options);
 
-    // Stash a copy of the mono for future `redetect` messages. The original
-    // is about to be transferred to the main thread and the worker can no
-    // longer read it.
-    monoCache.set(url, {
-      mono: mono.slice(),
-      sampleRate: audioBuffer.sampleRate,
-    });
+    const hasCachedMono = mono.byteLength <= maxCachedMonoBytes;
+    if (hasCachedMono) {
+      monoCache.set(url, {
+        mono: mono.slice(),
+        sampleRate: audioBuffer.sampleRate,
+      });
+    } else {
+      monoCache.delete(url);
+    }
 
     const result: WorkerDecodeResponse = {
       type: 'decoded',
       id,
       url,
-      wavBuffer,
+      wavBlob,
+      hasCachedMono,
       mono,
       sampleRate: audioBuffer.sampleRate,
       duration: audioBuffer.duration,
@@ -232,10 +229,7 @@ self.addEventListener('message', async (e: MessageEvent<WorkerRequest>) => {
       clips,
     };
 
-    // Transfer ownership of the two large buffers to avoid a structured
-    // clone. The mono slice() above is the worker's own copy; the
-    // original here is the one that gets transferred.
-    post(result, [wavBuffer, mono.buffer]);
+    post(result, [mono.buffer]);
   } catch (err) {
     const message = err instanceof Error ? err.message : String(err);
     const error: WorkerDecodeError = {type: 'error', id, url, message};

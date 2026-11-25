@@ -13,12 +13,12 @@ interface AddTracksResult {
 }
 
 export function useAddFiles(
-  addTracks: (files: FileList, playAfter?: boolean) => AddTracksResult,
+  addTracks: (files: FileList, playAfter?: boolean) => Promise<AddTracksResult>,
   onSkipped?: (skipped: number) => void,
 ) {
   const handleFiles = useCallback(
-    (files: FileList, playAfter: boolean = true) => {
-      const {skipped} = addTracks(files, playAfter);
+    async (files: FileList, playAfter: boolean = true) => {
+      const {skipped} = await addTracks(files, playAfter);
       if (skipped > 0) onSkipped?.(skipped);
     },
     [addTracks, onSkipped],

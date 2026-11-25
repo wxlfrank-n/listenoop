@@ -1,4 +1,4 @@
-﻿/**
+/**
  * Encodes a decoded AudioBuffer as a mono WAV blob.
  *
  * Why WAV?
@@ -16,8 +16,11 @@ export function audioBufferToWavBlob(buffer: AudioBuffer): Blob {
   const sampleRate = buffer.sampleRate;
   const numCh = buffer.numberOfChannels;
   const dataSize = length * 2;
-  const arrayBuffer = new ArrayBuffer(44 + dataSize);
-  const view = new DataView(arrayBuffer);
+  if (dataSize > 0xffffffff - 36) {
+    throw new RangeError('Audio exceeds the WAV size limit');
+  }
+  const header = new ArrayBuffer(44);
+  const view = new DataView(header);
 
   // Helper to write ASCII string to buffer (for WAV header markers like "RIFF", "WAVE", etc.)
   const writeString = (offset: number, text: string) => {
@@ -40,23 +43,24 @@ export function audioBufferToWavBlob(buffer: AudioBuffer): Blob {
   writeString(36, 'data');
   view.setUint32(40, dataSize, true);
 
-  let offset = 44;
-  if (numCh === 1) {
-    const ch = buffer.getChannelData(0);
-    for (let i = 0; i < length; i++) {
-      const s = Math.max(-1, Math.min(1, ch[i]!));
-      view.setInt16(offset, s < 0 ? s * 0x8000 : s * 0x7fff, true);
-      offset += 2;
+  const parts: BlobPart[] = [header];
+  const chunkSamples = 256 * 1024;
+  const chunk = new ArrayBuffer(Math.min(length, chunkSamples) * 2);
+  const pcm = new DataView(chunk);
+  const left = buffer.getChannelData(0);
+  const right = numCh > 1 ? buffer.getChannelData(1) : left;
+  for (let start = 0; start < length; start += chunkSamples) {
+    const count = Math.min(chunkSamples, length - start);
+    for (let i = 0; i < count; i++) {
+      const index = start + i;
+      const sample = Math.max(
+        -1,
+        Math.min(1, (left[index]! + right[index]!) * 0.5),
+      );
+      pcm.setInt16(i * 2, sample < 0 ? sample * 0x8000 : sample * 0x7fff, true);
     }
-  } else {
-    const ch0 = buffer.getChannelData(0);
-    const ch1 = buffer.getChannelData(1);
-    for (let i = 0; i < length; i++) {
-      const s = Math.max(-1, Math.min(1, (ch0[i]! + ch1[i]!) * 0.5));
-      view.setInt16(offset, s < 0 ? s * 0x8000 : s * 0x7fff, true);
-      offset += 2;
-    }
+    // Blob snapshots this chunk, so the same scratch buffer can be reused.
+    parts.push(new Blob([new Uint8Array(chunk, 0, count * 2)]));
   }
-
-  return new Blob([arrayBuffer], {type: 'audio/wav'});
+  return new Blob(parts, {type: 'audio/wav'});
 }

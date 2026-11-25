@@ -5,7 +5,7 @@ import {adjacentTrackIndex, sortedTrackIndices} from '../utils/trackOrder';
 import {nextLoopTrackIndex} from '../utils/loopMode';
 import {useState} from 'react';
 import {decodeAudio, evictAudio} from '../workers/audioDecoderClient';
-import {initializeAudioContext} from '../utils/audio';
+import {decodeAudioBuffer, initializeAudioContext} from '../utils/audio';
 import {addListener, addListeners} from '../utils/listener';
 import {store} from '../store/store';
 import {useAppDispatch, useAppSelector} from '../store/hooks';
@@ -50,6 +50,7 @@ function snatchToStart(audio: HTMLAudioElement, time: number) {
     }
     stop();
   });
+  return stop;
 }
 
 // Fresh read of player state for imperative callbacks (event handlers, rAF).
@@ -626,6 +627,8 @@ export function useAudioPlayer(skipSeconds: number, playbackSpeed = 1) {
   // new range (e.g. clicking another clip) drops the previous one instead of
   // letting the old range keep looping/pausing.
   const rangeRafRef = useRef(0);
+  const rangeResumeTimerRef = useRef(0);
+  const startSnapStopRef = useRef<(() => void) | null>(null);
   const rangeEndedStopRef = useRef<(() => void) | null>(null);
   // Monotonic id so a late callback (stale resume timer / event) from a
   // previous range can never touch the state of the range that replaced it.
@@ -633,6 +636,10 @@ export function useAudioPlayer(skipSeconds: number, playbackSpeed = 1) {
 
   const stopRangeMonitoring = useCallback(() => {
     rangeRunIdRef.current++;
+    window.clearTimeout(rangeResumeTimerRef.current);
+    rangeResumeTimerRef.current = 0;
+    startSnapStopRef.current?.();
+    startSnapStopRef.current = null;
     if (rangeRafRef.current) {
       cancelAnimationFrame(rangeRafRef.current);
       rangeRafRef.current = 0;
@@ -741,7 +748,10 @@ export function useAudioPlayer(skipSeconds: number, playbackSpeed = 1) {
       holdAtEndRef.current = false;
       const range = getTrimRange();
       if (range) time = Math.max(range.start, Math.min(range.end, time));
-      if (audio.paused) snatchToStart(audio, time);
+      startSnapStopRef.current?.();
+      startSnapStopRef.current = audio.paused
+        ? snatchToStart(audio, time)
+        : null;
       audio.currentTime = time;
       console.debug('Seek to:', time);
       dispatch(setCurrentTime(time));
@@ -750,14 +760,36 @@ export function useAudioPlayer(skipSeconds: number, playbackSpeed = 1) {
   );
 
   const addTracks = useCallback(
-    (files: FileList, playAfter: boolean = false) => {
+    async (
+      files: FileList,
+      playAfter: boolean = false,
+      canAdd = () => true,
+    ) => {
       const all = Array.from(files);
-      const supported = ['.mp3', '.wav', '.ogg', '.m4a', '.flac', '.webm'];
-      const audioFiles = all.filter(f =>
-        supported.some(ext => f.name.toLowerCase().endsWith(ext)),
-      );
-      const skipped = all.length - audioFiles.length;
-      const newTracks: Track[] = audioFiles.map(file => {
+      const supported = /\.(mp3|wav|ogg|m4a|flac|webm)$/i;
+      const validated: {file: File; duration: number}[] = [];
+      for (const file of all) {
+        if (!canAdd()) return {added: 0, skipped: 0};
+        if (!file.size || !supported.test(file.name)) continue;
+
+        // Check the bytes with the same audio decoder used when analysis runs
+        // on the main thread. Validate sequentially to limit memory use.
+        const url = URL.createObjectURL(file);
+        try {
+          const {buffer} = await decodeAudioBuffer(url);
+          if (buffer.length > 0 && buffer.duration > 0) {
+            validated.push({file, duration: buffer.duration});
+          }
+        } catch {
+          // A supported suffix can still contain corrupt or unsupported audio.
+        } finally {
+          URL.revokeObjectURL(url);
+        }
+      }
+      if (!canAdd()) return {added: 0, skipped: 0};
+
+      const skipped = all.length - validated.length;
+      const newTracks: Track[] = validated.map(({file, duration}) => {
         const url = URL.createObjectURL(file);
         trackBlobUrl(url);
         importedFilesRef.current.set(url, file);
@@ -765,7 +797,7 @@ export function useAudioPlayer(skipSeconds: number, playbackSpeed = 1) {
           id: crypto.randomUUID(),
           title: file.name.replace(/\.[^/.]+$/, ''),
           artist: 'Unknown Artist',
-          duration: 0,
+          duration,
           url,
         };
       });
@@ -1002,22 +1034,6 @@ export function useAudioPlayer(skipSeconds: number, playbackSpeed = 1) {
        */
       let seeking = true;
 
-      let seekRequestTs = performance.now();
-
-      let recoveryAttempts = 0;
-
-      let resumeTimer = 0;
-
-      const cancelResume = () => {
-        if (!resumeTimer) {
-          return;
-        }
-
-        window.clearTimeout(resumeTimer);
-
-        resumeTimer = 0;
-      };
-
       const stopLoop = () => {
         if (!rangeRafRef.current) {
           return;
@@ -1029,8 +1045,11 @@ export function useAudioPlayer(skipSeconds: number, playbackSpeed = 1) {
       };
 
       const cleanupRange = () => {
-        cancelResume();
-
+        window.clearTimeout(rangeResumeTimerRef.current);
+        rangeResumeTimerRef.current = 0;
+        startSnapStopRef.current?.();
+        startSnapStopRef.current = null;
+        suppressRangePauseRef.current = false;
         stopLoop();
 
         rangeEndedStopRef.current?.();
@@ -1149,9 +1168,9 @@ export function useAudioPlayer(skipSeconds: number, playbackSpeed = 1) {
 
         seeking = true;
 
-        seekRequestTs = performance.now();
-
-        cancelResume();
+        window.clearTimeout(rangeResumeTimerRef.current);
+        startSnapStopRef.current?.();
+        startSnapStopRef.current = null;
 
         /*
          * This pause is part of looping.
@@ -1168,7 +1187,6 @@ export function useAudioPlayer(skipSeconds: number, playbackSpeed = 1) {
           firstStart > start &&
           audio.currentTime === firstStart &&
           !audio.seeking;
-        seeking = !resumeInPlace;
         if (!resumeInPlace) audio.currentTime = seekTarget;
 
         dispatch(setCurrentTime(seekTarget));
@@ -1182,33 +1200,50 @@ export function useAudioPlayer(skipSeconds: number, playbackSpeed = 1) {
           onRepeat?.();
         }
 
-        /*
-         * Give the seek a short time to settle.
-         */
-        resumeTimer = window.setTimeout(() => {
-          suppressRangePauseRef.current = false;
+        let seekRequestedAt = performance.now();
+        let retried = false;
+        const resumeWhenReady = () => {
+          if (runId !== rangeRunIdRef.current) return;
 
-          if (runId !== rangeRunIdRef.current) {
+          rangeResumeTimerRef.current = 0;
+          // A slow seek can outlast the initial delay. Keep the old audio
+          // paused until the browser has settled at the new range start.
+          if (
+            audio.seeking ||
+            Math.abs(audio.currentTime - seekTarget) > 0.05
+          ) {
+            if (performance.now() - seekRequestedAt >= 3000) {
+              if (retried) {
+                abortLoop();
+                return;
+              }
+              retried = true;
+              seekRequestedAt = performance.now();
+              audio.currentTime = seekTarget;
+            }
+            rangeResumeTimerRef.current = window.setTimeout(
+              resumeWhenReady,
+              50,
+            );
             return;
           }
 
-          resumeTimer = 0;
-
-          if (!resumeInPlace) snatchToStart(audio, seekTarget);
-
+          if (!resumeInPlace) {
+            startSnapStopRef.current = snatchToStart(audio, seekTarget);
+          }
+          seeking = false;
+          suppressRangePauseRef.current = false;
           audio
             .play()
             .then(() => {
-              if (runId !== rangeRunIdRef.current) {
-                return;
-              }
-
-              dispatch(setIsPlaying(true));
+              if (runId === rangeRunIdRef.current) dispatch(setIsPlaying(true));
             })
             .catch(error => {
               if (runId === rangeRunIdRef.current) reportPlaybackError(error);
             });
-        }, 50);
+        };
+
+        rangeResumeTimerRef.current = window.setTimeout(resumeWhenReady, 50);
       };
 
       const tick = () => {
@@ -1222,81 +1257,16 @@ export function useAudioPlayer(skipSeconds: number, playbackSpeed = 1) {
 
         const t = audio.currentTime;
 
-        if (seeking) {
-          const seekTarget = count === 0 ? firstStart : start;
-          const nearStart = t >= seekTarget - 0.05 && t <= seekTarget + 0.15;
-
-          if (nearStart) {
-            seeking = false;
-
-            /*
-             * A successful seek resets recovery state.
-             */
-            recoveryAttempts = 0;
-          } else if (performance.now() - seekRequestTs > 3000) {
-            /*
-             * iOS occasionally ignores the first seek.
-             */
-            if (recoveryAttempts < 1) {
-              recoveryAttempts++;
-
-              suppressRangePauseRef.current = true;
-
-              audio.pause();
-
-              audio.currentTime = seekTarget;
-
-              seekRequestTs = performance.now();
-
-              suppressRangePauseRef.current = false;
-
-              audio
-                .play()
-                .then(() => {
-                  if (runId !== rangeRunIdRef.current) {
-                    return;
-                  }
-
-                  dispatch(setIsPlaying(true));
-                })
-                .catch(error => {
-                  if (runId === rangeRunIdRef.current)
-                    reportPlaybackError(error);
-                });
-            } else {
-              abortLoop();
-
-              return;
-            }
-          }
-        } else {
-          /*
-           * Clip boundary.
-           */
-          if (t >= end) {
-            count++;
-
-            /*
-             * Last repetition.
-             */
-            if (count >= repetitions) {
-              finishLoop();
-
-              return;
-            }
-
-            /*
-             * Another repetition remains.
-             */
-            resetToStart(true);
-          } else if (t < start - 0.05) {
-            /*
-             * Unexpected backwards movement.
-             */
-            abortLoop();
-
+        if (!seeking && t >= end) {
+          count++;
+          if (count >= repetitions) {
+            finishLoop();
             return;
           }
+          resetToStart(true);
+        } else if (!seeking && t < start - 0.05) {
+          abortLoop();
+          return;
         }
 
         rangeRafRef.current = requestAnimationFrame(tick);

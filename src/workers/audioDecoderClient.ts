@@ -28,7 +28,7 @@
  *     browsers don't pay the failed round-trip tax on every track.
  *
  * The fallback reuses `decodeAudioBuffer` + `audioBufferToWavBlob` +
- * `getInitClipData` on the main thread (`decodeAudioBuffer` uses the regular
+ * `getSectionedClipData` on the main thread (`decodeAudioBuffer` uses the regular
  * `AudioContext`, which IS available on the main thread in every browser
  * that supports Web Audio). The app still works — just with the old UI
  * freeze during decode.
@@ -38,7 +38,7 @@ import AudioDecoderWorker from './audioDecoder.worker.ts?worker';
 import {decodeAudioBuffer} from '../utils/audio';
 import {audioBufferToWavBlob} from '../utils/wav';
 import {
-  getInitClipData,
+  getSectionedClipData,
   type InitClipData,
   type SplitOptions,
 } from '../utils/clips';
@@ -62,6 +62,8 @@ export const WORKER_OFFLINE_AUDIO_UNSUPPORTED =
 export interface DecodeResult {
   /** WAV-encoded audio as a Blob (ready for `URL.createObjectURL`). */
   wavBlob: Blob;
+  hasCachedMono: boolean;
+  detectionOptions: SplitOptions;
   /** Mono downmixed samples (the same data the worker transferred). */
   mono: Float32Array;
   sampleRate: number;
@@ -192,7 +194,9 @@ function getWorker(): Worker {
         if (!entry) return;
         pending.delete(data.id);
         const result: DecodeResult = {
-          wavBlob: new Blob([data.wavBuffer], {type: 'audio/wav'}),
+          wavBlob: data.wavBlob,
+          hasCachedMono: data.hasCachedMono,
+          detectionOptions: entry.options,
           mono: data.mono,
           sampleRate: data.sampleRate,
           duration: data.duration,
@@ -340,25 +344,38 @@ export function decodeAudio(
 }
 
 /**
- * Re-run clip detection against the cached mono samples for `url` using
- * the supplied `options`. The worker keeps a copy of the mono from the
- * previous `decode`, so this is fast (~10–50 ms for typical tracks) and
- * does not re-fetch or re-decode.
- *
- * Rejects if `url` has not been decoded via `decodeAudio` first — the
- * worker has no mono to operate on. Callers should only invoke this once
- * the waveform is in the `'ready'` state.
+ * Re-run clip detection against the cached mono samples. Large tracks keep
+ * a single copy on the client to reduce memory use during analysis.
+ * Call once the waveform is ready.
  */
 export function redetectClips(
   url: string,
   options: SplitOptions,
 ): Promise<InitClipData> {
-  // If the worker can't decode, it also has no mono cache. Re-run clip
-  // detection against the main-thread decode result instead.
-  if (!workerDecodeCapable) {
-    return redetectViaMainThread(url, options);
-  }
+  const cached = cache.get(url);
+  if (!cached)
+    return Promise.reject(new Error('No cached decode for redetectClips'));
+  return cached.then(result => {
+    const initial = result.detectionOptions;
+    if (
+      initial.blockMs === options.blockMs &&
+      initial.silenceRatio === options.silenceRatio &&
+      initial.minClipLength === options.minClipLength &&
+      initial.expansionRate === options.expansionRate &&
+      initial.longClipThreshold === options.longClipThreshold
+    ) {
+      return result.clips;
+    }
+    return workerDecodeCapable && result.hasCachedMono
+      ? redetectViaWorker(url, options)
+      : getSectionedClipData(result.mono, result.sampleRate, options);
+  });
+}
 
+function redetectViaWorker(
+  url: string,
+  options: SplitOptions,
+): Promise<InitClipData> {
   return new Promise<InitClipData>((resolve, reject) => {
     const id = nextRequestId++;
     pendingRedetect.set(id, {resolve, reject, url, options});
@@ -397,13 +414,13 @@ function redetectViaMainThread(
     return Promise.reject(new Error('No cached decode for redetectClips'));
   }
   return cached.then(result =>
-    getInitClipData(result.mono, result.sampleRate, options),
+    getSectionedClipData(result.mono, result.sampleRate, options),
   );
 }
 
 /**
  * Main-thread fallback when the worker can't run. Uses the existing
- * `decodeAudioBuffer` + `audioBufferToWavBlob` + `getInitClipData` so
+ * `decodeAudioBuffer` + `audioBufferToWavBlob` + `getSectionedClipData` so
  * behaviour matches the pre-worker implementation exactly.
  *
  * `decodeAudioBuffer` uses the regular `AudioContext` (NOT
@@ -438,10 +455,12 @@ async function decodeViaMainThread(
   }
 
   const wavBlob = audioBufferToWavBlob(buffer);
-  const clips = getInitClipData(mono, buffer.sampleRate, options);
+  const clips = getSectionedClipData(mono, buffer.sampleRate, options);
 
   return {
     wavBlob,
+    hasCachedMono: false,
+    detectionOptions: options,
     mono,
     sampleRate: buffer.sampleRate,
     duration: buffer.duration,

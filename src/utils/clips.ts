@@ -75,6 +75,57 @@ export function getInitClipData(
     finiteOr(options.longClipThreshold, 1),
   );
 }
+/** Detect in five-minute windows, retaining context on both sides of each seam. */
+export function getSectionedClipData(
+  data: Float32Array,
+  sampleRate: number,
+  options: SplitOptions,
+): InitClipData {
+  const section = Math.round(300 * sampleRate);
+  if (!Number.isFinite(section) || section <= 0 || data.length <= section) {
+    return getInitClipData(data, sampleRate, options);
+  }
+  const overlap = Math.round(2 * sampleRate);
+  const clips: Clip[] = [];
+  for (let start = 0; start < data.length; start += section) {
+    const end = Math.min(start + section, data.length);
+    const from = Math.max(0, start - overlap);
+    const to = Math.min(data.length, end + overlap);
+    const offset = from / sampleRate;
+    const local = getInitClipData(data.subarray(from, to), sampleRate, options);
+    for (const clip of local.clips) {
+      const center = (clip.start + clip.end) / 2 + offset;
+      if (center < start / sampleRate || center >= end / sampleRate) continue;
+      const startTime = Math.max(clip.start + offset, clips.at(-1)?.end ?? 0);
+      const endTime = clip.end + offset;
+      if (endTime <= startTime) continue;
+      const source = clip.longClipSource;
+      clips.push({
+        start: startTime,
+        end: endTime,
+        vStart: startTime,
+        vEnd: endTime,
+        ...(source && {
+          longClipSource: {
+            start: source.start + offset,
+            end: source.end + offset,
+          },
+        }),
+      });
+    }
+  }
+  const expansion = Math.max(
+    0.25,
+    Math.min(0.4, finiteOr(options.expansionRate, 0.25)),
+  );
+  return padAndGroup(
+    clips,
+    data.length / sampleRate,
+    expansion,
+    options.minClipLength,
+  );
+}
+
 function finiteOr(value: number | undefined, fallback: number): number {
   return value !== undefined && Number.isFinite(value) ? value : fallback;
 }
@@ -342,7 +393,7 @@ function canSplitAt(time: number, start: number, end: number, minimum: number) {
   );
 }
 
-/** Find and rank local minima once for the original long clip. */
+/** Find local minima once for the original long clip. */
 function findFallbackValleys(db: Float32Array): FallbackValley[] {
   const candidates: FallbackValley[] = [];
   for (let first = 1; first < db.length - 1; first++) {
@@ -356,7 +407,7 @@ function findFallbackValleys(db: Float32Array): FallbackValley[] {
     first = last;
   }
 
-  return candidates.sort((a, b) => a.level - b.level || a.first - b.first);
+  return candidates;
 }
 
 function findFallbackSplitTimes(
@@ -373,14 +424,36 @@ function findFallbackSplitTimes(
   const duration = clip.end - clip.start;
   const limit = duration < 2 ? 1 : duration < 3 ? 2 : 3;
   const selected: number[] = [];
-  for (const {first, last} of candidates) {
-    if (first <= from || last >= to - 1) continue;
-    const time = timeAtFrame((first + last) / 2);
-    if (!canSplitAt(time, clip.start, clip.end, minimum)) continue;
-    if (selected.every(other => Math.abs(time - other) + 1e-9 >= minimum)) {
-      selected.push(time);
-      if (selected.length === limit) break;
+  // Candidates are ordered by frame. Restrict each search to this piece,
+  // especially when a long source clip has already split into many pieces.
+  let low = 0;
+  let high = candidates.length;
+  while (low < high) {
+    const mid = low + Math.floor((high - low) / 2);
+    if (candidates[mid]!.first <= from) low = mid + 1;
+    else high = mid;
+  }
+  for (let split = 0; split < limit; split++) {
+    let bestLevel = Infinity;
+    let bestTime: number | undefined;
+    for (let i = low; i < candidates.length; i++) {
+      const {first, last, level} = candidates[i]!;
+      if (last >= to - 1) break;
+      if (level >= bestLevel) continue;
+      const time = timeAtFrame((first + last) / 2);
+      if (!canSplitAt(time, clip.start, clip.end, minimum)) continue;
+      if (
+        selected.some(
+          other => time === other || Math.abs(time - other) + 1e-9 < minimum,
+        )
+      ) {
+        continue;
+      }
+      bestLevel = level;
+      bestTime = time;
     }
+    if (bestTime === undefined) break;
+    selected.push(bestTime);
   }
   return selected.sort((a, b) => a - b);
 }
@@ -450,6 +523,15 @@ function finalizeClips(
     longClipThreshold,
   );
   clips = enforceMinClipLength(clips, minClipLength);
+  return padAndGroup(clips, duration, expansionRate, minClipLength);
+}
+
+function padAndGroup(
+  clips: Clip[],
+  duration: number,
+  expansionRate: number,
+  minClipLength: number,
+): InitClipData {
   if (!clips.length) return {clips: [], gaps: [], initGap: 0};
   expandClips(clips, duration, expansionRate, minClipLength / 2);
   const gaps = getClipGaps(clips);

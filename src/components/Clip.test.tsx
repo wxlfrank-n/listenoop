@@ -1,6 +1,6 @@
 // @vitest-environment jsdom
 
-import {cleanup, fireEvent, render} from '@testing-library/react';
+import {act, cleanup, fireEvent, render} from '@testing-library/react';
 import {
   afterEach,
   beforeAll,
@@ -11,6 +11,7 @@ import {
   vi,
 } from 'vitest';
 import {Clip} from './Clip';
+import {ClipAnnotationProvider} from './ClipAnnotations';
 import {clipGestureLedger, clipPinchState} from './clipPinch';
 import type {WaveWindow} from '../types';
 import type {Clip as InitClipData} from '../utils/clips';
@@ -108,6 +109,114 @@ beforeEach(() => {
  */
 afterEach(() => {
   cleanup();
+});
+
+it('toggles a persistent review mark without playing or editing the clip', () => {
+  vi.useFakeTimers();
+  const trackId = 'review-test';
+  const storageKey = 'listenoop:clip-annotations:' + trackId;
+  const onPlayRange = vi.fn();
+  const onSwipe = vi.fn();
+  const renderTrack = (id: string, withSecondClip = false) =>
+    render(
+      <ClipAnnotationProvider trackId={id}>
+        <Clip
+          clip={clip}
+          window={windowConfig}
+          id={0}
+          active={false}
+          onPlayRange={onPlayRange}
+          repetitions={3}
+          playing={false}
+          onActivate={vi.fn()}
+          onSwipe={onSwipe}
+        />
+        {withSecondClip && (
+          <Clip
+            clip={{start: 4, end: 5, vStart: 4, vEnd: 5}}
+            window={windowConfig}
+            id={1}
+            active={false}
+            onPlayRange={onPlayRange}
+            repetitions={3}
+            playing={false}
+            onActivate={vi.fn()}
+            onSwipe={onSwipe}
+          />
+        )}
+      </ClipAnnotationProvider>,
+    );
+  const pointer = {
+    button: 0,
+    pointerId: 1,
+    pointerType: 'touch',
+    clientX: 100,
+    clientY: 100,
+  };
+
+  function hold(rect: HTMLElement, release = true) {
+    const wasAnnotated = rect.classList.contains('waveform-clip--annotated');
+    fireEvent.pointerDown(rect, pointer);
+    void act(() => {
+      vi.advanceTimersByTime(2000);
+    });
+    expect(rect.classList.contains('waveform-clip--annotated')).toBe(
+      wasAnnotated,
+    );
+    void act(() => {
+      vi.advanceTimersByTime(1);
+    });
+    expect(rect.classList.contains('waveform-clip--annotated')).toBe(
+      !wasAnnotated,
+    );
+    if (release) {
+      fireEvent.pointerUp(rect, pointer);
+      fireEvent.click(rect);
+    }
+  }
+
+  try {
+    const first = renderTrack(trackId);
+    const rect = first.getByRole('button');
+    fireEvent.pointerDown(rect, pointer);
+    fireEvent.pointerMove(rect, {...pointer, clientX: 120});
+    void act(() => {
+      vi.advanceTimersByTime(2001);
+    });
+    fireEvent.pointerUp(rect, {...pointer, clientX: 120});
+    expect(rect.classList.contains('waveform-clip--annotated')).toBe(false);
+
+    hold(rect);
+    expect(rect.classList.contains('waveform-clip--annotated')).toBe(true);
+    first.unmount();
+
+    const other = renderTrack('another-track');
+    expect(
+      other.getByRole('button').classList.contains('waveform-clip--annotated'),
+    ).toBe(false);
+    other.unmount();
+
+    const reopened = renderTrack(trackId, true);
+    const [reopenedRect, secondClip] = reopened.getAllByRole('button');
+    expect(reopenedRect.classList.contains('waveform-clip--annotated')).toBe(
+      true,
+    );
+    hold(reopenedRect, false);
+    expect(reopenedRect.classList.contains('waveform-clip--annotated')).toBe(
+      false,
+    );
+    expect(localStorage.getItem(storageKey)).toBe('[]');
+    expect(onPlayRange).not.toHaveBeenCalled();
+    const nextPointer = {...pointer, pointerId: 2};
+    fireEvent.pointerDown(secondClip, nextPointer);
+    fireEvent.pointerUp(secondClip, nextPointer);
+    fireEvent.click(secondClip);
+    expect(onPlayRange).toHaveBeenCalledExactlyOnceWith(4, 5, 3);
+    expect(onSwipe).not.toHaveBeenCalled();
+  } finally {
+    vi.useRealTimers();
+    localStorage.removeItem(storageKey);
+  }
 });
 
 describe('Clip gestures', () => {

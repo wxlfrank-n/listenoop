@@ -67,6 +67,7 @@ export interface Theme {
   accentDimRgb: string;
   /** Clip swipe hint icon color (pack/unpack affordance on the active clip). */
   clipSwipe: string;
+  clipAnnotation: string;
   /** Waveform bar color for the played portion. */
   waveformBarPlayed: string;
 }
@@ -95,6 +96,7 @@ export const THEMES: Record<StaticThemeId, Theme> = {
     clipLabelText: '#DFF7FF',
     clipLabelBorder: '#344276',
     clipSwipe: '#40FFFF',
+    clipAnnotation: '#DB2777',
     accent: '#00E8C0',
     accentInk: '#40FFFF',
     accentDim: '#00D4AF',
@@ -124,6 +126,7 @@ export const THEMES: Record<StaticThemeId, Theme> = {
     clipLabelText: '#F4F8FF',
     clipLabelBorder: '#576D90',
     clipSwipe: '#BAF5FC',
+    clipAnnotation: '#6255A5',
     accent: '#9DECF4',
     accentDim: '#85DCEB',
     onAccent: '#10182C',
@@ -159,6 +162,7 @@ export const THEMES: Record<StaticThemeId, Theme> = {
     accentRgb: '42, 161, 152',
     accentDimRgb: '42, 161, 152',
     clipSwipe: '#52BDB3',
+    clipAnnotation: '#F4A7C5',
   },
   midnight: {
     label: 'Gruvbox Dark',
@@ -188,6 +192,7 @@ export const THEMES: Record<StaticThemeId, Theme> = {
     accentRgb: '250, 189, 47',
     accentDimRgb: '250, 189, 47',
     clipSwipe: '#FABD2F',
+    clipAnnotation: '#EFA7CB',
   },
   nova: {
     label: 'Tokyo Night',
@@ -217,6 +222,7 @@ export const THEMES: Record<StaticThemeId, Theme> = {
     accentRgb: '122, 162, 247',
     accentDimRgb: '122, 162, 247',
     clipSwipe: '#7AA2F7',
+    clipAnnotation: '#F49BC2',
   },
   light: {
     label: 'Spring',
@@ -246,6 +252,7 @@ export const THEMES: Record<StaticThemeId, Theme> = {
     accentRgb: '61, 123, 34',
     accentDimRgb: '50, 101, 27',
     clipSwipe: '#2B5519',
+    clipAnnotation: '#8B3A62',
   },
   paper: {
     label: 'Summer',
@@ -275,6 +282,7 @@ export const THEMES: Record<StaticThemeId, Theme> = {
     accentRgb: '0, 143, 232',
     accentDimRgb: '0, 143, 232',
     clipSwipe: '#17649B',
+    clipAnnotation: '#9B3C68',
   },
   autumn: {
     label: 'Autumn',
@@ -304,6 +312,7 @@ export const THEMES: Record<StaticThemeId, Theme> = {
     accentRgb: '255, 176, 0',
     accentDimRgb: '255, 176, 0',
     clipSwipe: '#8C5300',
+    clipAnnotation: '#883D69',
   },
   winter: {
     label: 'Winter',
@@ -333,6 +342,7 @@ export const THEMES: Record<StaticThemeId, Theme> = {
     accentRgb: '33, 150, 210',
     accentDimRgb: '33, 150, 210',
     clipSwipe: '#1B6492',
+    clipAnnotation: '#84549F',
   },
   rose: {
     label: 'Lilac',
@@ -361,6 +371,7 @@ export const THEMES: Record<StaticThemeId, Theme> = {
     accentRgb: '109, 70, 184',
     accentDimRgb: '95, 60, 191',
     clipSwipe: '#5f3cbf',
+    clipAnnotation: '#A33466',
     accentInk: '#6d46b8',
   },
   qinghua: {
@@ -390,6 +401,7 @@ export const THEMES: Record<StaticThemeId, Theme> = {
     accentRgb: '0, 56, 168',
     accentDimRgb: '0, 40, 120',
     clipSwipe: '#0038a8',
+    clipAnnotation: '#8B4A70',
     accentInk: '#0038a8',
   },
   yingluo: {
@@ -419,6 +431,7 @@ export const THEMES: Record<StaticThemeId, Theme> = {
     accentRgb: '199, 21, 133',
     accentDimRgb: '160, 16, 104',
     clipSwipe: '#c71585',
+    clipAnnotation: '#6246A4',
     accentInk: '#c71585',
   },
   norge: {
@@ -448,6 +461,7 @@ export const THEMES: Record<StaticThemeId, Theme> = {
     accentRgb: '186, 12, 47',
     accentDimRgb: '150, 9, 37',
     clipSwipe: '#ba0c2f',
+    clipAnnotation: '#255297',
     accentInk: '#ba0c2f',
   },
 };
@@ -506,6 +520,7 @@ export function applyThemeVars(theme: ThemeId): void {
     ['--accent-rgb', t.accentRgb],
     ['--accent-dim-rgb', t.accentDimRgb],
     ['--clip-swipe', t.clipSwipe],
+    ['--clip-annotation', t.clipAnnotation],
   ];
   for (const [key, value] of vars) {
     root.style.setProperty(key, value);

@@ -29,6 +29,7 @@
 
 import {
   memo,
+  useContext,
   useEffect,
   useMemo,
   useRef,
@@ -39,13 +40,15 @@ import {createPortal} from 'react-dom';
 import {useDrag} from '@use-gesture/react';
 import {useT} from '../i18n';
 
-import {clipGestureLedger} from './clipPinch';
+import {clipGestureLedger, clipPinchState} from './clipPinch';
 
 import {
   getClipSplitBoundaries,
   type Clip as InitClipData,
 } from '../utils/clips';
 import type {SwipeDirection, WaveWindow} from '../types';
+
+import {ClipAnnotations} from './ClipAnnotations';
 
 import './Clip.css';
 
@@ -98,6 +101,7 @@ export interface ClipProps {
 
 const SWIPE_THRESHOLD_PX = 10;
 const TAP_THRESHOLD_PX = 4;
+const ANNOTATION_HOLD_MS = 2001;
 
 /*
  * Diagonal band boundaries, expressed as the slope of |dy|/|dx| (tan of the
@@ -227,6 +231,13 @@ export const Clip = memo(
   }: ClipProps) => {
     const {windowStartSec, windowLen, innerH, vbH} = window;
     const t = useT();
+    const annotations = useContext(ClipAnnotations);
+    const annotationKey = `${clip.start}:${clip.end}`;
+    const annotated = annotations?.marks.has(annotationKey);
+    const holdTimer = useRef<ReturnType<typeof setTimeout> | undefined>(
+      undefined,
+    );
+    const held = useRef(false);
     const splitBoundaries = useMemo(
       () => getClipSplitBoundaries(clip, minClipLength),
       [clip, minClipLength],
@@ -266,6 +277,7 @@ export const Clip = memo(
     const pointerIdsRef = useRef<Set<number>>(new Set());
     useEffect(
       () => () => {
+        clearTimeout(holdTimer.current);
         for (const pointerId of pointerIdsRef.current) {
           clipGestureLedger.active.delete(pointerId);
         }
@@ -320,9 +332,21 @@ export const Clip = memo(
      * `buttons: -1` keeps the historical behavior of reacting to any button.
      */
     const bindClip = useDrag(
-      ({first, last, event, initial, target, currentTarget}) => {
+      ({
+        first,
+        last,
+        canceled,
+        cancel,
+        event,
+        initial,
+        target,
+        currentTarget,
+      }) => {
+        if (canceled) return;
         if (first) {
           suppressClickRef.current = false;
+          held.current = false;
+          clearTimeout(holdTimer.current);
           const bounds = canSplit
             ? clipRef.current?.getBoundingClientRect()
             : undefined;
@@ -356,6 +380,25 @@ export const Clip = memo(
           if (clipGestureLedger.active.size > 1) {
             clipGestureLedger.multi = true;
           }
+          if (annotations && (event as PointerEvent).button === 0) {
+            holdTimer.current = setTimeout(() => {
+              if (
+                clipPinchState.active ||
+                clipGestureLedger.multi ||
+                !clipGestureLedger.active.has(pointerId)
+              )
+                return;
+              held.current = true;
+              suppressClickRef.current = true;
+              // Finish the hold even if the browser never delivers pointer-up.
+              pointerIdsRef.current.delete(pointerId);
+              clipGestureLedger.active.delete(pointerId);
+              clipGestureLedger.multi = false;
+              clipGestureLedger.clipSwipeLocked = false;
+              cancel();
+              annotations.toggle(annotationKey);
+            }, ANNOTATION_HOLD_MS);
+          }
 
           return;
         }
@@ -372,7 +415,11 @@ export const Clip = memo(
 
         const dy = pointer.clientY - initial[1];
 
+        if (last || Math.hypot(dx, dy) >= TAP_THRESHOLD_PX) {
+          clearTimeout(holdTimer.current);
+        }
         if (!last) {
+          if (held.current) return;
           /*
            * Once a move clearly reads as a clip gesture, the clip owns the
            * pointer: stand the parent's horizontal pan/page drag down so it
@@ -408,7 +455,7 @@ export const Clip = memo(
         setSwipeDir(null);
         setHintPos(null);
 
-        if (event.type === 'pointercancel') {
+        if (held.current || event.type === 'pointercancel') {
           suppressClickRef.current = true;
 
           return;
@@ -529,7 +576,7 @@ export const Clip = memo(
         ref={clipRef}
         className={`waveform-clip ${active ? 'waveform-clip--active' : ''} ${
           swipeAction ? 'waveform-clip--swiping' : ''
-        }${longClipDescription ? ' waveform-clip--long-source' : ''}`}
+        }${longClipDescription ? ' waveform-clip--long-source' : ''}${annotated ? ' waveform-clip--annotated' : ''}`}
         title={
           longClipDescription ??
           `${formatSeconds(clip.start)} – ${formatSeconds(clip.end)}`
@@ -551,6 +598,8 @@ export const Clip = memo(
           width: `${widthPct}%`,
           height: `${heightPct}%`,
         }}
+        data-needs-review={annotated || undefined}
+        onContextMenu={annotations ? e => e.preventDefault() : undefined}
         onClick={handleClick}
         onKeyDown={e => {
           if (e.key === 'Enter' || e.key === ' ') {

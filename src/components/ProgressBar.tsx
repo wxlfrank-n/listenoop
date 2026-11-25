@@ -1,3 +1,4 @@
+import {ClipAnnotationProvider} from './ClipAnnotations';
 /**
  * Main progress and waveform visualization component.
  *
@@ -466,7 +467,7 @@ export function ProgressBar({
   );
 
   return (
-    <>
+    <ClipAnnotationProvider key={trackId} trackId={trackId}>
       <div className="progress-container">
         {/*
          * -----------------------------------------------------
@@ -594,6 +595,6 @@ export function ProgressBar({
           disabled={playing}
         />
       )}
-    </>
+    </ClipAnnotationProvider>
   );
 }

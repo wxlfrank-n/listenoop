@@ -27,6 +27,12 @@
   outline-offset: -1px;
 }
 
+.waveform-clip.waveform-clip--annotated {
+  background: color-mix(in srgb, var(--clip-annotation) 30%, transparent);
+  outline: 2px solid var(--clip-annotation);
+  outline-offset: -2px;
+}
+
 .waveform-clip__boundary {
   position: absolute;
   top: 0;

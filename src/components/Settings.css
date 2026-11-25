@@ -482,7 +482,7 @@
 }
 
 .theme-card--active .theme-card__swatch {
-  border: 2px solid var(--accent);
+  border-width: 2px;
 }
 
 .theme-card__dot {

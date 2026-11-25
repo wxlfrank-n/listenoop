@@ -9,6 +9,7 @@
  */
 
 export type ThemeId =
+  | 'glass'
   | 'dark'
   | 'light'
   | 'midnight'
@@ -100,6 +101,35 @@ export const THEMES: Record<StaticThemeId, Theme> = {
     accentRgb: '0, 232, 192',
     accentDimRgb: '0, 212, 175',
     onAccent: '#060A24',
+  },
+  glass: {
+    label: 'Glass',
+    colorScheme: 'dark',
+    bgPrimary: '#10182C',
+    bgSecondary: '#1D2A43',
+    bgTertiary: '#2B3C5C',
+    bgHover: '#384D71',
+    bgPanel: '#202E49',
+    textPrimary: '#F4F8FF',
+    textSecondary: '#CBD9EF',
+    textTertiary: '#ACBFDD',
+    border: '#576D90',
+    danger: '#FF9FAE',
+    waveformBgTop: '#253858',
+    waveformBgMid: '#1D2A43',
+    waveformBar: '#83A8DA',
+    waveformBarSilent: '#536E97',
+    waveformBarPlayed: '#9DECF4',
+    clipLabelBg: '#253858',
+    clipLabelText: '#F4F8FF',
+    clipLabelBorder: '#576D90',
+    clipSwipe: '#BAF5FC',
+    accent: '#9DECF4',
+    accentDim: '#85DCEB',
+    onAccent: '#10182C',
+    accentInk: '#BAF5FC',
+    accentRgb: '157, 236, 244',
+    accentDimRgb: '133, 220, 235',
   },
   dark: {
     label: 'Solarized Dark',
@@ -422,7 +452,21 @@ export const THEMES: Record<StaticThemeId, Theme> = {
   },
 };
 
-export const THEME_IDS = Object.keys(THEMES) as ThemeId[];
+export const THEME_IDS: readonly ThemeId[] = [
+  'listenoop',
+  'glass',
+  'dark',
+  'light',
+  'midnight',
+  'paper',
+  'autumn',
+  'winter',
+  'rose',
+  'nova',
+  'qinghua',
+  'yingluo',
+  'norge',
+];
 
 export const DEFAULT_THEME: ThemeId = 'listenoop';
 

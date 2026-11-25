@@ -41,6 +41,7 @@ const TAB_LABEL_KEYS: Record<SettingsTabId, TranslationKey> = {
 
 const THEME_LABEL_KEYS: Record<ThemeId, TranslationKey> = {
   listenoop: 'themes.listenoop',
+  glass: 'themes.glass',
   dark: 'themes.dark',
   light: 'themes.light',
   midnight: 'themes.midnight',
@@ -238,13 +239,24 @@ function SegmentedSetting<T extends string | number>({
   );
 }
 
-function ThemeCardPreview({theme, label}: {theme: ThemeId; label: string}) {
+function ThemeCardPreview({
+  theme,
+  label,
+  selected,
+}: {
+  theme: ThemeId;
+  label: string;
+  selected: boolean;
+}) {
   const t = THEMES[theme];
   return (
     <>
       <span
         className="theme-card__swatch"
-        style={{background: t.bgPrimary}}
+        style={{
+          background: t.bgPrimary,
+          borderColor: selected ? t.accent : undefined,
+        }}
         aria-hidden="true"
       >
         <span className="theme-card__dot" style={{background: t.accent}} />
@@ -274,7 +286,11 @@ function AppearanceTab() {
               aria-pressed={config.theme === id}
               aria-label={t(THEME_LABEL_KEYS[id])}
             >
-              <ThemeCardPreview theme={id} label={t(THEME_LABEL_KEYS[id])} />
+              <ThemeCardPreview
+                theme={id}
+                label={t(THEME_LABEL_KEYS[id])}
+                selected={config.theme === id}
+              />
             </button>
           ))}
         </div>

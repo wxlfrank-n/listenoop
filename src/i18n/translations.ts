@@ -182,6 +182,7 @@ export const en = {
 
   themes: {
     listenoop: 'Listenoop Night',
+    glass: 'Glass',
     dark: 'Solarized Dark',
     light: 'Spring',
     midnight: 'Gruvbox Dark',
@@ -387,6 +388,7 @@ export const no: Messages = {
 
   themes: {
     listenoop: 'Listenoop Night',
+    glass: 'Glass',
     dark: 'Solarized Dark',
     light: 'Vår',
     midnight: 'Gruvbox Dark',
@@ -583,6 +585,7 @@ export const zh: Messages = {
 
   themes: {
     listenoop: 'Listenoop Night',
+    glass: 'Glass',
     dark: 'Solarized Dark',
     light: '春日',
     midnight: 'Gruvbox Dark',

@@ -140,6 +140,20 @@ afterEach(() => {
 });
 
 describe('stacked waveform active-clip follow', () => {
+  it('hands the cursor to the next row halfway through the silence between clips', () => {
+    const {rerender, scroller} = setup();
+    const displayClips = [longClips[0]!, ...longClips.slice(2)];
+    rerender({displayClips, playing: true});
+    const rows = scroller.querySelectorAll('.stacked-waveform__row');
+    const samples = [[3, 0], [4.499, 0], [4.5, 1], [5.99, 1], [6, 1]] as const;
+    for (const [time, row] of samples) {
+      rerender({currentTime: time});
+      const cursors = scroller.querySelectorAll('.stacked-waveform__cursor');
+      expect(cursors).toHaveLength(1);
+      expect(cursors[0]?.parentElement).toBe(rows[row]);
+    }
+  });
+
   it('keeps the cursor on the selected page when replay lands just before a shared boundary', () => {
     const {rerender, pageNumber, scroller} = setup();
     rerender({activeClip: 2, currentTime: 8, playing: true});

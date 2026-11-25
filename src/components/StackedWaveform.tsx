@@ -188,6 +188,14 @@ export const StackedWaveform = memo(
         rows.push(cur);
       }
 
+      for (let i = 1; i < rows.length; i++) {
+        const previous = rows[i - 1]!;
+        const next = rows[i]!;
+        const midpoint = (previous.end + next.start) / 2;
+        previous.end = midpoint;
+        next.start = midpoint;
+      }
+
       if (rows.length > 0) {
         /*
          * First row represents the beginning of
